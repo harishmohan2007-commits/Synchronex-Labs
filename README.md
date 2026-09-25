@@ -27,7 +27,3 @@ npm run build
 Sign in → Command → Capture/Import → Extract → Confidence gate → Review → Apply → Trace → Memory.
 
 The current UI uses synthetic data. Supabase/API/LLM integration can be added without changing the information architecture.
-
-
-## UI Theme Update
-The existing application screens and interaction flows have been retained. `src/index.css` now applies the requested Host Grotesk + light mint/black/white visual system directly to the existing app, rather than creating a separate replacement application.

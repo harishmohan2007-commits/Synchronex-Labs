@@ -112,6 +112,3 @@ Automation threshold → timezone → evidence retention → save confirmation. 
 ## 8. Prototype boundary
 
 The UI intentionally demonstrates the SIH26122 planning-to-execution bridge using synthetic data. Production OCR, ASR, enterprise schedule APIs, and live project data are not required for the prototype.
-
-## Command page discipline panel interaction — v3.0
-The Command right rail is the primary quick-scan surface for workstream health. Discipline sectors are independent controls rather than rows in a shared table. Users can expand a sector to inspect actual, planned, variance, and next milestone details, then move directly to the schedule. Civil is expanded by default; other sectors remain collapsed to preserve screen real estate.
