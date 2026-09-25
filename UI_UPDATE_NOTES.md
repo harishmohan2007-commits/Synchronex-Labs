@@ -19,3 +19,11 @@ The search bar is now a real project-navigation control rather than a visual pla
 
 ## Validation
 The TSX source was syntax/transpile checked with the installed TypeScript compiler. A full Vite production build could not be run in this environment because the ZIP does not contain installed dependencies and package installation is unavailable here.
+
+## Command right-side discipline control panel — v3.0
+- Moved discipline progress from the Project Pulse split view into the Command page right-side control rail.
+- Added distinct, color-coded sector containers for Civil, Foundations, Piping, Mechanical, Electrical, Instrumentation, and HSE.
+- Each sector shows discipline status, actual percentage, progress bar, and expandable plan/actual/variance/milestone details.
+- Added a direct "Open schedule" action within an expanded sector.
+- Kept the main Project Pulse chart wide to improve scanability and reduce competing information density.
+- Search remains functional across activities, field reports, WBS nodes, and review items; the visible shortcut now communicates Ctrl/Command + K.
