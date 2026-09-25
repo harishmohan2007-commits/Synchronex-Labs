@@ -31,6 +31,8 @@ export default function App(){
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
   const [query,setQuery]=useState('');
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [searchIndex,setSearchIndex]=useState(0);
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
@@ -48,6 +50,37 @@ export default function App(){
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
   const filtered=useMemo(()=>ACTIVITIES.filter(a=>`${a.id} ${a.desc} ${a.discipline}`.toLowerCase().includes(query.toLowerCase())),[query]);
+  const searchResults=useMemo(()=>{
+    const q=query.trim().toLowerCase();
+    if(!q) return [
+      ...ACTIVITIES.slice(0,4).map(a=>({kind:'Activity',id:a.id,title:a.desc,meta:`${a.discipline} · ${a.wbs} node`,screen:'schedule' as Screen,selectId:a.id})),
+      ...FIELD_EVENTS.slice(0,2).map(e=>({kind:'Report',id:e.time,title:e.text.replaceAll('\"',''),meta:`Field signal · ${e.actId}`,screen:'capture' as Screen,selectId:e.actId})),
+    ];
+    return [
+      ...ACTIVITIES.filter(a=>`${a.id} ${a.desc} ${a.discipline} ${a.wbs}`.toLowerCase().includes(q)).slice(0,6).map(a=>({kind:'Activity',id:a.id,title:a.desc,meta:`${a.discipline} · ${a.wbs} node`,screen:'schedule' as Screen,selectId:a.id})),
+      ...FIELD_EVENTS.filter(e=>`${e.text} ${e.actId} ${e.actDesc}`.toLowerCase().includes(q)).slice(0,4).map(e=>({kind:'Report',id:e.time,title:e.text.replaceAll('\"',''),meta:`Field signal · ${e.actId}`,screen:'capture' as Screen,selectId:e.actId})),
+      ...REVIEW_QUEUE.filter(r=>`${r.id} ${r.text} ${r.candidate} ${r.issue}`.toLowerCase().includes(q)).slice(0,4).map(r=>({kind:'Review',id:r.id,title:r.text.replaceAll('\"',''),meta:`${r.issue} · ${r.candidate||'unmatched'}`,screen:'review' as Screen,selectId:r.candidate||''})),
+    ];
+  },[query]);
+  const openSearch=()=>{setSearchOpen(true);setSearchIndex(0)};
+  const closeSearch=()=>{setSearchOpen(false);setQuery('');setSearchIndex(0)};
+  const runSearchResult=(r:any)=>{
+    if(r.selectId) setSelectedId(r.selectId);
+    setScreen(r.screen);
+    closeSearch();
+  };
+  React.useEffect(()=>{
+    const onKey=(e:KeyboardEvent)=>{
+      if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();return;}
+      if(!searchOpen)return;
+      if(e.key==='Escape'){closeSearch();return;}
+      if(e.key==='ArrowDown'){e.preventDefault();setSearchIndex(i=>Math.min(i+1,Math.max(0,searchResults.length-1)));}
+      if(e.key==='ArrowUp'){e.preventDefault();setSearchIndex(i=>Math.max(0,i-1));}
+      if(e.key==='Enter'&&searchResults[searchIndex]){e.preventDefault();runSearchResult(searchResults[searchIndex]);}
+    };
+    window.addEventListener('keydown',onKey);
+    return ()=>window.removeEventListener('keydown',onKey);
+  },[searchOpen,searchResults,searchIndex]);
   const activeReview=REVIEW_QUEUE[Math.min(reviewIndex,Math.max(0,REVIEW_QUEUE.length-1))];
 
   const notify=(message:string)=>{setToast(message);window.setTimeout(()=>setToast(''),3000)};
@@ -109,12 +142,13 @@ export default function App(){
       <div className="page-head">
         <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
         <div className="head-tools">
-          <label className="global-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find activity, report or WBS node" aria-label="Search workspace"/><kbd>⌘ K</kbd></label>
+          <button className="global-search" onClick={openSearch} aria-label="Open workspace search"><span>⌕</span><span className="search-placeholder">Find activity, report or WBS node</span><kbd>⌘ K</kbd></button>
           <button className="outline-btn" onClick={()=>notify('Baseline Rev 04 is active. Changes are tracked against this revision.')}>Baseline <b>04</b></button>
         </div>
       </div>
 
       {screen==='command'&&<Command onGo={go} onSelect={(id)=>{setSelectedId(id);go('schedule')}} reviewCount={reviewCount}/>} 
+
       {screen==='schedule'&&<Schedule rows={filtered} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} />}
       {screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>go('import')} />}
       {screen==='review'&&<Review count={reviewCount} item={activeReview} index={reviewIndex} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} />}
@@ -123,6 +157,8 @@ export default function App(){
       {screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport}/>} 
       {screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}}/>}
     </main>
+
+    {searchOpen&&<div className="search-backdrop" onMouseDown={e=>e.currentTarget===e.target&&closeSearch()}><div className="search-dialog" role="dialog" aria-modal="true" aria-label="Workspace search"><div className="search-dialog-input"><span>⌕</span><input autoFocus value={query} onChange={e=>{setQuery(e.target.value);setSearchIndex(0)}} placeholder="Search activities, reports, WBS nodes or reviews…"/><kbd>ESC</kbd></div><div className="search-results">{searchResults.length===0?<div className="search-empty"><strong>No matches found</strong><span>Try an activity ID, discipline, report phrase, or review ID.</span></div>:searchResults.map((r,i)=><button key={`${r.kind}-${r.id}-${i}`} className={`search-result ${i===searchIndex?'selected':''}`} onMouseEnter={()=>setSearchIndex(i)} onClick={()=>runSearchResult(r)}><span className="search-kind">{r.kind}</span><span className="search-result-copy"><strong>{r.title}</strong><small>{r.meta}</small></span><code>{r.id}</code></button>)}</div><div className="search-footer"><span>↑↓ Navigate</span><span>Enter Open</span><span>Esc Close</span></div></div></div>}
 
     {modal==='help'&&<Modal title="How the planning-to-execution bridge works" onClose={()=>setModal(null)}><div className="flow-list">{[
       ['01','Capture','Receive free text, reports, spreadsheets, site diaries, or supervisor statements.'],
@@ -146,7 +182,7 @@ function AuthScreen({mode,setMode,onLogin}:{mode:'login'|'forgot';setMode:(v:'lo
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
 function Command({onGo,onSelect,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id:string)=>void;reviewCount:number}){
- return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">BASELINE REV 04</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div></div><div className="discipline-list">{DISCIPLINES.map(d=><div className="discipline-row" key={d.name}><div><b>{d.name}</b><span>{d.activities} activities</span></div><div className="bar-track"><i style={{width:`${d.actual}%`}}/></div><strong className={d.variance<0?'negative':'positive'}>{d.actual}%</strong><span className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</span></div>)}</div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('capture')}>Open capture →</button>}><div className="signal-table">{FIELD_EVENTS.slice(0,5).map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block"><span className="eyebrow">DECISION QUEUE</span><strong className="aside-number">{reviewCount}</strong><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block"><span className="eyebrow">NEXT CONTROL</span><h3>Capture today's field report</h3><p>Use free text first. The prototype extracts events and shows evidence before anything changes.</p><button className="outline-btn" onClick={()=>onGo('capture')}>Start capture</button></div><div className="aside-block"><span className="eyebrow">PROJECT HEALTH</span><div className="health-line"><span>Baseline completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
+ return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">BASELINE REV 04</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div></div><div className="discipline-list">{DISCIPLINES.map(d=><div className="discipline-row" key={d.name}><div><b>{d.name}</b><span>{d.activities} activities</span></div><div className="bar-track"><i style={{width:`${d.actual}%`}}/></div><strong className={d.variance<0?'negative':'positive'}>{d.actual}%</strong><span className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</span></div>)}</div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('capture')}>Open capture →</button>}><div className="signal-table">{FIELD_EVENTS.slice(0,5).map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>e.status==='REVIEW REQUIRED'?onGo('review'):onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block"><span className="eyebrow">DECISION QUEUE</span><strong className="aside-number">{reviewCount}</strong><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block"><span className="eyebrow">NEXT CONTROL</span><h3>Capture today's field report</h3><p>Use free text first. The prototype extracts events and shows evidence before anything changes.</p><button className="outline-btn" onClick={()=>onGo('capture')}>Start capture</button></div><div className="aside-block"><span className="eyebrow">PROJECT HEALTH</span><div className="health-line"><span>Baseline completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
