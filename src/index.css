@@ -782,3 +782,79 @@ tbody tr.selected{
   .trend-summary{grid-template-columns:1fr 1fr 1fr}
   .aside-discipline-list{max-height:420px}
 }
+
+/* =========================================================
+   SCHEDULE LATTICE / EXECUTION CONTROL REDESIGN
+   ========================================================= */
+.schedule-screen{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 370px;background:#f8faf8;overflow:hidden}
+.schedule-main{min-width:0;overflow:auto;padding:30px 32px 42px}
+.schedule-page-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}
+.schedule-page-head .page-title{margin-top:4px}
+.schedule-import-btn{height:44px;border:1px solid #0c0d0d;background:#0c0d0d;color:#fff;padding:0 17px;font-weight:600;cursor:pointer}
+.schedule-import-btn span{margin-left:8px;font-family:"IBM Plex Mono"}
+.schedule-overview-strip{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #d9e1dc;background:#fff;margin-bottom:18px}
+.schedule-overview-strip>div{padding:15px 17px;border-right:1px solid #d9e1dc}
+.schedule-overview-strip>div:last-child{border-right:0}
+.schedule-overview-strip span,.schedule-overview-strip small{display:block;color:#74817c;font:10px "IBM Plex Mono";letter-spacing:.08em;text-transform:uppercase}
+.schedule-overview-strip strong{display:block;font:600 25px "Host Grotesk";margin:5px 0 2px;color:#0c0d0d}
+.schedule-overview-strip small{font-family:inherit;letter-spacing:0;text-transform:none;font-size:11px}
+.schedule-overview-strip .negative{color:#b63a30}
+.schedule-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.schedule-search{height:42px;display:flex;align-items:center;gap:9px;flex:1;min-width:260px;background:#fff;border:1px solid #cbd6d0;padding:0 11px}
+.schedule-search>span{font-size:20px;color:#486359}
+.schedule-search input{border:0!important;outline:0!important;background:transparent;flex:1;min-width:0;height:100%;font-size:13px!important}
+.schedule-search button{border:0;background:none;font-size:18px;color:#7b8882;cursor:pointer}
+.schedule-toolbar select{height:42px;background:#fff;border:1px solid #cbd6d0;padding:0 30px 0 11px;font-size:12px;color:#26342f}
+.schedule-clear{height:42px;border:1px solid #cbd6d0;background:#f4f7f5;padding:0 12px;color:#53625c;cursor:pointer;font-size:12px}
+.schedule-table-card{border:1px solid #d9e1dc;background:#fff;overflow:hidden}
+.schedule-table-headline{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;border-bottom:1px solid #d9e1dc}
+.schedule-table-headline strong{font-size:15px}
+.schedule-table-headline span{display:block;color:#7a8781;font-size:11px;margin-top:3px}
+.schedule-result-count{font-family:"IBM Plex Mono"!important;font-size:10px!important;color:#66756f!important;margin:0!important}
+.schedule-table-scroll{overflow:auto}
+.schedule-table{min-width:920px}
+.schedule-table thead th{position:sticky;top:0;z-index:2;background:#f2f6f3;border-bottom:1px solid #d7e0da;padding:11px 12px;font:10px "IBM Plex Mono";letter-spacing:.06em;color:#61716a;text-transform:uppercase;white-space:nowrap}
+.schedule-table tbody td{padding:13px 12px;border-bottom:1px solid #e8ede9;vertical-align:middle}
+.schedule-table tbody tr{cursor:pointer;transition:background .12s ease}
+.schedule-table tbody tr:hover{background:#f5f8f6}
+.schedule-table tbody tr.is-selected{background:#eaf3ee;box-shadow:inset 3px 0 #286650}
+.schedule-activity-cell{display:grid;gap:3px;min-width:205px}
+.schedule-activity-cell .activity-id{font-size:10px}
+.schedule-activity-cell strong{font-size:13px;font-weight:600;color:#0c0d0d}
+.schedule-activity-cell small{font-size:10px;color:#8a9690;font-family:"IBM Plex Mono"}
+.schedule-discipline-label{font-size:12px;font-weight:600;color:#475851}
+.schedule-date-range{display:flex;gap:6px;align-items:center;font:10px "IBM Plex Mono";white-space:nowrap;color:#586660}
+.schedule-date-range b{color:#a0aba6;font-weight:400}
+.schedule-progress-cell{display:flex;align-items:center;gap:8px;min-width:100px}
+.schedule-progress-cell .progress-bar-bg{width:62px;height:6px;background:#dfe7e2;border-radius:99px;overflow:hidden}
+.schedule-progress-cell .progress-bar-fill{height:100%;background:#225b48;border-radius:99px}
+.schedule-progress-cell b{font:600 10px "IBM Plex Mono";color:#42524b}
+.schedule-ai-link{display:inline-flex;padding:4px 6px;background:#e7f1eb;color:#246247;font:600 10px "IBM Plex Mono"}
+.schedule-ai-empty{color:#b7c1bd}
+.schedule-empty{padding:44px;text-align:center;color:#718079;font-size:13px}.schedule-empty button{border:0;background:none;text-decoration:underline;cursor:pointer;color:#225d49}
+.schedule-aside{background:#eef3ef;border-left:1px solid #d4ded8;overflow:auto;padding:26px 22px}
+.schedule-aside-heading{padding-bottom:18px;border-bottom:1px solid #cfdad4}
+.schedule-aside-heading h2{font-size:21px;letter-spacing:-.025em;margin:7px 0 6px}
+.schedule-aside-heading p{font-size:12px;line-height:1.5;color:#687770;margin:0;max-width:300px}
+.schedule-discipline-list{display:grid;gap:9px;padding-top:14px}
+.schedule-discipline-card{border:1px solid #d4dfd8;background:#fff;overflow:hidden;box-shadow:0 1px 0 rgba(15,35,28,.02)}
+.schedule-discipline-card.is-expanded{border-color:#b9cec3}
+.schedule-discipline-head{width:100%;display:grid;grid-template-columns:34px minmax(0,1fr) auto auto 20px;gap:9px;align-items:center;border:0;background:#fff;padding:11px 10px 9px;text-align:left;cursor:pointer}
+.schedule-discipline-icon{width:30px;height:30px;border-radius:8px;background:color-mix(in srgb,var(--discipline-tone) 12%,white);color:var(--discipline-tone);display:grid;place-items:center;font-weight:700}
+.schedule-discipline-title{min-width:0}.schedule-discipline-title strong{display:block;font-size:13px;color:#1a2521}.schedule-discipline-title small{display:block;font-size:10px;color:#8a9791;margin-top:2px}
+.schedule-discipline-status .status-on-track,.schedule-discipline-status .status-delayed,.schedule-discipline-status .status-in-progress,.schedule-discipline-status .status-completed{font-size:8px;padding:3px 5px}
+.schedule-discipline-percent{font:600 12px "IBM Plex Mono";color:#244e40}
+.schedule-discipline-chevron{font:16px "IBM Plex Mono";color:#7c8b84;text-align:center}
+.schedule-discipline-bar{height:5px;margin:0 10px 10px;background:#dfe7e2;overflow:hidden}
+.schedule-discipline-bar i{display:block;height:100%;background:var(--discipline-tone)}
+.schedule-discipline-detail{border-top:1px solid #e4eae6;padding:10px}
+.schedule-discipline-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.schedule-discipline-metrics>div{background:#f3f6f4;padding:8px}.schedule-discipline-metrics span{display:block;font:8px "IBM Plex Mono";color:#7c8983;text-transform:uppercase}.schedule-discipline-metrics strong{display:block;font:600 12px "IBM Plex Mono";margin-top:4px}.schedule-discipline-metrics .positive{color:#247052}.schedule-discipline-metrics .negative{color:#b13c32}
+.schedule-milestone{border-left:2px solid var(--discipline-tone);padding:8px 0 8px 10px;margin-top:9px}.schedule-milestone span{display:block;font:8px "IBM Plex Mono";color:#7c8983;letter-spacing:.08em}.schedule-milestone strong{display:block;font-size:11px;margin-top:3px;color:#34443e}
+.schedule-mini-action{border:0;background:none;padding:5px 0 0;color:#537067;font-size:10px;cursor:pointer}
+.schedule-aside-topline{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #cfdad4;padding-bottom:14px}.schedule-aside-topline span{font:9px "IBM Plex Mono";letter-spacing:.08em;color:#718079}.schedule-aside-topline button{border:1px solid #c6d1cb;background:#fff;width:28px;height:28px;cursor:pointer;font-size:17px;color:#60716a}
+.schedule-selected-title{padding:18px 0 16px}.schedule-selected-title h2{font-size:21px;line-height:1.15;margin:7px 0 10px;letter-spacing:-.03em}.schedule-selected-progress{padding:15px 0;border-top:1px solid #cfdad4;border-bottom:1px solid #cfdad4}.schedule-selected-progress>div:first-child{display:flex;justify-content:space-between;align-items:end}.schedule-selected-progress span{font:9px "IBM Plex Mono";color:#74817b;letter-spacing:.08em}.schedule-selected-progress strong{font:600 27px "Host Grotesk"}.schedule-big-bar{height:8px;background:#d8e2dc;margin-top:10px}.schedule-big-bar i{display:block;height:100%;background:#1f5d49}
+.schedule-date-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #cfdad4}.schedule-date-grid>div{padding:14px 0}.schedule-date-grid>div+div{border-left:1px solid #cfdad4;padding-left:14px}.schedule-date-grid span{display:block;font:8px "IBM Plex Mono";color:#78857f;letter-spacing:.08em}.schedule-date-grid strong{display:block;font:600 15px "IBM Plex Mono";margin-top:5px}.schedule-date-grid small{display:block;color:#7a8781;font-size:11px;margin-top:3px}
+.schedule-inspector-section{padding:15px 0;border-bottom:1px solid #cfdad4}.schedule-inspector-section>p{font-size:11px;line-height:1.55;color:#66756e;margin:8px 0 0}.schedule-inspector-section>p b{color:#a1aca7;font-weight:400;padding:0 3px}.schedule-ai-card{display:flex;align-items:center;gap:8px}.schedule-ai-card>div{flex:1}.schedule-ai-card strong{display:block;font-size:12px;margin-top:3px}.schedule-ai-card>b{font:600 17px "IBM Plex Mono";color:#267051}.schedule-ai-card>small{font-size:9px;color:#78857f}.schedule-event{display:grid;grid-template-columns:45px 1fr;gap:8px;margin-top:9px}.schedule-event time{font:9px "IBM Plex Mono";color:#8a9690}.schedule-event p{margin:0;font-size:11px;line-height:1.45;color:#34443e}.schedule-context-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0}.schedule-context-row strong{font-size:13px}.schedule-context-row span{font:10px "IBM Plex Mono";color:#2d6b53}.schedule-secondary-action{width:100%;height:36px;background:#fff;border:1px solid #c6d2cb;color:#254c40;text-align:left;padding:0 10px;cursor:pointer;font-size:11px}
+@media(max-width:1100px){.schedule-screen{grid-template-columns:minmax(0,1fr) 330px}.schedule-overview-strip{grid-template-columns:repeat(2,1fr)}.schedule-overview-strip>div:nth-child(2){border-right:0}.schedule-overview-strip>div:nth-child(-n+2){border-bottom:1px solid #d9e1dc}}
+@media(max-width:900px){.schedule-screen{display:block;overflow:auto}.schedule-main{overflow:visible}.schedule-aside{border-left:0;border-top:1px solid #d4ded8}.schedule-page-head{align-items:stretch;flex-direction:column}.schedule-import-btn{width:max-content}.schedule-overview-strip{grid-template-columns:repeat(2,1fr)}}
