@@ -214,3 +214,11 @@
 .review-detail-aside .review-rule{margin:18px 0;}
 .aside-copy{font-size:13px;line-height:1.55;color:#68757a;}
 @media(max-width:1000px){.review-queue-head{align-items:flex-start;flex-direction:column}.review-filters{justify-content:flex-start}.review-detail-card{grid-template-columns:1fr}.review-detail-aside{border-left:0;border-top:1px solid var(--line)}}
+
+/* Review queue -> detail navigation */
+.review-queue-clickable-row{cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.review-queue-clickable-row:hover{background:#f4f8f5;box-shadow:inset 3px 0 var(--green)}
+.review-detail-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 14px}
+.review-back-btn{display:inline-flex;align-items:center;gap:7px}
+.review-detail-card-full{margin-top:0}
+@media(max-width:1000px){.review-detail-toolbar{align-items:flex-start}}
