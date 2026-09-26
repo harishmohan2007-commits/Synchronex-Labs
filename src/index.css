@@ -214,3 +214,8 @@
 .review-detail-aside .review-rule{margin:18px 0;}
 .aside-copy{font-size:13px;line-height:1.55;color:#68757a;}
 @media(max-width:1000px){.review-queue-head{align-items:flex-start;flex-direction:column}.review-filters{justify-content:flex-start}.review-detail-card{grid-template-columns:1fr}.review-detail-aside{border-left:0;border-top:1px solid var(--line)}}
+
+/* Review queue navigation */
+.review-clickable-row{cursor:pointer;transition:background .15s ease}
+.review-clickable-row:hover{background:#f4f7f5}
+.review-back-btn{margin-bottom:14px}
