@@ -165,3 +165,7 @@
 .review-list-item:hover{background:#f0f3ef;}
 .review-list-item.active{background:#e3ede2;border-left:3px solid #17463B;padding-left:7px;}
 .review-list-item.unmatched b{color:#B7352C;}
+
+/* --- Status-color distinction: Delayed reads red, not amber ----------- */
+.status-badge.delayed{background:#f6dedb;color:#8f2a22;}
+.discipline-card.expanded{box-shadow:0 10px 24px rgba(15,35,29,.10);}

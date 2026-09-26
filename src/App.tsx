@@ -144,6 +144,12 @@ function highlight(text: string, q: string): React.ReactNode {
   return <>{text.slice(0, idx)}<mark>{text.slice(idx, idx + len)}</mark>{text.slice(idx + len)}</>;
 }
 
+function statusAccent(status:string):string{
+  if(status==='Delayed') return '#B7352C';
+  if(status==='At Risk') return '#A45B13';
+  return '#2a6653';
+}
+
 export default function App(){
   const [authenticated,setAuthenticated]=useState(false);
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
@@ -367,7 +373,8 @@ function Metric({label,value,note,tone}:{label:string;value:string;note:string;t
 function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
  const [statusFilter,setStatusFilter]=useState('All');
  const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
- const [expanded,setExpanded]=useState<string|null>(null);
+ const mostUrgent=[...DISCIPLINES].sort((a,b)=>a.variance-b.variance)[0];
+ const [expanded,setExpanded]=useState<string|null>(mostUrgent?.name || null);
  const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
  let visibleRows=statusFilter==='All'?disciplineRows:disciplineRows.filter(a=>a.status===statusFilter);
  visibleRows=[...visibleRows].sort((a,b)=>{
@@ -383,9 +390,9 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
  return <div className="schedule-page"><PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}><div className="schedule-intro"><div><strong>Choose a discipline to inspect its executable plan.</strong><span>Each workstream opens its own schedule so dates, progress, milestones, and evidence stay focused.</span></div><div className="schedule-count"><b>{visibleRows.length}</b><span>visible activities</span></div></div><div className="discipline-card-grid">{cards.map(d=>{
    const isExpanded=expanded===d.name;
    const evidence=recentEvidence(d.name);
-   return <div key={d.name} className={`discipline-card ${discipline===d.name?'active':''} ${d.variance<0?'risk':''} ${isExpanded?'expanded':''}`}>
+   return <div key={d.name} className={`discipline-card ${discipline===d.name?'active':''} ${d.variance<0?'risk':''} ${isExpanded?'expanded':''}`} style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
      <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
-       <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
+       <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
        <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
        <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
        <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
