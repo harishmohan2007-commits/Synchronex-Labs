@@ -157,7 +157,7 @@ export default function App(){
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
-  const [reviewIndex,setReviewIndex]=useState(0);
+  const [reviewIndex,setReviewIndex]=useState<number|null>(null);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
@@ -182,11 +182,10 @@ export default function App(){
 
   // Activity detail modal target
   const [detailId,setDetailId]=useState<string|null>(null);
-  const [memoryDetailType,setMemoryDetailType]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
   const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
-  const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
+  const activeReview=reviewIndex===null ? null : (openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || null);
 
   const searchResults=useMemo(()=>searchAll(query),[query]);
   const groupedResults=useMemo(()=>{
@@ -253,7 +252,7 @@ export default function App(){
     setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
     setReviewCount(c=>Math.max(0,c-1));
     notify(`Match ${activeReview.candidate || 'new activity'} confirmed. Actual update queued with provenance.`);
-    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
+    setReviewIndex(null);
   };
   const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
@@ -266,7 +265,6 @@ export default function App(){
   if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} onLogin={()=>setAuthenticated(true)} />;
 
   const detailActivity=ACTIVITIES.find(a=>a.id===detailId) || null;
-  const memoryDetail=MEMORY_OCCURRENCES[memoryDetailType || ''] || MEMORY_OCCURRENCES['Pipe Erection'];
   const detailTrail=detailId?AUDIT_TRAIL.filter(t=>t.activity===detailId):[];
   const detailEvidence=detailId?FIELD_EVENTS.find(e=>e.actId===detailId):undefined;
 
@@ -329,7 +327,7 @@ export default function App(){
       {screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>go('import')} />}
       {screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} />}
-      {screen==='memory'&&(memoryDetailType?<MemoryOccurrenceDetail data={memoryDetail} onBack={()=>setMemoryDetailType(null)}/>:<Memory onOpenOccurrence={setMemoryDetailType}/>)}
+      {screen==='memory'&&<Memory />}
       {screen==='trace'&&<Trace />}
       {screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>} 
       {screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}}/>}
@@ -418,20 +416,119 @@ function Capture({text,setText,stage,busy,result,run,onImport}:{text:string;setT
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">QUEUE / {queue.length} ITEMS</span><div className="review-list" role="listbox" aria-label="Review queue">{queue.length ? queue.map((q,i)=><button key={q.id} type="button" role="option" aria-selected={i===index} className={`review-list-item ${i===index?'active':''} ${q.status==='Unmatched'?'unmatched':''}`} onClick={()=>onJump(i)}><code>{q.id}</code><span>{q.text.replace(/^"|"$/g,'')}</span><b>{q.conf?`${q.conf}%`:'—'}</b></button>) : <div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div>}</div><div className="review-rule"/><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
+function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number|null;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){
+ return <div className="review-page">
+   <PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Review queue" action={<span className="queue-count">{count} open</span>}>
+     <div className="review-queue-panel">
+       <div className="review-queue-head">
+         <div><strong>Select a field event to open planner validation.</strong><span>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</span></div>
+         <div className="review-filters"><select><option>All Confidence</option><option>&gt;80%</option><option>60–80%</option><option>&lt;60%</option></select><select><option>All Disciplines</option><option>Civil</option><option>Piping</option><option>Mechanical</option></select><select><option>All Issues</option><option>Multiple candidates</option><option>No match</option><option>Granularity</option></select></div>
+       </div>
+       <div className="review-table-wrap">
+         <table className="data-table review-queue-table">
+           <thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th></tr></thead>
+           <tbody>
+             {queue.length ? queue.map((q,i)=><tr key={q.id} onClick={()=>onJump(i)} className={index===i?'selected-review-row':''}>
+               <td><code>{q.id}</code></td>
+               <td className="review-event-text">{q.text.replace(/^"|"$/g,'')}</td>
+               <td>{q.candidate||'—'}</td>
+               <td><b className={q.conf>=80?'review-high':q.conf>=70?'review-mid':'review-low'}>{q.conf?`${q.conf}%`:'—'}</b></td>
+               <td>{q.issue}</td>
+               <td><span className={`review-status ${q.status==='Unmatched'?'unmatched':'reviewing'}`}>{q.status}</span></td>
+             </tr>) : <tr><td colSpan={6} className="review-empty-cell">Queue cleared · all open decisions have been resolved.</td></tr>}
+           </tbody>
+         </table>
+       </div>
+     </div>
+   </PageSection>
 
-const MEMORY_OCCURRENCES:Record<string,{activity:string;memoryId:string;date:string;discipline:string;location:string;sourceFile:string;sourceType:string;uploadedBy:string;uploadedRole:string;uploadedAt:string;validatedBy:string;validatedAt:string;evidence:string;baseline:string;actual:string;drift:string;cause:string;status:string}> = {
-  'Pipe Erection': { activity:'P-101 Spool A Erection', memoryId:'MEM-PE-042', date:'23 Sep 2026', discipline:'Piping', location:'P-101 Pipe Rack', sourceFile:'Daily_Progress_Report_23Sep.xlsx', sourceType:'Daily Progress Report', uploadedBy:'Ravi Kumar', uploadedRole:'Project Manager', uploadedAt:'23 Sep 2026 · 09:18', validatedBy:'Site Planning Engineer', validatedAt:'23 Sep 2026 · 09:42', evidence:'Piping crew completed spool erection after material release.', baseline:'5 days', actual:'7 days', drift:'+2 days', cause:'Material availability', status:'Validated' },
-  'Foundation Work': { activity:'Foundation Block A', memoryId:'MEM-CIV-031', date:'22 Sep 2026', discipline:'Civil', location:'Foundation Zone A', sourceFile:'Civil_Daily_Report_22Sep.xlsx', sourceType:'Discipline Daily Report', uploadedBy:'Priya Nair', uploadedRole:'Site Engineer', uploadedAt:'22 Sep 2026 · 17:05', validatedBy:'Project Controls Manager', validatedAt:'23 Sep 2026 · 08:20', evidence:'Foundation concrete work reached completion after a material release delay.', baseline:'8 days', actual:'9 days', drift:'+1 day', cause:'Material availability', status:'Validated' },
-  'Cable Installation': { activity:'Cable Installation — Substation A', memoryId:'MEM-ELE-027', date:'21 Sep 2026', discipline:'Electrical', location:'Substation A', sourceFile:'Electrical_Site_Diary_21Sep.pdf', sourceType:'Site Diary', uploadedBy:'Mohammed Faisal', uploadedRole:'Electrical Supervisor', uploadedAt:'21 Sep 2026 · 18:12', validatedBy:'Electrical Planning Engineer', validatedAt:'22 Sep 2026 · 08:10', evidence:'Cable laying progressed after tray access was released.', baseline:'4 days', actual:'5 days', drift:'+1 day', cause:'Access constraint', status:'Validated' },
-  'Instrument Hook-Up': { activity:'Instrument Hook-Up — Zone 1', memoryId:'MEM-INS-018', date:'20 Sep 2026', discipline:'Instrumentation', location:'Process Area — Zone 1', sourceFile:'Instrumentation_Progress_20Sep.xlsx', sourceType:'Discipline Spreadsheet', uploadedBy:'Anitha S', uploadedRole:'Discipline Engineer', uploadedAt:'20 Sep 2026 · 17:44', validatedBy:'Project Controls Manager', validatedAt:'21 Sep 2026 · 08:35', evidence:'Instrument hook-up progressed after cable termination checks were completed.', baseline:'6 days', actual:'8 days', drift:'+2 days', cause:'Inspection delay', status:'Validated' },
-  'Equipment Alignment': { activity:'P-201 Pump Alignment', memoryId:'MEM-MEC-022', date:'19 Sep 2026', discipline:'Mechanical', location:'Pump Bay P-201', sourceFile:'Mechanical_Daily_Report_19Sep.xlsx', sourceType:'Daily Progress Report', uploadedBy:'Suresh R', uploadedRole:'Mechanical Supervisor', uploadedAt:'19 Sep 2026 · 18:02', validatedBy:'Mechanical Planning Engineer', validatedAt:'20 Sep 2026 · 08:25', evidence:'Pump alignment required additional correction before acceptance.', baseline:'3 days', actual:'4 days', drift:'+1 day', cause:'Equipment rework', status:'Validated' },
-  'Structural Steel': { activity:'Structural Steel Erection A', memoryId:'MEM-CIV-015', date:'18 Sep 2026', discipline:'Civil', location:'Pipe Rack North', sourceFile:'Structural_Steel_Report_18Sep.xlsx', sourceType:'Daily Progress Report', uploadedBy:'Vignesh P', uploadedRole:'Construction Manager', uploadedAt:'18 Sep 2026 · 17:32', validatedBy:'Project Controls Engineer', validatedAt:'19 Sep 2026 · 08:40', evidence:'Structural erection slowed while anchor bolt inspection was completed.', baseline:'10 days', actual:'12 days', drift:'+2 days', cause:'Inspection delay', status:'Validated' }
+   {item && index!==null && <div className="review-detail-card">
+     <div className="review-detail-main">
+       <div className="review-detail-header">
+         <div><span className="eyebrow">HUMAN VALIDATION / EVENT {String(index+1).padStart(2,'0')} / {item.id}</span><h2>Resolve before apply</h2></div>
+         <div className="confidence-ring"><b>{item.conf||0}%</b><span>AI confidence</span></div>
+       </div>
+       <div className="review-hero">
+         <div><blockquote>{item.text}</blockquote><span className="issue-chip">{item.issue}</span></div>
+       </div>
+       <div className="candidate-grid">
+         <div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item.candidate || 'No activity'}</code><strong>{item.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item.conf || 0}%</span></div>
+         <div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div>
+       </div>
+       <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div>
+       <p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+     </div>
+     <aside className="review-detail-aside"><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside>
+   </div>}
+ </div>
+}
+
+const MEMORY_OCCURRENCES: Record<string, Array<{
+  id:string; activity:string; date:string; discipline:string; location:string; source:string;
+  uploader:string; baseline:string; actual:string; drift:string; cause:string; evidence:string;
+}>> = {
+  'Pipe Erection': [
+    {id:'MEM-PE-042',activity:'P-101 Spool A Erection',date:'23 Sep 2026',discipline:'Piping',location:'P-101 Pipe Rack',source:'Daily Progress Report',uploader:'Arun Kumar · Site Supervisor',baseline:'5 days',actual:'7 days',drift:'+2 days',cause:'Material availability',evidence:'“Piping crew completed spool erection after material release.”'},
+    {id:'MEM-PE-041',activity:'P-101 Spool B Erection',date:'22 Sep 2026',discipline:'Piping',location:'P-101 Pipe Rack',source:'Daily Progress Report',uploader:'S. Prakash · Piping Engineer',baseline:'5 days',actual:'6 days',drift:'+1 day',cause:'Material availability',evidence:'“Spool B erection completed following material release.”'},
+    {id:'MEM-PE-038',activity:'P-102 Spool A Erection',date:'20 Sep 2026',discipline:'Piping',location:'P-102 Pipe Rack',source:'Site Diary',uploader:'R. Naveen · Field Engineer',baseline:'5 days',actual:'8 days',drift:'+3 days',cause:'Inspection delay',evidence:'“Erection held briefly for inspection clearance.”'},
+  ],
+  'Foundation Work': [
+    {id:'MEM-FW-031',activity:'Foundation Block A',date:'23 Sep 2026',discipline:'Civil',location:'North Foundation Area',source:'Daily Progress Report',uploader:'Karthik S. · Civil Supervisor',baseline:'8 days',actual:'10 days',drift:'+2 days',cause:'Material availability',evidence:'“Concrete work reached final pour after material release.”'},
+    {id:'MEM-FW-029',activity:'Foundation Block B',date:'21 Sep 2026',discipline:'Civil',location:'North Foundation Area',source:'Site Diary',uploader:'M. Senthil · Site Engineer',baseline:'8 days',actual:'9 days',drift:'+1 day',cause:'Manpower constraints',evidence:'“Block B works progressed with reduced crew.”'},
+  ],
+  'Cable Installation': [
+    {id:'MEM-CI-027',activity:'Substation A Cable Laying',date:'23 Sep 2026',discipline:'Electrical',location:'Substation A',source:'Daily Progress Report',uploader:'V. Hari · Electrical Supervisor',baseline:'4 days',actual:'5 days',drift:'+1 day',cause:'Access constraint',evidence:'“Cable laying completed after access clearance.”'},
+  ],
+  'Instrument Hook-Up': [
+    {id:'MEM-IH-018',activity:'Zone 1 Instrument Hook-Up',date:'23 Sep 2026',discipline:'Instrumentation',location:'Process Area Zone 1',source:'Site Diary',uploader:'Dinesh R. · Instrument Engineer',baseline:'6 days',actual:'8 days',drift:'+2 days',cause:'Inspection delay',evidence:'“Hook-up completed after instrument inspection.”'},
+  ],
+  'Equipment Alignment': [
+    {id:'MEM-EA-022',activity:'P-101 Pump Alignment',date:'22 Sep 2026',discipline:'Mechanical',location:'Pump Bay P-101',source:'Daily Progress Report',uploader:'S. Raj · Mechanical Supervisor',baseline:'3 days',actual:'4 days',drift:'+1 day',cause:'Rework',evidence:'“Alignment completed after minor base plate rework.”'},
+  ],
+  'Structural Steel': [
+    {id:'MEM-SS-015',activity:'Structural Steel Erection A',date:'23 Sep 2026',discipline:'Civil',location:'Main Process Structure',source:'Daily Progress Report',uploader:'Ajith P. · Structural Supervisor',baseline:'10 days',actual:'12 days',drift:'+2 days',cause:'Manpower constraints',evidence:'“Steel erection progressed with reduced crew availability.”'},
+  ],
 };
 
-function Memory({onOpenOccurrence}:{onOpenOccurrence:(type:string)=>void}){return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>onOpenOccurrence(m.type)} style={{cursor:'pointer'}}><td><strong>{m.type}</strong><div className="memory-row-hint">View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>}
+function Memory(){
+  const [activityType,setActivityType]=useState<string|null>(null);
+  const [occurrence,setOccurrence]=useState<typeof MEMORY_OCCURRENCES[string][number]|null>(null);
 
-function MemoryOccurrenceDetail({data,onBack}:{data:any;onBack:()=>void}){return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCE DETAIL" title={data.activity} action={<button className="outline-btn" onClick={onBack}>← Back to occurrences</button>}><div className="memory-detail-layout"><div className="memory-detail-main"><div className="memory-detail-status"><span className="eyebrow">VALIDATED EXECUTION OCCURRENCE</span><div><code>{data.memoryId}</code><span className="trace-chip">{data.status}</span></div><h3>{data.activity}</h3><p>This occurrence is retained as reusable execution evidence for the <b>{data.activity.includes('Spool')?'Pipe Erection':data.discipline}</b> benchmark.</p></div><div className="memory-detail-grid"><div><span>DATE</span><b>{data.date}</b></div><div><span>DISCIPLINE</span><b>{data.discipline}</b></div><div><span>LOCATION</span><b>{data.location}</b></div><div><span>SOURCE</span><b>{data.sourceType}</b></div></div><div className="memory-source"><span className="eyebrow">SOURCE EVIDENCE</span><blockquote>“{data.evidence}”</blockquote><p>Original field evidence remains associated with the validated benchmark and can be traced through the project audit history.</p></div><div className="memory-upload"><span className="eyebrow">SOURCE FILE & UPLOAD DETAILS</span><div className="memory-upload-grid"><div><span>FILE</span><b>{data.sourceFile}</b></div><div><span>UPLOADED BY</span><b>{data.uploadedBy}</b><small>{data.uploadedRole}</small></div><div><span>UPLOADED AT</span><b>{data.uploadedAt}</b></div><div><span>VALIDATED BY</span><b>{data.validatedBy}</b><small>{data.validatedAt}</small></div></div></div></div><aside className="memory-detail-aside"><span className="eyebrow">EXECUTION VARIANCE</span><div className="variance-row"><span>Baseline</span><b>{data.baseline}</b></div><div className="variance-row"><span>Actual</span><b>{data.actual}</b></div><div className="variance-row"><span>Drift</span><b className="negative">{data.drift}</b></div><div className="variance-row"><span>Delay / Cause</span><b>{data.cause}</b></div><div className="memory-why"><span className="eyebrow">WHY IT MATTERS</span><p>This verified occurrence is reusable evidence for future planning, productivity benchmarking, and forecasting.</p></div></aside></div></PageSection>}
+  if(occurrence){
+    return <PageSection label="INSTITUTIONAL MEMORY / VALIDATED OCCURRENCE" title={occurrence.activity} action={<button className="outline-btn" onClick={()=>setOccurrence(null)}>← Back to occurrences</button>}>
+      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 320px',gap:22}}>
+        <div>
+          <div className="section-card" style={{padding:22,background:'#fff',border:'1px solid var(--line)'}}>
+            <span className="eyebrow">VALIDATED EXECUTION OCCURRENCE</span>
+            <div style={{marginTop:8,display:'flex',gap:10,alignItems:'center'}}><code style={{color:'#245c9b',fontWeight:600}}>{occurrence.id}</code><span className="trace-chip">Validated</span></div>
+            <h3 style={{fontSize:28,margin:'16px 0 8px'}}>{occurrence.activity}</h3>
+            <p style={{fontSize:16,color:'#5d6b70',lineHeight:1.6,margin:0}}>This occurrence is retained as reusable execution evidence for the <b>{activityType}</b> benchmark.</p>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',border:'1px solid var(--line)',marginTop:22}}>
+              {[['DATE',occurrence.date],['DISCIPLINE',occurrence.discipline],['LOCATION',occurrence.location],['SOURCE',occurrence.source]].map(([k,v])=><div key={k} style={{padding:'16px 18px',borderBottom:'1px solid var(--line)'}}><span className="eyebrow">{k}</span><strong style={{display:'block',marginTop:7,fontSize:15}}>{v}</strong></div>)}
+            </div>
+            <div style={{marginTop:22,padding:'18px 20px',background:'#f3f7f4',borderLeft:'3px solid #2a6653'}}><span className="eyebrow">SOURCE EVIDENCE</span><p style={{fontSize:18,lineHeight:1.5,margin:'10px 0 6px'}}>{occurrence.evidence}</p><small style={{color:'#6d797e'}}>Original field evidence remains associated with the validated benchmark and can be traced through the project audit history.</small></div>
+            <div style={{marginTop:18,padding:'16px 20px',background:'#f7f8f4',borderLeft:'3px solid #71868c'}}><span className="eyebrow">SOURCE FILE & UPLOAD DETAILS</span><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:18,marginTop:10}}><div><small style={{display:'block',color:'#849095'}}>File</small><strong>Daily_Progress_Report_23Sep.xlsx</strong></div><div><small style={{display:'block',color:'#849095'}}>Uploaded by</small><strong>{occurrence.uploader}</strong></div></div></div>
+          </div>
+        </div>
+        <aside style={{border:'1px solid var(--line)',background:'#eef0eb',padding:22,alignSelf:'start'}}>
+          <span className="eyebrow">EXECUTION VARIANCE</span>
+          {[['Baseline',occurrence.baseline],['Actual',occurrence.actual],['Drift',occurrence.drift],['Delay / Cause',occurrence.cause]].map(([k,v])=><div key={k} style={{display:'flex',justifyContent:'space-between',gap:15,borderBottom:'1px solid #d7ddd9',padding:'18px 0',fontSize:13}}><span>{k}</span><strong>{v}</strong></div>)}
+          <div style={{marginTop:24}}><span className="eyebrow">WHY IT MATTERS</span><p style={{fontSize:14,lineHeight:1.6,color:'#637076'}}>This verified occurrence is reusable evidence for future planning, productivity benchmarking, and forecasting.</p></div>
+        </aside>
+      </div>
+    </PageSection>;
+  }
+
+  if(activityType){
+    const occurrences=MEMORY_OCCURRENCES[activityType]||[];
+    return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCES" title={activityType} action={<button className="outline-btn" onClick={()=>setActivityType(null)}>← Back to memory</button>}>
+      <p className="lead">Validated executable activities contributing to this benchmark. Select an occurrence to inspect its source evidence and upload details.</p>
+      <div className="memory-table"><table><thead><tr><th>Executable activity</th><th>Date</th><th>Discipline</th><th>Source</th><th>Uploaded by</th><th>Evidence</th></tr></thead><tbody>{occurrences.map(o=><tr key={o.id} onClick={()=>setOccurrence(o)} style={{cursor:'pointer'}}><td><strong>{o.activity}</strong><div style={{font: '10px IBM Plex Mono',color:'#879398',marginTop:4}}>{o.id} · View occurrence details →</div></td><td>{o.date}</td><td>{o.discipline}</td><td>{o.source}</td><td>{o.uploader.split(' · ')[0]}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div>
+    </PageSection>;
+  }
+
+  return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setActivityType(m.type)} style={{cursor:'pointer'}}><td><strong>{m.type}</strong><div style={{font:'10px IBM Plex Mono',color:'#879398',marginTop:4}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>;
+}
 
 function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
 
