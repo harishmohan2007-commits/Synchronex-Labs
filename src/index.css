@@ -183,26 +183,29 @@
 .schedule-detail-head{gap:18px;}
 .schedule-detail-head .filter-btn{white-space:nowrap;}
 
-/* Project Memory occurrence drill-down */
-.memory-clickable-row { cursor: pointer; transition: background .15s ease; }
-.memory-clickable-row:hover, .memory-clickable-row:focus { background: #F7FAF8; outline: none; }
-.memory-clickable-row td:first-child small { display:block; margin-top:4px; color:#64748B; font-family:var(--font-mono); font-size:10px; letter-spacing:.02em; opacity:0; transform:translateY(2px); transition:opacity .15s ease, transform .15s ease; }
-.memory-clickable-row:hover td:first-child small, .memory-clickable-row:focus td:first-child small { opacity:1; transform:translateY(0); }
-.memory-detail-head { display:flex; justify-content:space-between; gap:24px; align-items:flex-end; padding:18px 0 22px; border-bottom:1px solid #E2E8F0; }
-.memory-detail-head .lead { max-width:760px; margin-bottom:0; }
-.memory-detail-metrics { display:grid; grid-template-columns:repeat(4,minmax(110px,1fr)); border:1px solid #DDE5E1; min-width:560px; }
-.memory-detail-metrics div { padding:13px 15px; border-left:1px solid #DDE5E1; }
-.memory-detail-metrics div:first-child { border-left:0; }
-.memory-detail-metrics span { display:block; font-family:var(--font-mono); font-size:9px; letter-spacing:.12em; color:#718096; margin-bottom:6px; }
-.memory-detail-metrics b { font-size:17px; color:#111827; }
-.memory-occurrence-table { margin-top:20px; overflow:auto; border:1px solid #DDE5E1; }
-.memory-occurrence-table table { width:100%; border-collapse:collapse; min-width:1050px; }
-.memory-occurrence-table th { background:#F5F7F4; color:#667085; font-family:var(--font-mono); font-size:9px; letter-spacing:.1em; text-transform:uppercase; text-align:left; padding:11px 13px; border-bottom:1px solid #DDE5E1; }
-.memory-occurrence-table td { padding:14px 13px; border-bottom:1px solid #E7ECE9; font-size:12px; color:#334155; vertical-align:top; }
-.memory-occurrence-table tr:last-child td { border-bottom:0; }
-.memory-occurrence-table .trace-chip { display:inline-block; white-space:nowrap; }
-.memory-status { color:#166534; font-size:11px; font-weight:600; white-space:nowrap; }
-.memory-detail-note { margin-top:18px; padding:16px 18px; border-left:3px solid #17624F; background:#F4F8F6; }
-.memory-detail-note strong { display:block; margin-top:5px; color:#1F2937; font-size:13px; }
-.memory-detail-note p { margin:5px 0 0; color:#64748B; font-size:11px; }
-@media (max-width:1100px){ .memory-detail-head{align-items:flex-start;flex-direction:column}.memory-detail-metrics{min-width:0;width:100%} }
+/* Project Memory drill-down */
+.memory-click-row{cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+.memory-click-row:hover,.memory-click-row:focus{background:#f1f6f2;box-shadow:inset 3px 0 #216653;outline:none}
+.memory-click-row td:first-child small{display:block;margin-top:5px;color:#7a898e;font:10px 'IBM Plex Mono';opacity:0;transition:opacity .15s ease}
+.memory-click-row:hover td:first-child small,.memory-click-row:focus td:first-child small{opacity:1}
+.memory-detail-intro{border:1px solid var(--line);background:#fff;padding:20px;display:grid;grid-template-columns:1fr auto;gap:25px;align-items:center;margin-bottom:16px}
+.memory-detail-intro .lead{margin:7px 0 0;max-width:760px}
+.memory-detail-stats{display:grid;grid-template-columns:repeat(4,minmax(90px,1fr));border-left:1px solid var(--line)}
+.memory-detail-stats div{padding:0 15px;border-right:1px solid var(--line)}
+.memory-detail-stats span{display:block;color:#78868b;font:600 9px 'IBM Plex Mono';letter-spacing:.1em;text-transform:uppercase}
+.memory-detail-stats strong{display:block;margin-top:8px;font:600 18px 'IBM Plex Mono';color:var(--ink)}
+.memory-detail-head{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-bottom:0;background:#f7f8f4;padding:16px 18px}
+.memory-detail-head strong{display:block;margin-top:6px;font-size:15px}
+.memory-occurrence-list{display:grid;gap:12px}
+.memory-occurrence{border:1px solid var(--line);background:#fff;padding:18px}
+.memory-occurrence-top{display:flex;align-items:center;gap:12px;color:#748287;font-size:12px}
+.memory-occurrence-top code{color:#245c9b;font:600 11px 'IBM Plex Mono'}
+.memory-occurrence-top .trace-chip{margin-left:auto}
+.memory-occurrence h3{font-size:18px;margin:12px 0 16px}
+.memory-occurrence-grid{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.memory-occurrence-grid div{padding:13px 14px;border-right:1px solid var(--line)}
+.memory-occurrence-grid div:last-child{border-right:0}
+.memory-occurrence-grid strong{display:block;margin-top:7px;font-size:14px}
+.memory-occurrence-source{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:10px;padding-top:13px}
+.memory-occurrence-source p{margin:0;color:#5f6e73;font-size:13px}
+@media(max-width:1200px){.memory-detail-intro{grid-template-columns:1fr}.memory-detail-stats{border-left:0;border-top:1px solid var(--line);padding-top:15px}.memory-occurrence-grid{grid-template-columns:repeat(2,1fr)}.memory-occurrence-grid div:nth-child(2){border-right:0}.memory-occurrence-grid div:nth-child(-n+2){border-bottom:1px solid var(--line)}.memory-occurrence-source{grid-template-columns:1fr}}
