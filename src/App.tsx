@@ -157,7 +157,7 @@ export default function App(){
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
-  const [reviewIndex,setReviewIndex]=useState<number|null>(null);
+  const [reviewIndex,setReviewIndex]=useState(0);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
@@ -185,7 +185,7 @@ export default function App(){
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
   const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
-  const activeReview=reviewIndex===null ? null : (openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || null);
+  const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
   const searchResults=useMemo(()=>searchAll(query),[query]);
   const groupedResults=useMemo(()=>{
@@ -252,7 +252,7 @@ export default function App(){
     setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
     setReviewCount(c=>Math.max(0,c-1));
     notify(`Match ${activeReview.candidate || 'new activity'} confirmed. Actual update queued with provenance.`);
-    setReviewIndex(null);
+    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
   };
   const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
@@ -416,107 +416,56 @@ function Capture({text,setText,stage,busy,result,run,onImport}:{text:string;setT
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number|null;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){
- return <div className="review-page">
-   <PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Review queue" action={<span className="queue-count">{count} open</span>}>
-     <div className="review-queue-panel">
-       <div className="review-queue-head">
-         <div><strong>Select a field event to open planner validation.</strong><span>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</span></div>
-         <div className="review-filters"><select><option>All Confidence</option><option>&gt;80%</option><option>60–80%</option><option>&lt;60%</option></select><select><option>All Disciplines</option><option>Civil</option><option>Piping</option><option>Mechanical</option></select><select><option>All Issues</option><option>Multiple candidates</option><option>No match</option><option>Granularity</option></select></div>
-       </div>
-       <div className="review-table-wrap">
-         <table className="data-table review-queue-table">
-           <thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th></tr></thead>
-           <tbody>
-             {queue.length ? queue.map((q,i)=><tr key={q.id} onClick={()=>onJump(i)} className={index===i?'selected-review-row':''}>
-               <td><code>{q.id}</code></td>
-               <td className="review-event-text">{q.text.replace(/^"|"$/g,'')}</td>
-               <td>{q.candidate||'—'}</td>
-               <td><b className={q.conf>=80?'review-high':q.conf>=70?'review-mid':'review-low'}>{q.conf?`${q.conf}%`:'—'}</b></td>
-               <td>{q.issue}</td>
-               <td><span className={`review-status ${q.status==='Unmatched'?'unmatched':'reviewing'}`}>{q.status}</span></td>
-             </tr>) : <tr><td colSpan={6} className="review-empty-cell">Queue cleared · all open decisions have been resolved.</td></tr>}
-           </tbody>
-         </table>
-       </div>
-     </div>
-   </PageSection>
-
-   {item && index!==null && <div className="review-detail-card">
-     <div className="review-detail-main">
-       <div className="review-detail-header">
-         <div><span className="eyebrow">HUMAN VALIDATION / EVENT {String(index+1).padStart(2,'0')} / {item.id}</span><h2>Resolve before apply</h2></div>
-         <div className="confidence-ring"><b>{item.conf||0}%</b><span>AI confidence</span></div>
-       </div>
-       <div className="review-hero">
-         <div><blockquote>{item.text}</blockquote><span className="issue-chip">{item.issue}</span></div>
-       </div>
-       <div className="candidate-grid">
-         <div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item.candidate || 'No activity'}</code><strong>{item.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item.conf || 0}%</span></div>
-         <div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div>
-       </div>
-       <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div>
-       <p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
-     </div>
-     <aside className="review-detail-aside"><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside>
-   </div>}
- </div>
-}
+function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">QUEUE / {queue.length} ITEMS</span><div className="review-list" role="listbox" aria-label="Review queue">{queue.length ? queue.map((q,i)=><button key={q.id} type="button" role="option" aria-selected={i===index} className={`review-list-item ${i===index?'active':''} ${q.status==='Unmatched'?'unmatched':''}`} onClick={()=>onJump(i)}><code>{q.id}</code><span>{q.text.replace(/^"|"$/g,'')}</span><b>{q.conf?`${q.conf}%`:'—'}</b></button>) : <div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div>}</div><div className="review-rule"/><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
 
 function Memory(){
-  const [selectedType,setSelectedType]=useState<string|null>(null);
-  const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType)||null;
-
-  const occurrenceProfile:(type:string)=>{discipline:string;activity:string;locations:string[];causes:string[];source:string}={
-    'Pipe Erection':{discipline:'Piping',activity:'P-101 / P-102 Spool Erection',locations:['Pipe Rack A','Pipe Rack B','Process Area 01','Process Area 02'],causes:['Material availability','Access constraint','Crew reassignment','No delay'],source:'Daily Piping Progress Report'},
-    'Foundation Work':{discipline:'Civil',activity:'Foundation Block / Equipment Foundation',locations:['Foundation Area A','Pump Bay 01','Compressor Pad','Utility Area'],causes:['Material availability','Weather interruption','Inspection hold','No delay'],source:'Civil Daily Site Diary'},
-    'Cable Installation':{discipline:'Electrical',activity:'Cable Tray & Cable Installation',locations:['Substation A','Control Room','Cable Corridor','MCC Building'],causes:['Material availability','Route congestion','Manpower constraint','No delay'],source:'Electrical Progress Sheet'},
-    'Instrument Hook-Up':{discipline:'Instrumentation',activity:'Instrument Hook-Up & Termination',locations:['Panel Area A','Process Unit 01','Control Room','Field JB Area'],causes:['Inspection delay','Material availability','Access constraint','No delay'],source:'Instrumentation Daily Report'},
-    'Equipment Alignment':{discipline:'Mechanical',activity:'Pump / Equipment Alignment',locations:['Pump Bay 01','Pump Bay 02','Compressor Area','Equipment Yard'],causes:['Equipment availability','Foundation readiness','Inspection hold','No delay'],source:'Mechanical Equipment Report'},
-    'Structural Steel':{discipline:'Structural',activity:'Structural Steel Erection',locations:['Pipe Rack A','Pipe Rack B','Module Area','Utility Structure'],causes:['Material availability','Crane availability','Access constraint','No delay'],source:'Structural Erection Report'},
-  };
-
-  const makeOccurrences=(m:typeof MEMORY_ACTIVITIES[number])=>{
-    const profile=occurrenceProfile(m.type);
-    const base=parseFloat(m.baselineAvg);
-    const actual=parseFloat(m.actualAvg);
-    const count=m.occurrences;
-    return Array.from({length:count},(_,i)=>{
-      const drift=Number((actual-base + (((i%5)-2)*0.18)).toFixed(1));
-      const actualDays=Math.max(1,Number((base+drift).toFixed(1)));
-      const cause=profile.causes[i%profile.causes.length];
-      return {
-        id:`${m.type.slice(0,3).toUpperCase()}-${String(i+1).padStart(3,'0')}`,
-        date:`${String(3+(i%24)).padStart(2,'0')} Sep 2026`,
-        activity:`${profile.activity} ${String((i%6)+1).padStart(2,'0')}`,
-        location:profile.locations[i%profile.locations.length],
-        baseline:`${base.toFixed(base%1?1:0)} days`,
-        actual:`${actualDays.toFixed(1)} days`,
-        drift:`${drift>=0?'+':''}${drift.toFixed(1)} days`,
-        cause,
-        source:profile.source,
-        status:cause==='No delay'?'On plan':'Delay recorded',
-      };
-    });
-  };
-
-  if(selected){
-    const occurrences=makeOccurrences(selected);
-    return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCE DETAIL" title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to memory</button>}>
-      <div className="memory-detail-head">
-        <div><span className="eyebrow">VALIDATED EXECUTION HISTORY</span><h2>{selected.occurrences} recorded occurrences</h2><p>Every occurrence below is synthetic demo evidence linked to the activity-type benchmark.</p></div>
-        <div className="memory-detail-metrics"><div><span>BASELINE AVG</span><strong>{selected.baselineAvg}</strong></div><div><span>ACTUAL AVG</span><strong>{selected.actualAvg}</strong></div><div><span>DRIFT</span><strong className="negative">{selected.variance}</strong></div></div>
-      </div>
-      <div className="memory-occurrence-table"><table><thead><tr><th>Occurrence</th><th>Date</th><th>Activity</th><th>Location</th><th>Baseline</th><th>Actual</th><th>Drift</th><th>Delay cause</th><th>Source</th><th>Status</th></tr></thead><tbody>{occurrences.map(o=><tr key={o.id}><td><code>{o.id}</code></td><td>{o.date}</td><td><strong>{o.activity}</strong></td><td>{o.location}</td><td>{o.baseline}</td><td>{o.actual}</td><td className={o.drift.startsWith('+')?'negative':'positive'}>{o.drift}</td><td>{o.cause}</td><td>{o.source}</td><td><span className={o.status==='On plan'?'trace-chip':'issue-chip'}>{o.status}</span></td></tr>)}</tbody></table></div>
-      <div className="memory-detail-footer"><span className="eyebrow">TRACEABILITY</span><p>Each occurrence retains its source report, execution context, duration comparison, and delay reason so the benchmark can be reviewed before being reused for future planning.</p></div>
-    </PageSection>;
-  }
-
-  return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}>
-    <p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p>
-    <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)}><td><strong>{m.type}</strong><small className="memory-row-hint">View occurrence details →</small></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div>
-    <div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div>
+ const [selectedType,setSelectedType]=useState<string|null>(null);
+ const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
+ const occurrenceSeed:Record<string,{date:string;activity:string;duration:string;variance:string;cause:string;source:string;status:string}[]>={
+  'Pipe Erection':[
+   {date:'23 Sep 2026',activity:'P-101 Spool A Erection',duration:'7 days',variance:'+2 days',cause:'Material availability',source:'Daily Site Report · RQ-004',status:'Validated'},
+   {date:'21 Sep 2026',activity:'P-101 Spool B Erection',duration:'8 days',variance:'+3 days',cause:'Crew reallocation',source:'Piping Progress Report · RQ-007',status:'Validated'},
+   {date:'18 Sep 2026',activity:'P-102 Pipeline Erection',duration:'6 days',variance:'+1 day',cause:'Inspection hold',source:'Field Diary · RQ-011',status:'Validated'},
+   {date:'15 Sep 2026',activity:'P-103 Pipeline Erection',duration:'8 days',variance:'+3 days',cause:'Material availability',source:'Daily Site Report · RQ-015',status:'Validated'},
+  ],
+  'Foundation Work':[
+   {date:'22 Sep 2026',activity:'Foundation Block A',duration:'10 days',variance:'+2 days',cause:'Excavation delay',source:'Civil Daily Report · RQ-001',status:'Validated'},
+   {date:'19 Sep 2026',activity:'Foundation Block B',duration:'9 days',variance:'+1 day',cause:'Manpower constraints',source:'Civil Progress Sheet · RQ-006',status:'Validated'},
+   {date:'16 Sep 2026',activity:'Equipment Foundation C',duration:'11 days',variance:'+3 days',cause:'Material availability',source:'Site Diary · RQ-012',status:'Validated'},
+  ],
+  'Cable Installation':[
+   {date:'20 Sep 2026',activity:'Cable Tray Zone A',duration:'5 days',variance:'+1 day',cause:'Access constraint',source:'Electrical Report · RQ-003',status:'Validated'},
+   {date:'17 Sep 2026',activity:'Power Cable Pulling',duration:'6 days',variance:'+2 days',cause:'Material availability',source:'Electrical Report · RQ-009',status:'Validated'},
+   {date:'13 Sep 2026',activity:'Control Cable Installation',duration:'4 days',variance:'0 days',cause:'No delay recorded',source:'Daily Progress Report · RQ-014',status:'Validated'},
+  ],
+  'Instrument Hook-Up':[
+   {date:'21 Sep 2026',activity:'PT-201 Instrument Hook-Up',duration:'9 days',variance:'+3 days',cause:'Calibration hold',source:'Instrumentation Report · RQ-005',status:'Validated'},
+   {date:'18 Sep 2026',activity:'FT-202 Instrument Hook-Up',duration:'8 days',variance:'+2 days',cause:'Access constraint',source:'Field Diary · RQ-008',status:'Validated'},
+   {date:'14 Sep 2026',activity:'LT-203 Instrument Hook-Up',duration:'8 days',variance:'+2 days',cause:'Inspection delay',source:'Instrumentation Report · RQ-013',status:'Validated'},
+  ],
+  'Equipment Alignment':[
+   {date:'20 Sep 2026',activity:'P-201 Pump Alignment',duration:'5 days',variance:'+2 days',cause:'Foundation readiness',source:'Mechanical Report · RQ-002',status:'Validated'},
+   {date:'16 Sep 2026',activity:'P-202 Pump Alignment',duration:'4 days',variance:'+1 day',cause:'Survey hold',source:'Mechanical Report · RQ-010',status:'Validated'},
+   {date:'12 Sep 2026',activity:'Compressor Alignment',duration:'4 days',variance:'+1 day',cause:'Equipment availability',source:'Mechanical Daily Report · RQ-016',status:'Validated'},
+  ],
+  'Structural Steel':[
+   {date:'19 Sep 2026',activity:'Pipe Rack Steel Erection',duration:'13 days',variance:'+3 days',cause:'Material availability',source:'Structural Report · RQ-017',status:'Validated'},
+   {date:'14 Sep 2026',activity:'Module Steel Erection',duration:'12 days',variance:'+2 days',cause:'Weather interruption',source:'Site Diary · RQ-018',status:'Validated'},
+   {date:'09 Sep 2026',activity:'Platform Steel Erection',duration:'11 days',variance:'+1 day',cause:'Manpower constraints',source:'Structural Report · RQ-019',status:'Validated'},
+  ],
+ };
+ const occurrences=selected ? (occurrenceSeed[selected.type] || []) : [];
+ if(selected){
+  return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCE DETAILS" title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to memory</button>}>
+   <div className="memory-detail-head">
+    <div><span className="eyebrow">VALIDATED EXECUTION HISTORY</span><p className="lead" style={{marginTop:8}}>Occurrence records behind this benchmark. Each record keeps its execution evidence traceable to the source that produced it.</p></div>
+    <div className="memory-detail-metrics"><div><span>BASELINE AVG</span><b>{selected.baselineAvg}</b></div><div><span>ACTUAL AVG</span><b>{selected.actualAvg}</b></div><div><span>DRIFT</span><b className="negative">{selected.variance}</b></div><div><span>OCCURRENCES</span><b>{selected.occurrences}</b></div></div>
+   </div>
+   <div className="memory-occurrence-table"><table><thead><tr><th>Date</th><th>Executable activity</th><th>Actual duration</th><th>Drift</th><th>Delay / context</th><th>Source evidence</th><th>Status</th></tr></thead><tbody>{occurrences.map((o,i)=><tr key={`${o.date}-${i}`}><td>{o.date}</td><td><strong>{o.activity}</strong></td><td>{o.duration}</td><td className={o.variance==='0 days'?'':'negative'}>{o.variance}</td><td>{o.cause}</td><td><span className="trace-chip">{o.source}</span></td><td><span className="memory-status">✓ {o.status}</span></td></tr>)}</tbody></table></div>
+   <div className="memory-detail-note"><span className="eyebrow">TRACEABILITY</span><strong>{occurrences.length} representative occurrences shown from {selected.occurrences} recorded events.</strong><p>The prototype uses synthetic demo evidence. In production, these rows would be populated from validated actuals and linked audit records.</p></div>
   </PageSection>;
+ }
+ return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} className="memory-clickable-row" tabIndex={0} role="button" onClick={()=>setSelectedType(m.type)} onKeyDown={e=>(e.key==='Enter'||e.key===' ')&&setSelectedType(m.type)}><td><strong>{m.type}</strong><small>View occurrence details →</small></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>
 }
 
 function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
