@@ -157,7 +157,7 @@ export default function App(){
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
-  const [reviewIndex,setReviewIndex]=useState(0);
+  const [reviewIndex,setReviewIndex]=useState<number|null>(null);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
@@ -185,7 +185,7 @@ export default function App(){
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
   const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
-  const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
+  const activeReview=reviewIndex===null ? null : (openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || null);
 
   const searchResults=useMemo(()=>searchAll(query),[query]);
   const groupedResults=useMemo(()=>{
@@ -252,7 +252,7 @@ export default function App(){
     setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
     setReviewCount(c=>Math.max(0,c-1));
     notify(`Match ${activeReview.candidate || 'new activity'} confirmed. Actual update queued with provenance.`);
-    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
+    setReviewIndex(null);
   };
   const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
@@ -416,7 +416,52 @@ function Capture({text,setText,stage,busy,result,run,onImport}:{text:string;setT
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">QUEUE / {queue.length} ITEMS</span><div className="review-list" role="listbox" aria-label="Review queue">{queue.length ? queue.map((q,i)=><button key={q.id} type="button" role="option" aria-selected={i===index} className={`review-list-item ${i===index?'active':''} ${q.status==='Unmatched'?'unmatched':''}`} onClick={()=>onJump(i)}><code>{q.id}</code><span>{q.text.replace(/^"|"$/g,'')}</span><b>{q.conf?`${q.conf}%`:'—'}</b></button>) : <div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div>}</div><div className="review-rule"/><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
+function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number|null;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){
+ return <div className="review-page">
+   <PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Review queue" action={<span className="queue-count">{count} open</span>}>
+     <div className="review-queue-panel">
+       <div className="review-queue-head">
+         <div><strong>Select a field event to open planner validation.</strong><span>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</span></div>
+         <div className="review-filters"><select><option>All Confidence</option><option>&gt;80%</option><option>60–80%</option><option>&lt;60%</option></select><select><option>All Disciplines</option><option>Civil</option><option>Piping</option><option>Mechanical</option></select><select><option>All Issues</option><option>Multiple candidates</option><option>No match</option><option>Granularity</option></select></div>
+       </div>
+       <div className="review-table-wrap">
+         <table className="data-table review-queue-table">
+           <thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th></tr></thead>
+           <tbody>
+             {queue.length ? queue.map((q,i)=><tr key={q.id} onClick={()=>onJump(i)} className={index===i?'selected-review-row':''}>
+               <td><code>{q.id}</code></td>
+               <td className="review-event-text">{q.text.replace(/^"|"$/g,'')}</td>
+               <td>{q.candidate||'—'}</td>
+               <td><b className={q.conf>=80?'review-high':q.conf>=70?'review-mid':'review-low'}>{q.conf?`${q.conf}%`:'—'}</b></td>
+               <td>{q.issue}</td>
+               <td><span className={`review-status ${q.status==='Unmatched'?'unmatched':'reviewing'}`}>{q.status}</span></td>
+             </tr>) : <tr><td colSpan={6} className="review-empty-cell">Queue cleared · all open decisions have been resolved.</td></tr>}
+           </tbody>
+         </table>
+       </div>
+     </div>
+   </PageSection>
+
+   {item && index!==null && <div className="review-detail-card">
+     <div className="review-detail-main">
+       <div className="review-detail-header">
+         <div><span className="eyebrow">HUMAN VALIDATION / EVENT {String(index+1).padStart(2,'0')} / {item.id}</span><h2>Resolve before apply</h2></div>
+         <div className="confidence-ring"><b>{item.conf||0}%</b><span>AI confidence</span></div>
+       </div>
+       <div className="review-hero">
+         <div><blockquote>{item.text}</blockquote><span className="issue-chip">{item.issue}</span></div>
+       </div>
+       <div className="candidate-grid">
+         <div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item.candidate || 'No activity'}</code><strong>{item.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item.conf || 0}%</span></div>
+         <div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div>
+       </div>
+       <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div>
+       <p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+     </div>
+     <aside className="review-detail-aside"><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside>
+   </div>}
+ </div>
+}
 
 function Memory(){return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type}><td><strong>{m.type}</strong></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>}
 
