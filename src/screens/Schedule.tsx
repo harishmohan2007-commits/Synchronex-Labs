@@ -1,238 +1,131 @@
-import React, { useState } from 'react';
-import { ACTIVITIES } from '../data';
+import React, { useMemo, useState } from 'react';
+import { ACTIVITIES, DISCIPLINES } from '../data';
 
 interface Props {
-  selectedActivity: string | null;
-  onSelectActivity: (id: string | null) => void;
-  pip245Progress: number;
+  rows: typeof ACTIVITIES;
+  selectedId: string;
+  onSelect: (id: string) => void;
+  selected: (typeof ACTIVITIES)[number];
+  onImport: () => void;
 }
 
-const StatusBadge = ({ status }: { status: string }) => {
-  const cls = status === 'Completed' ? 'status-completed' : status === 'In Progress' ? 'status-in-progress' : status === 'Delayed' ? 'status-delayed' : 'status-on-track';
-  return <span className={cls}>{status}</span>;
+const disciplineMeta: Record<string, { icon: string; accent: string; label: string; milestone: string }> = {
+  Civil: { icon: '⌂', accent: '#2b7258', label: 'Civil works', milestone: 'Foundation Block A · 70%' },
+  Piping: { icon: '⌁', accent: '#2d6b9b', label: 'Piping systems', milestone: 'Line 24 spool erection · 70%' },
+  Mechanical: { icon: '◇', accent: '#72529a', label: 'Mechanical packages', milestone: 'Pump P-101 alignment · 55%' },
+  Electrical: { icon: '⌁', accent: '#a65d10', label: 'Electrical systems', milestone: 'MCC-1 panel installation · 80%' },
+  Instrumentation: { icon: '◌', accent: '#a74c46', label: 'Instrumentation', milestone: 'Control room cabling · 65%' },
+  HSE: { icon: '✦', accent: '#477d63', label: 'Health & safety', milestone: 'Gas detection installation · 80%' },
 };
 
-export default function Schedule({ selectedActivity, onSelectActivity, pip245Progress }: Props) {
-  const [search, setSearch] = useState('');
-  const [discipline, setDiscipline] = useState('All');
+const statusClass = (status: string) => status === 'Completed' ? 'status-completed' : status === 'In Progress' ? 'status-in-progress' : status === 'Delayed' ? 'status-delayed' : 'status-on-track';
+
+export default function Schedule({ rows, selectedId, onSelect, selected, onImport }: Props) {
+  const [activeDiscipline, setActiveDiscipline] = useState('Piping');
+  const [query, setQuery] = useState('');
   const [status, setStatus] = useState('All');
-  const [sortCol, setSortCol] = useState<string | null>(null);
-  const [sortAsc, setSortAsc] = useState(true);
 
-  const activities = ACTIVITIES.map(a => a.id === 'PIP-245' ? { ...a, progress: pip245Progress } : a);
-
-  const filtered = activities.filter(a => {
-    if (search && !a.id.toLowerCase().includes(search.toLowerCase()) && !a.desc.toLowerCase().includes(search.toLowerCase())) return false;
-    if (discipline !== 'All' && a.discipline !== discipline) return false;
-    if (status !== 'All' && a.status !== status) return false;
-    return true;
+  const disciplineActivities = useMemo(() => rows.filter(a => a.discipline === activeDiscipline), [rows, activeDiscipline]);
+  const visibleActivities = disciplineActivities.filter(a => {
+    const matchesQuery = !query || `${a.id} ${a.desc}`.toLowerCase().includes(query.toLowerCase());
+    const matchesStatus = status === 'All' || a.status === status;
+    return matchesQuery && matchesStatus;
   });
 
-  const selected = selectedActivity ? activities.find(a => a.id === selectedActivity) : null;
-
-  const handleSort = (col: string) => {
-    if (sortCol === col) setSortAsc(!sortAsc);
-    else { setSortCol(col); setSortAsc(true); }
+  const openDiscipline = (name: string) => {
+    setActiveDiscipline(name);
+    const first = rows.find(a => a.discipline === name);
+    if (first) onSelect(first.id);
   };
 
-  const sorted = [...filtered].sort((a, b) => {
-    if (!sortCol) return 0;
-    const av = (a as any)[sortCol];
-    const bv = (b as any)[sortCol];
-    if (typeof av === 'number') return sortAsc ? av - bv : bv - av;
-    return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
-  });
-
-  const ACTIVITY_EVENTS: Record<string, { date: string; text: string }[]> = {
-    'PIP-245': [
-      { date: '23 Sep', text: '"Line 24 spool erection completed."' },
-      { date: '22 Sep', text: '"Line 24 erection continued."' },
-      { date: '21 Sep', text: '"Line 24 erection started."' },
-    ],
-  };
+  const activeMeta = disciplineMeta[activeDiscipline] || disciplineMeta.Civil;
+  const selectedInDiscipline = disciplineActivities.find(a => a.id === selectedId) || disciplineActivities[0];
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      <div style={{ flex: 1, padding: 24, overflow: 'auto' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+    <div className="schedule-page">
+      <div className="schedule-content">
+        <div className="schedule-hero">
           <div>
-            <div className="page-title">Schedule Control</div>
-            <div className="page-subtitle">Baseline activities and actual execution status.</div>
+            <span className="eyebrow">EXECUTABLE PLAN / DISCIPLINE CONTROL</span>
+            <h2>Schedule by discipline</h2>
+            <p>Choose a workstream first, then inspect only the L5/L6 activities that belong to it.</p>
           </div>
-          <button className="btn-secondary">↑ Import Schedule</button>
+          <button className="primary-btn" onClick={onImport}>Import schedule ↑</button>
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <input className="filter-input" placeholder="Search activities..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: 220 }} />
-          <select className="filter-input" value={discipline} onChange={e => setDiscipline(e.target.value)}>
-            <option>All</option>
-            {['Civil', 'Piping', 'Mechanical', 'Electrical', 'Instrumentation', 'HSE'].map(d => <option key={d}>{d}</option>)}
+        <div className="schedule-toolbar">
+          <label className="schedule-search"><span>⌕</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search within discipline…" /></label>
+          <select className="filter-btn" value={status} onChange={e => setStatus(e.target.value)}>
+            <option>All</option><option>Planned</option><option>In Progress</option><option>Completed</option><option>Delayed</option>
           </select>
-          <select className="filter-input" value={status} onChange={e => setStatus(e.target.value)}>
-            <option>All</option>
-            {['Planned', 'In Progress', 'Completed', 'Delayed'].map(s => <option key={s}>{s}</option>)}
-          </select>
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#94A3B8', alignSelf: 'center' }}>{sorted.length} activities</div>
+          <span className="schedule-count">{disciplineActivities.length} activities in {activeDiscipline}</span>
         </div>
 
-        {/* Table */}
-        <div className="section-card" style={{ overflow: 'auto' }}>
-          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {[
-                  { key: 'wbs', label: 'WBS' },
-                  { key: 'id', label: 'Activity ID' },
-                  { key: 'desc', label: 'Description' },
-                  { key: 'discipline', label: 'Discipline' },
-                  { key: 'planStart', label: 'Plan Start' },
-                  { key: 'planFinish', label: 'Plan Finish' },
-                  { key: 'actStart', label: 'Act. Start' },
-                  { key: 'actFinish', label: 'Act. Finish' },
-                  { key: 'progress', label: 'Progress' },
-                  { key: 'status', label: 'Status' },
-                  { key: 'aiConf', label: 'AI Link' },
-                ].map(col => (
-                  <th key={col.key} onClick={() => handleSort(col.key)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    {col.label} {sortCol === col.key ? (sortAsc ? '↑' : '↓') : ''}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map(a => (
-                <tr
-                  key={a.id}
-                  onClick={() => onSelectActivity(selectedActivity === a.id ? null : a.id)}
-                  style={{ background: selectedActivity === a.id ? '#EFF6FF' : undefined }}
-                >
-                  <td><span className="wbs-level">{a.wbs}</span></td>
-                  <td><span className="activity-id">{a.id}</span></td>
-                  <td style={{ maxWidth: 240, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.desc}</td>
-                  <td style={{ color: '#64748B', fontSize: 12 }}>{a.discipline}</td>
-                  <td style={{ color: '#64748B', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{a.planStart}</td>
-                  <td style={{ color: '#64748B', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{a.planFinish}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{a.actStart}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{a.actFinish}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className="progress-bar-bg" style={{ width: 60 }}>
-                        <div className="progress-bar-fill" style={{ width: `${a.progress}%`, background: a.progress === 100 ? '#15803D' : '#1D4ED8' }} />
-                      </div>
-                      <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 500, color: '#374151', minWidth: 28 }}>{a.progress}%</span>
-                    </div>
-                  </td>
-                  <td><StatusBadge status={a.status} /></td>
-                  <td>
-                    {a.aiConf > 0 ? (
-                      <span className="confidence-badge" style={{ color: a.aiConf >= 90 ? '#15803D' : a.aiConf >= 75 ? '#B45309' : '#94A3B8' }}>
-                        {a.aiConf}%
-                      </span>
-                    ) : <span style={{ color: '#CBD5E1', fontSize: 11 }}>—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Drawer */}
-      {selected && (
-        <>
-          <div className="drawer-overlay" onClick={() => onSelectActivity(null)} style={{ position: 'relative', display: 'none' }} />
-          <div style={{
-            width: 380,
-            background: 'white',
-            borderLeft: '1px solid #E2E8F0',
-            overflow: 'auto',
-            flexShrink: 0,
-          }}>
-            <div style={{ padding: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div>
-                  <span className="activity-id" style={{ fontSize: 13 }}>{selected.id}</span>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: '#111827', marginTop: 6 }}>{selected.desc}</div>
+        <section className="discipline-cards" aria-label="Disciplines">
+          {DISCIPLINES.map(d => {
+            const meta = disciplineMeta[d.name] || disciplineMeta.Civil;
+            const active = d.name === activeDiscipline;
+            return (
+              <button key={d.name} className={`discipline-card ${active ? 'selected' : ''}`} style={{ '--discipline-accent': meta.accent } as React.CSSProperties} onClick={() => openDiscipline(d.name)} aria-pressed={active}>
+                <div className="discipline-card-top">
+                  <span className="discipline-icon">{meta.icon}</span>
+                  <span className={`discipline-status ${d.status === 'Delayed' ? 'delayed' : d.status === 'At Risk' ? 'risk' : 'track'}`}>{d.status}</span>
+                  <span className="discipline-open">{active ? 'OPEN' : 'VIEW'} →</span>
                 </div>
-                <button onClick={() => onSelectActivity(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: 18, padding: 0 }}>×</button>
-              </div>
+                <div className="discipline-card-title"><strong>{d.name}</strong><span>{meta.label}</span></div>
+                <div className="discipline-progress-row"><span>Actual</span><b>{d.actual}%</b><span>vs {d.planned}% plan</span></div>
+                <div className="discipline-progress"><i style={{ width: `${d.actual}%` }} /></div>
+                <div className="discipline-card-metrics"><span><b>{d.activities}</b> activities</span><span className={d.variance < 0 ? 'negative' : 'positive'}>{d.variance > 0 ? '+' : ''}{d.variance}% variance</span></div>
+                <div className="discipline-milestone"><small>NEXT MILESTONE</small><strong>{meta.milestone}</strong></div>
+              </button>
+            );
+          })}
+        </section>
 
-              {/* WBS Path */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>WBS PATH</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 12, color: '#64748B' }}>
-                  {['L1 North Field Gas Processing', 'L2 Piping & Mechanical', 'L3 Process Piping', 'L4 Pipe Installation', `L5 ${selected.desc}`].map((p, i, arr) => (
-                    <React.Fragment key={i}>
-                      <span style={{ color: i === arr.length - 1 ? '#1D4ED8' : '#64748B', fontWeight: i === arr.length - 1 ? 600 : 400 }}>{p}</span>
-                      {i < arr.length - 1 && <span style={{ color: '#CBD5E1' }}>/</span>}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14, marginBottom: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 6 }}>PLANNED</div>
-                    <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{selected.planStart} 2026</div>
-                    <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: '#64748B' }}>{selected.planFinish} 2026</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 6 }}>ACTUAL</div>
-                    <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>{selected.actStart !== '—' ? `${selected.actStart} 2026` : '—'}</div>
-                    <div style={{ fontSize: 12, color: '#64748B' }}>{selected.actFinish !== '—' ? `${selected.actFinish} 2026` : 'In Progress'}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14, marginBottom: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>PROGRESS</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div className="progress-bar-bg" style={{ flex: 1 }}>
-                    <div className="progress-bar-fill" style={{ width: `${selected.progress}%`, background: '#1D4ED8' }} />
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: '#1D4ED8' }}>{selected.progress}%</span>
-                </div>
-              </div>
-
-              {selected.aiConf > 0 && (
-                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14, marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>AI LINK STATUS</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#15803D', display: 'inline-block' }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#15803D' }}>Linked</span>
-                    <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#15803D', fontWeight: 600 }}>{selected.aiConf}% confidence</span>
-                  </div>
-                </div>
-              )}
-
-              {(ACTIVITY_EVENTS[selected.id] || []).length > 0 && (
-                <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14, marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 10 }}>RECENT EXECUTION EVENTS</div>
-                  {(ACTIVITY_EVENTS[selected.id] || []).map((e, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#94A3B8', minWidth: 40 }}>{e.date}</span>
-                      <span style={{ fontSize: 12, color: '#374151', fontStyle: 'italic' }}>{e.text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: 14 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 8 }}>AUDIT</div>
-                {['Created from baseline', selected.aiConf > 0 ? 'AI linked' : null, 'Progress updated', selected.aiConf > 0 ? 'Planner verified' : null].filter(Boolean).map((e, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, fontSize: 12, color: '#64748B' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#CBD5E1', flexShrink: 0 }} />
-                    {e}
-                  </div>
-                ))}
-              </div>
+        <section className="discipline-schedule-panel">
+          <div className="discipline-schedule-head">
+            <div>
+              <span className="eyebrow">SELECTED WORKSTREAM</span>
+              <h3>{activeDiscipline} schedule</h3>
+              <p>Plan window, actual execution, progress and AI evidence for this discipline.</p>
             </div>
+            <div className="discipline-summary"><b>{DISCIPLINES.find(d => d.name === activeDiscipline)?.actual}%</b><span>actual progress</span></div>
           </div>
-        </>
-      )}
+
+          <div className="discipline-schedule-body">
+            <div className="activity-stack">
+              {visibleActivities.map(a => (
+                <button key={a.id} className={`activity-card ${selectedInDiscipline?.id === a.id ? 'selected' : ''}`} onClick={() => onSelect(a.id)}>
+                  <div className="activity-card-main">
+                    <span className="activity-id">{a.id}</span>
+                    <strong>{a.desc}</strong>
+                    <small>{a.wbs} executable node</small>
+                  </div>
+                  <div className="activity-window"><small>PLAN</small><span>{a.planStart} → {a.planFinish}</span><small>ACTUAL</small><span>{a.actStart} → {a.actFinish}</span></div>
+                  <div className="activity-progress"><div><span>Progress</span><b>{a.progress}%</b></div><div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${a.progress}%`, background: activeMeta.accent }} /></div><StatusBadge status={a.status} /></div>
+                  <span className="activity-chevron">→</span>
+                </button>
+              ))}
+              {!visibleActivities.length && <div className="empty-state"><strong>No activities match these filters.</strong><span>Try another search or status.</span></div>}
+            </div>
+
+            {selectedInDiscipline && <aside className="schedule-detail-card">
+              <div className="detail-kicker">SELECTED ACTIVITY</div>
+              <span className="activity-id">{selectedInDiscipline.id}</span>
+              <h3>{selectedInDiscipline.desc}</h3>
+              <span className={statusClass(selectedInDiscipline.status)}>{selectedInDiscipline.status}</span>
+              <div className="detail-progress"><div className="detail-progress-label"><span>Actual progress</span><b>{selectedInDiscipline.progress}%</b></div><div className="progress-bar-bg"><div className="progress-bar-fill" style={{ width: `${selectedInDiscipline.progress}%`, background: activeMeta.accent }} /></div></div>
+              <div className="detail-dates"><div><small>PLANNED</small><b>{selectedInDiscipline.planStart}</b><span>{selectedInDiscipline.planFinish}</span></div><div><small>ACTUAL</small><b>{selectedInDiscipline.actStart}</b><span>{selectedInDiscipline.actFinish}</span></div></div>
+              {selectedInDiscipline.aiConf > 0 && <div className="detail-evidence"><small>AI LINK</small><strong>{selectedInDiscipline.aiConf}% confidence</strong><span>Evidence is linked to the execution record before schedule application.</span></div>}
+              <button className="outline-btn full" onClick={() => onSelect(selectedInDiscipline.id)}>Keep activity selected</button>
+            </aside>}
+          </div>
+        </section>
+      </div>
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return <span className={statusClass(status)}>{status}</span>;
 }
