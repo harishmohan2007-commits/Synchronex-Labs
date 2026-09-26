@@ -47,3 +47,121 @@
 .schedule-page{min-height:calc(100vh - 204px);background:#f5f5f0}.schedule-content{padding:30px 38px 60px}.schedule-hero{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:22px}.schedule-hero h2{margin:5px 0 6px;font-size:30px;letter-spacing:-.035em}.schedule-hero p{margin:0;color:#69767a;font-size:15px;line-height:1.5}.schedule-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:18px}.schedule-search{height:40px;display:flex;align-items:center;gap:8px;border:1px solid #cfd8d4;background:#fff;padding:0 12px;flex:1;max-width:430px}.schedule-search span{color:#7d898d}.schedule-search input{border:0;outline:0;background:transparent;width:100%;font-size:13px}.schedule-count{margin-left:auto;color:#7b888b;font:11px 'IBM Plex Mono';text-transform:uppercase;letter-spacing:.05em}.discipline-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.discipline-card{--discipline-accent:#2b7258;position:relative;text-align:left;background:#fff;border:1px solid #d5ddd8;border-left:4px solid var(--discipline-accent);padding:16px;min-height:205px;color:var(--ink);transition:.16s ease;box-shadow:0 1px 0 rgba(15,35,29,.02)}.discipline-card:hover{transform:translateY(-2px);border-color:#aebeb7;box-shadow:0 8px 22px rgba(25,48,41,.08)}.discipline-card.selected{background:#eef5f0;border-color:#8fa99e;box-shadow:inset 0 0 0 1px #c7d8cf,0 8px 24px rgba(25,48,41,.08)}.discipline-card-top{display:flex;align-items:center;gap:8px}.discipline-icon{width:32px;height:32px;border-radius:8px;background:#e8f0eb;color:var(--discipline-accent);display:grid;place-items:center;font-weight:700}.discipline-status{font:600 9px 'IBM Plex Mono';letter-spacing:.05em;text-transform:uppercase;padding:4px 6px}.discipline-status.track{background:#e4efe8;color:#27704f}.discipline-status.risk{background:#f5ead8;color:#956016}.discipline-status.delayed{background:#f6e2df;color:#a03c34}.discipline-open{margin-left:auto;color:#7b898c;font:600 9px 'IBM Plex Mono'}.discipline-card-title{margin-top:13px;display:flex;align-items:baseline;justify-content:space-between;gap:10px}.discipline-card-title strong{font-size:19px}.discipline-card-title span{font-size:11px;color:#7a878b}.discipline-progress-row{display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px;margin-top:14px;color:#748186;font-size:11px}.discipline-progress-row b{font:600 14px 'IBM Plex Mono';color:var(--discipline-accent)}.discipline-progress-row span:last-child{text-align:right}.discipline-progress{height:6px;background:#dfe6e2;margin-top:7px}.discipline-progress i{display:block;height:100%;background:var(--discipline-accent)}.discipline-card-metrics{display:flex;justify-content:space-between;margin-top:11px;font-size:11px;color:#78858a}.discipline-card-metrics b{color:#26383b}.discipline-milestone{border-top:1px solid #e0e6e2;margin-top:12px;padding-top:9px;display:flex;flex-direction:column;gap:3px}.discipline-milestone small{font:600 8px 'IBM Plex Mono';color:#8b9799;letter-spacing:.12em}.discipline-milestone strong{font-size:11px;color:#39494d}.discipline-schedule-panel{margin-top:22px;border:1px solid #d5ddd8;background:#fff}.discipline-schedule-head{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;border-bottom:1px solid #dfe5e2;background:#f8faf7}.discipline-schedule-head h3{margin:5px 0 4px;font-size:22px}.discipline-schedule-head p{margin:0;color:#758287;font-size:13px}.discipline-summary{min-width:120px;text-align:right}.discipline-summary b{display:block;font:600 26px 'IBM Plex Mono';color:var(--green)}.discipline-summary span{font-size:10px;color:#7c898d;text-transform:uppercase;letter-spacing:.08em}.discipline-schedule-body{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:0;min-height:330px}.activity-stack{padding:12px}.activity-card{width:100%;display:grid;grid-template-columns:minmax(180px,1.35fr) 1.05fr 180px 24px;gap:16px;align-items:center;text-align:left;background:#fff;border:1px solid transparent;border-bottom-color:#e2e7e4;padding:15px 13px;color:var(--ink)}.activity-card:hover{background:#f6f9f6}.activity-card.selected{background:#edf5ef;border-color:#bdd0c6;box-shadow:inset 3px 0 var(--green)}.activity-card-main{display:flex;flex-direction:column;gap:3px}.activity-card-main .activity-id{font-size:11px}.activity-card-main strong{font-size:14px}.activity-card-main small{font-size:10px;color:#879397}.activity-window{display:grid;grid-template-columns:45px 1fr;gap:4px 8px;align-items:center}.activity-window small{font:600 8px 'IBM Plex Mono';color:#8b9799}.activity-window span{font:11px 'IBM Plex Mono';color:#526267}.activity-progress>div:first-child{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.activity-progress>div:first-child span{font-size:10px;color:#7a878b}.activity-progress>div:first-child b{font:600 11px 'IBM Plex Mono'}.activity-progress .progress-bar-bg{height:5px;width:100%;margin-bottom:8px}.activity-progress .status-completed,.activity-progress .status-in-progress,.activity-progress .status-delayed,.activity-progress .status-on-track{width:max-content}.activity-chevron{font-size:18px;color:#899699}.schedule-detail-card{border-left:1px solid #dfe5e2;background:#f5f7f3;padding:22px;position:sticky;top:0;height:max-content;min-height:330px}.detail-kicker{font:600 9px 'IBM Plex Mono';letter-spacing:.13em;color:#7c898d;margin-bottom:10px}.schedule-detail-card h3{font-size:19px;line-height:1.25;margin:6px 0 10px}.schedule-detail-card>.status-completed,.schedule-detail-card>.status-in-progress,.schedule-detail-card>.status-delayed,.schedule-detail-card>.status-on-track{display:inline-flex;margin-bottom:18px}.detail-progress{border-top:1px solid #dbe2de;padding-top:16px}.detail-progress-label{display:flex;justify-content:space-between;font-size:11px;color:#68767a;margin-bottom:7px}.detail-progress-label b{font:600 16px 'IBM Plex Mono';color:var(--green)}.detail-progress .progress-bar-bg{height:7px}.detail-dates{display:grid;grid-template-columns:1fr 1fr;margin-top:18px;border:1px solid #dce3df;background:#fff}.detail-dates div{padding:12px;border-right:1px solid #dce3df}.detail-dates div:last-child{border-right:0}.detail-dates small,.detail-evidence small{display:block;font:600 8px 'IBM Plex Mono';letter-spacing:.1em;color:#8a9699;margin-bottom:5px}.detail-dates b{display:block;font:600 12px 'IBM Plex Mono'}.detail-dates span{display:block;color:#7c898d;font:10px 'IBM Plex Mono';margin-top:3px}.detail-evidence{border-top:1px solid #dbe2de;margin-top:16px;padding-top:14px;display:flex;flex-direction:column;gap:4px}.detail-evidence strong{font:600 12px 'IBM Plex Mono';color:#287050}.detail-evidence span{font-size:11px;line-height:1.45;color:#69767b}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:260px;color:#77858a;gap:6px}.empty-state strong{color:#39494d}.pulse-summary{padding:22px;display:flex;flex-direction:column;justify-content:center;gap:20px;background:#f7f8f4}.pulse-summary strong{display:block;font-size:20px;line-height:1.25;margin-top:8px}.pulse-summary p{font-size:13px;line-height:1.55;color:#68757a;margin:8px 0 0}.pulse-summary .full{width:100%}
 @media(max-width:1250px){.discipline-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.discipline-schedule-body{grid-template-columns:1fr}.schedule-detail-card{border-left:0;border-top:1px solid #dfe5e2;position:static}.activity-card{grid-template-columns:minmax(170px,1.2fr) 1fr 160px 24px}}
 @media(max-width:900px){.discipline-cards{grid-template-columns:1fr}.schedule-content{padding:24px}.schedule-hero{align-items:flex-start;flex-direction:column}.activity-card{grid-template-columns:1fr}.activity-window{grid-template-columns:45px 1fr}.schedule-toolbar{flex-wrap:wrap}.schedule-count{width:100%;margin-left:0}}
+
+/* =====================================================================
+   UX redesign overrides — appended by the requirements-handoff pass.
+   These win the cascade over earlier duplicate/conflicting rules above
+   and are the canonical definitions for the classes listed. Fixes the
+   Capture-card / right-rail clipping issue and adds styles for the new
+   global search dropdown, activity detail modal, discipline expand/
+   collapse panel, schedule filter bar, and review queue list.
+   ===================================================================== */
+
+/* --- Capture card: reusable, responsive, no clipping ------------------ */
+.aside-block.capture-card{
+  box-sizing:border-box;position:relative;width:100%;max-width:100%;
+  min-width:0;height:auto;min-height:0;max-height:none;
+  overflow:visible;padding:20px 18px;border-top:2px solid #7b8d86;
+  display:flex;flex-direction:column;gap:8px;
+}
+.aside-block.capture-card *{min-width:0;box-sizing:border-box;}
+.aside-block.capture-card p,
+.aside-block.capture-card h3{overflow-wrap:anywhere;word-break:break-word;}
+.aside-block.capture-card .capture-card-meta{display:flex;flex-wrap:wrap;gap:8px;}
+.aside-block.capture-card .outline-btn{width:100%;text-align:center;}
+
+/* --- Right rail: never clip or overlap the main content --------------- */
+.command-aside{
+  box-sizing:border-box;overflow-x:hidden;overflow-y:auto;
+  min-width:0;max-width:100%;position:relative;
+}
+.command-aside .aside-block{box-sizing:border-box;width:100%;max-width:100%;overflow:visible;}
+
+@media (max-width:1100px){
+  .command-layout{grid-template-columns:1fr !important;}
+  .command-aside{border-left:0;border-top:1px solid var(--line);min-height:0 !important;}
+}
+@media (max-width:640px){
+  .aside-block.capture-card{padding:16px 14px;}
+}
+
+/* --- Global search: dropdown, groups, results, states ----------------- */
+.global-search-wrap{position:relative;flex:1;min-width:0;max-width:420px;}
+.global-search{position:relative;z-index:2;}
+.search-dropdown{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;
+  background:#fff;border:1px solid var(--line,#D7DDD9);border-radius:8px;
+  box-shadow:0 12px 28px rgba(15,35,29,.14);max-height:60vh;overflow-y:auto;
+  padding:6px 0;
+}
+.search-loading,.search-empty{padding:14px 16px;font-size:13px;color:#5b6b64;}
+.search-group{padding:4px 0;}
+.search-group + .search-group{border-top:1px solid #eef1ee;}
+.search-group-label{
+  display:block;padding:6px 16px 4px;font-size:10px;letter-spacing:.06em;
+  text-transform:uppercase;color:#7b8d86;font-family:'IBM Plex Mono',monospace;
+}
+.search-result-row{
+  display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;
+  padding:8px 16px;border:none;background:transparent;cursor:pointer;
+}
+.search-result-row strong{font-size:14px;color:var(--ink,#18252B);font-weight:600;}
+.search-result-row span{font-size:12px;color:#6b7a73;}
+.search-result-row:hover,.search-result-row.active{background:#f0f3ef;}
+.search-result-row mark{background:#d9ecd0;color:inherit;border-radius:2px;padding:0 1px;}
+
+/* --- Activity detail modal --------------------------------------------- */
+.activity-detail{display:flex;flex-direction:column;gap:16px;}
+.activity-detail-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+.activity-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}
+.activity-detail-grid > div{border:1px solid var(--line,#D7DDD9);border-radius:6px;padding:10px 12px;min-width:0;}
+.activity-detail-grid span{display:block;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#7b8d86;margin-bottom:4px;}
+.activity-detail-grid b{font-size:14px;font-family:'IBM Plex Mono',monospace;overflow-wrap:anywhere;}
+.activity-detail-evidence p{font-style:italic;color:#3a4642;}
+.activity-detail-trace{border-top:1px solid #eef1ee;padding-top:10px;display:flex;flex-direction:column;gap:6px;}
+.trace-mini-row{display:grid;grid-template-columns:110px 90px 1fr auto;gap:8px;font-size:12px;align-items:center;}
+.trace-mini-row span:first-child{color:#7b8d86;font-family:'IBM Plex Mono',monospace;}
+@media (max-width:640px){
+  .activity-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .trace-mini-row{grid-template-columns:1fr;gap:2px;}
+}
+
+/* --- Discipline card: milestone row + expand/collapse ------------------ */
+.discipline-card{display:flex;flex-direction:column;overflow:visible;}
+.discipline-card-hit{all:unset;display:flex;flex-direction:column;gap:10px;cursor:pointer;width:100%;box-sizing:border-box;}
+.discipline-card-milestone{display:flex;flex-direction:column;gap:2px;margin-top:2px;}
+.discipline-card-milestone small{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#7b8d86;}
+.discipline-card-milestone span{font-size:12px;color:#3a4642;}
+.discipline-expand-btn{
+  all:unset;margin-top:10px;padding-top:8px;border-top:1px solid #eef1ee;
+  font-size:11px;letter-spacing:.03em;color:#2b7258;cursor:pointer;text-align:center;width:100%;
+}
+.discipline-expand-btn:hover{color:#173f35;}
+.discipline-expanded-panel{
+  margin-top:10px;padding-top:10px;border-top:1px dashed #d5ddd8;
+  display:flex;flex-direction:column;gap:10px;font-size:12px;
+}
+.discipline-expanded-panel .eyebrow{display:block;margin-bottom:3px;}
+.discipline-expanded-panel p{color:#3a4642;margin:0;}
+
+/* --- Schedule filter bar ------------------------------------------------ */
+.schedule-filter-bar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:10px 0;margin:6px 0 10px;border-bottom:1px solid #eef1ee;
+}
+.schedule-filter-bar label{display:flex;align-items:center;gap:6px;font-size:12px;color:#5b6b64;}
+.schedule-filter-bar select{border:1px solid var(--line,#D7DDD9);border-radius:5px;padding:4px 8px;font-size:12px;background:#fff;}
+.schedule-filter-bar .filter-count{margin-left:auto;font-size:12px;color:#7b8d86;font-family:'IBM Plex Mono',monospace;}
+.empty-state{padding:24px 16px;text-align:center;color:#7b8d86;font-size:13px;}
+
+/* --- Review queue list --------------------------------------------------- */
+.review-list{display:flex;flex-direction:column;gap:4px;max-height:280px;overflow-y:auto;margin:8px 0;}
+.review-list-item{
+  all:unset;display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;
+  padding:7px 10px;border-radius:5px;cursor:pointer;font-size:12px;box-sizing:border-box;width:100%;
+}
+.review-list-item code{font-family:'IBM Plex Mono',monospace;color:#5b6b64;}
+.review-list-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.review-list-item:hover{background:#f0f3ef;}
+.review-list-item.active{background:#e3ede2;border-left:3px solid #17463B;padding-left:7px;}
+.review-list-item.unmatched b{color:#B7352C;}

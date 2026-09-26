@@ -26,12 +26,12 @@ export const ACTIVITIES = [
 ];
 
 export const DISCIPLINES = [
-  { name: 'Civil', activities: 42, planned: 63, actual: 68, variance: +5, status: 'On Track' },
-  { name: 'Piping', activities: 58, planned: 57, actual: 51, variance: -6, status: 'At Risk' },
-  { name: 'Mechanical', activities: 38, planned: 49, actual: 46, variance: -3, status: 'At Risk' },
-  { name: 'Electrical', activities: 36, planned: 54, actual: 55, variance: +1, status: 'On Track' },
-  { name: 'Instrumentation', activities: 31, planned: 45, actual: 39, variance: -6, status: 'Delayed' },
-  { name: 'HSE', activities: 41, planned: 79, actual: 82, variance: +3, status: 'On Track' },
+  { name: 'Civil', activities: 42, planned: 63, actual: 68, variance: +5, status: 'On Track', milestones: 6, nextMilestone: 'Foundation Block B pour', varianceNote: 'Running ahead on early foundation work; sequencing buffer may be reallocated to Piping.' },
+  { name: 'Piping', activities: 58, planned: 57, actual: 51, variance: -6, status: 'At Risk', milestones: 8, nextMilestone: 'Line 25 erection', varianceNote: 'Spool delivery delays on Line 25 are the primary driver of the variance.' },
+  { name: 'Mechanical', activities: 38, planned: 49, actual: 46, variance: -3, status: 'At Risk', milestones: 5, nextMilestone: 'Pump Set P-102 installation', varianceNote: 'Minor slippage from compressor skid alignment rework.' },
+  { name: 'Electrical', activities: 36, planned: 54, actual: 55, variance: +1, status: 'On Track', milestones: 4, nextMilestone: 'Panel Installation MCC-2', varianceNote: 'Tracking to plan; no material or manpower constraints reported.' },
+  { name: 'Instrumentation', activities: 31, planned: 45, actual: 39, variance: -6, status: 'Delayed', milestones: 4, nextMilestone: 'Zone 2 instrument hook-up', varianceNote: 'Awaiting cable tray completion from Electrical before hook-up can proceed.' },
+  { name: 'HSE', activities: 41, planned: 79, actual: 82, variance: +3, status: 'On Track', milestones: 3, nextMilestone: 'Emergency shower commissioning', varianceNote: 'Ahead of plan; commissioning walkdown scheduled early.' },
 ];
 
 export const FIELD_EVENTS = [

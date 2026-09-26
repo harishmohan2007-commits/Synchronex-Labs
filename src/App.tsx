@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES } from './data';
 
 type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'settings';
@@ -26,6 +26,124 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
 
 const stages = ['Input received','Discipline identified','Events extracted','Activities searched','Confidence calculated','Ready for review'];
 
+/* ---------------------------------------------------------------------- */
+/* Global search: cross-entity index + fuzzy/typo-tolerant ranking        */
+/* ---------------------------------------------------------------------- */
+
+type SearchResult = {
+  group: string;
+  id: string;
+  label: string;
+  sub: string;
+  score: number;
+  action: { discipline?: string; activityId?: string; reviewId?: string };
+};
+
+function normalize(s: string): string {
+  return (s || '').toLowerCase().replace(/["“”]/g, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/** Exact ID > exact title > prefix/token > substring > typo-tolerant fuzzy. */
+function fieldScore(query: string, rawField: string): number {
+  if (!rawField) return 0;
+  const q = normalize(query), f = normalize(rawField);
+  if (!q) return 0;
+  if (f === q) return 100;
+  if (f.startsWith(q)) return 90;
+  const tokensF = f.split(' ');
+  const tokensQ = q.split(' ');
+  if (tokensQ.every(t => tokensF.some(tf => tf.startsWith(t)))) return 80;
+  if (f.includes(q)) return 70;
+  const distWhole = levenshtein(q, f.slice(0, q.length + 3));
+  const tolerance = Math.max(1, Math.floor(q.length * 0.3));
+  if (distWhole <= tolerance) return 55;
+  for (const tf of tokensF) {
+    const d = levenshtein(q, tf);
+    if (d <= Math.max(1, Math.floor(tf.length * 0.34))) return 45;
+  }
+  return 0;
+}
+
+function searchAll(query: string): SearchResult[] {
+  const q = query.trim();
+  if (!q) return [];
+  const results: SearchResult[] = [];
+
+  ACTIVITIES.forEach(a => {
+    const idScore = fieldScore(q, a.id) + (normalize(a.id) === normalize(q) ? 15 : 0);
+    const titleScore = fieldScore(q, a.desc);
+    const wbsScore = fieldScore(q, `${a.wbs} ${a.discipline} node`);
+    const best = Math.max(idScore, titleScore, wbsScore * 0.9);
+    if (best > 0) {
+      results.push({
+        group: 'Activities', id: a.id, label: `${a.id} · ${a.desc}`,
+        sub: `${a.discipline} · ${a.wbs} · ${a.progress}% complete · ${a.status}`,
+        score: best, action: { discipline: a.discipline, activityId: a.id },
+      });
+    }
+  });
+
+  DISCIPLINES.forEach(d => {
+    const s = fieldScore(q, d.name);
+    if (s > 0) {
+      results.push({
+        group: 'Disciplines / WBS', id: d.name, label: d.name,
+        sub: `${d.status} · ${d.actual}% actual vs ${d.planned}% planned · next: ${d.nextMilestone}`,
+        score: s, action: { discipline: d.name },
+      });
+    }
+  });
+
+  FIELD_EVENTS.forEach((e, i) => {
+    const s = Math.max(fieldScore(q, e.text), fieldScore(q, e.actId), fieldScore(q, e.actDesc));
+    if (s > 0) {
+      const linked = ACTIVITIES.find(a => a.id === e.actId);
+      results.push({
+        group: 'Field reports / evidence', id: `fe-${i}`, label: e.text.replace(/^"|"$/g, ''),
+        sub: `${e.actDesc} · ${e.actId} · ${e.status}`,
+        score: s, action: { discipline: linked?.discipline, activityId: linked ? e.actId : undefined },
+      });
+    }
+  });
+
+  REVIEW_QUEUE.forEach(r => {
+    const s = Math.max(fieldScore(q, r.text), fieldScore(q, r.candidate), fieldScore(q, r.issue));
+    if (s > 0) {
+      results.push({
+        group: 'Review items', id: r.id, label: r.text.replace(/^"|"$/g, ''),
+        sub: `${r.issue} · ${r.candidate !== '—' ? r.candidate : 'Unmatched'} · ${r.status}`,
+        score: s, action: { reviewId: r.id },
+      });
+    }
+  });
+
+  return results.sort((a, b) => b.score - a.score).slice(0, 20);
+}
+
+function highlight(text: string, q: string): React.ReactNode {
+  const query = q.trim();
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(normalize(query).split(' ')[0]);
+  if (idx === -1) return text;
+  const len = normalize(query).split(' ')[0].length;
+  return <>{text.slice(0, idx)}<mark>{text.slice(idx, idx + len)}</mark>{text.slice(idx + len)}</>;
+}
+
 export default function App(){
   const [authenticated,setAuthenticated]=useState(false);
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
@@ -46,9 +164,41 @@ export default function App(){
   const [saved,setSaved]=useState(false);
   const [threshold,setThreshold]=useState(90);
 
+  // Global search
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [searching,setSearching]=useState(false);
+  const [activeResult,setActiveResult]=useState(0);
+  const searchInputRef=useRef<HTMLInputElement>(null);
+
+  // Schedule discipline selection (lifted so global search can jump into it)
+  const [scheduleDiscipline,setScheduleDiscipline]=useState('All');
+
+  // Activity detail modal target
+  const [detailId,setDetailId]=useState<string|null>(null);
+
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const filtered=useMemo(()=>ACTIVITIES.filter(a=>`${a.id} ${a.desc} ${a.discipline}`.toLowerCase().includes(query.toLowerCase())),[query]);
   const activeReview=REVIEW_QUEUE[Math.min(reviewIndex,Math.max(0,REVIEW_QUEUE.length-1))];
+
+  const searchResults=useMemo(()=>searchAll(query),[query]);
+  const groupedResults=useMemo(()=>{
+    const map:Record<string,SearchResult[]>={};
+    searchResults.forEach(r=>{(map[r.group]=map[r.group]||[]).push(r)});
+    return map;
+  },[searchResults]);
+
+  useEffect(()=>{
+    setActiveResult(0);
+    if(!query){setSearching(false);setSearchOpen(false);return;}
+    setSearching(true);setSearchOpen(true);
+    const t=window.setTimeout(()=>setSearching(false),160);
+    return ()=>window.clearTimeout(t);
+  },[query]);
+
+  useEffect(()=>{
+    const handler=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchInputRef.current?.focus();}};
+    window.addEventListener('keydown',handler);
+    return ()=>window.removeEventListener('keydown',handler);
+  },[]);
 
   const notify=(message:string)=>{setToast(message);window.setTimeout(()=>setToast(''),3000)};
   const go=(next:Screen)=>{
@@ -57,6 +207,30 @@ export default function App(){
     setScreen(next); setQuery('');
   };
   const confirmLeave=()=>{const next=(window as any).__pendingScreen as Screen; setDirty(false);setModal(null);setScreen(next);setQuery('');};
+
+  const openResult=(r:SearchResult)=>{
+    setSearchOpen(false);setQuery('');
+    if(r.action.reviewId){
+      const idx=REVIEW_QUEUE.findIndex(x=>x.id===r.action.reviewId);
+      if(idx>=0)setReviewIndex(idx);
+      setScreen('review');
+      return;
+    }
+    if(r.action.discipline) setScheduleDiscipline(r.action.discipline);
+    if(r.action.activityId){
+      setSelectedId(r.action.activityId);
+      setDetailId(r.action.activityId);
+      setModal('activity');
+    }
+    setScreen('schedule');
+  };
+
+  const searchKeyDown=(e:React.KeyboardEvent<HTMLInputElement>)=>{
+    if(e.key==='Escape'){setSearchOpen(false);searchInputRef.current?.blur();}
+    else if(e.key==='ArrowDown'){e.preventDefault();setActiveResult(i=>Math.min(i+1,Math.max(0,searchResults.length-1)));}
+    else if(e.key==='ArrowUp'){e.preventDefault();setActiveResult(i=>Math.max(i-1,0));}
+    else if(e.key==='Enter'){e.preventDefault();if(searchResults[activeResult])openResult(searchResults[activeResult]);}
+  };
 
   const runCapture=()=>{
     if(!captureText.trim()){notify('Nothing to extract. Enter a field statement first.');return;}
@@ -79,6 +253,10 @@ export default function App(){
   };
 
   if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} onLogin={()=>setAuthenticated(true)} />;
+
+  const detailActivity=ACTIVITIES.find(a=>a.id===detailId) || null;
+  const detailTrail=detailId?AUDIT_TRAIL.filter(t=>t.activity===detailId):[];
+  const detailEvidence=detailId?FIELD_EVENTS.find(e=>e.actId===detailId):undefined;
 
   return <div className="app-shell">
     <header className="topbar">
@@ -109,18 +287,39 @@ export default function App(){
       <div className="page-head">
         <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
         <div className="head-tools">
-          <label className="global-search"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find activity, report or WBS node" aria-label="Search workspace"/><kbd>⌘ K</kbd></label>
+          <div className="global-search-wrap" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setSearchOpen(false);}}>
+            <label className="global-search">
+              <span>⌕</span>
+              <input ref={searchInputRef} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={searchKeyDown} onFocus={()=>{if(query)setSearchOpen(true)}} placeholder="Find activity, report or WBS node" aria-label="Search workspace" role="combobox" aria-expanded={searchOpen} aria-controls="global-search-results" autoComplete="off"/>
+              <kbd>⌘ K</kbd>
+            </label>
+            {searchOpen && <div className="search-dropdown" id="global-search-results" role="listbox">
+              {searching && <div className="search-loading">Searching…</div>}
+              {!searching && searchResults.length===0 && <div className="search-empty">No matches for “{query}”. Try an activity ID like PIP-245, a discipline, or field-report text.</div>}
+              {!searching && Object.entries(groupedResults).map(([group,items])=>
+                <div className="search-group" key={group}>
+                  <span className="search-group-label">{group}</span>
+                  {items.slice(0,4).map(r=>{
+                    const flatIndex=searchResults.indexOf(r);
+                    return <button key={group+r.id} type="button" role="option" aria-selected={flatIndex===activeResult} className={`search-result-row ${flatIndex===activeResult?'active':''}`} onMouseEnter={()=>setActiveResult(flatIndex)} onClick={()=>openResult(r)}>
+                      <strong>{highlight(r.label,query)}</strong><span>{r.sub}</span>
+                    </button>;
+                  })}
+                </div>
+              )}
+            </div>}
+          </div>
           <button className="outline-btn" onClick={()=>notify('Baseline Rev 04 is active. Changes are tracked against this revision.')}>Baseline <b>04</b></button>
         </div>
       </div>
 
-      {screen==='command'&&<Command onGo={go} onSelect={(id)=>{setSelectedId(id);go('schedule')}} reviewCount={reviewCount}/>} 
-      {screen==='schedule'&&<Schedule rows={filtered} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} />}
+      {screen==='command'&&<Command onGo={go} onSelect={(id)=>{setSelectedId(id);go('schedule')}} reviewCount={reviewCount}/>}
+      {screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>go('import')} />}
-      {screen==='review'&&<Review count={reviewCount} item={activeReview} index={reviewIndex} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} />}
+      {screen==='review'&&<Review count={reviewCount} item={activeReview} index={reviewIndex} queue={REVIEW_QUEUE} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} />}
       {screen==='memory'&&<Memory />}
       {screen==='trace'&&<Trace />}
-      {screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport}/>} 
+      {screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport}/>}
       {screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}}/>}
     </main>
 
@@ -133,6 +332,20 @@ export default function App(){
     ].map(x=><div className="flow-row" key={x[0]}><b>{x[0]}</b><div><strong>{x[1]}</strong><p>{x[2]}</p></div></div>)}</div></Modal>}
     {modal==='profile'&&<Modal title="Project Controls Engineer" onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">PC</div><p><b>Planner workspace</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
+    {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
+      {detailActivity ? <div className="activity-detail">
+        <div className="activity-detail-meta"><span className="eyebrow">{detailActivity.discipline} · {detailActivity.wbs} executable node</span><span className={`status-badge ${detailActivity.status==='Completed'?'track':detailActivity.status==='Planned'?'':'risk'}`}>{detailActivity.status}</span></div>
+        <div className="activity-detail-grid">
+          <div><span>PLAN</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
+          <div><span>ACTUAL</span><b>{detailActivity.actStart} → {detailActivity.actFinish}</b></div>
+          <div><span>PROGRESS</span><b>{detailActivity.progress}%</b></div>
+          <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'—'}</b></div>
+        </div>
+        <div className="activity-detail-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
+        <div className="activity-detail-trace"><span className="eyebrow">TRACE ({detailTrail.length})</span>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
+        <div className="modal-actions"><button className="outline-btn" onClick={()=>{setModal(null);go('trace')}}>Open full trace ledger →</button></div>
+      </div> : <p>Activity not found.</p>}
+    </Modal>}
     {toast&&<div className="toast" role="status"><span>✓</span>{toast}</div>}
   </div>;
 }
@@ -151,21 +364,48 @@ function Command({onGo,onSelect,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function Schedule({rows,selectedId,onSelect,selected,onImport}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void}){
- const [discipline,setDiscipline]=useState('All');
- const disciplines=DISCIPLINES.map(d=>d.name);
- const visibleRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
+ const [statusFilter,setStatusFilter]=useState('All');
+ const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
+ const [expanded,setExpanded]=useState<string|null>(null);
+ const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+ let visibleRows=statusFilter==='All'?disciplineRows:disciplineRows.filter(a=>a.status===statusFilter);
+ visibleRows=[...visibleRows].sort((a,b)=>{
+   if(sortBy==='progress')return b.progress-a.progress;
+   if(sortBy==='status')return a.status.localeCompare(b.status);
+   if(sortBy==='id')return a.id.localeCompare(b.id);
+   return a.planStart.localeCompare(b.planStart);
+ });
  const cards=discipline==='All'?DISCIPLINES:DISCIPLINES.filter(d=>d.name===discipline);
  const currentSelected=visibleRows.find(a=>a.id===selectedId) || visibleRows[0] || selected;
- const selectDiscipline=(name:string)=>{setDiscipline(name);const first=rows.find(a=>a.discipline===name);if(first)onSelect(first.id);};
- return <div className="schedule-page"><PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}><div className="schedule-intro"><div><strong>Choose a discipline to inspect its executable plan.</strong><span>Each workstream opens its own schedule so dates, progress, milestones, and evidence stay focused.</span></div><div className="schedule-count"><b>{visibleRows.length}</b><span>visible activities</span></div></div><div className="discipline-card-grid">{cards.map(d=><button key={d.name} className={`discipline-card ${discipline===d.name?'active':''} ${d.variance<0?'risk':''}`} onClick={()=>selectDiscipline(d.name)}><div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div><div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div><div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div><div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div></button>)}</div><div className="schedule-detail-head"><div><span className="eyebrow">{discipline==='All'?'ALL DISCIPLINES':'DISCIPLINE SCHEDULE'}</span><h3>{discipline==='All'?'Select a discipline':' '+discipline}</h3><p>{discipline==='All'?'Click any workstream card above to open its schedule.':'Executable activities for this workstream, ordered by planned start.'}</p></div>{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>View all disciplines</button>}</div>{discipline!=='All'&&<div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>onSelect(a.id)}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}</div>}<div className="schedule-selected"><div className="selected-summary"><span className="eyebrow">SELECTED ACTIVITY</span><h3>{currentSelected?.desc || selected.desc}</h3><code>{currentSelected?.id || selected.id}</code></div><div className="selected-stats"><div><span>Progress</span><b>{currentSelected?.progress ?? selected.progress}%</b></div><div><span>Planned</span><b>{currentSelected?.planStart ?? selected.planStart}</b><small>{currentSelected?.planFinish ?? selected.planFinish}</small></div><div><span>Actual</span><b>{currentSelected?.actStart ?? selected.actStart}</b><small>{currentSelected?.actFinish ?? selected.actFinish}</small></div><div><span>AI confidence</span><b>{currentSelected?.aiConf ? `${currentSelected.aiConf}%` : '—'}</b></div></div><div className="selected-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>“Line 24 spool erection completed.”</p><strong>Evidence remains attached to the activity for traceability.</strong></div></div></PageSection></div>
+ const selectDiscipline=(name:string)=>{setDiscipline(name);setStatusFilter('All');const first=rows.find(a=>a.discipline===name);if(first)onSelect(first.id);};
+ const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
+ return <div className="schedule-page"><PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}><div className="schedule-intro"><div><strong>Choose a discipline to inspect its executable plan.</strong><span>Each workstream opens its own schedule so dates, progress, milestones, and evidence stay focused.</span></div><div className="schedule-count"><b>{visibleRows.length}</b><span>visible activities</span></div></div><div className="discipline-card-grid">{cards.map(d=>{
+   const isExpanded=expanded===d.name;
+   const evidence=recentEvidence(d.name);
+   return <div key={d.name} className={`discipline-card ${discipline===d.name?'active':''} ${d.variance<0?'risk':''} ${isExpanded?'expanded':''}`}>
+     <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
+       <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
+       <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
+       <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
+       <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
+       <div className="discipline-card-milestone"><small>NEXT MILESTONE</small><span>{d.nextMilestone}</span></div>
+     </button>
+     <button className="discipline-expand-btn" aria-expanded={isExpanded} aria-label={isExpanded?`Collapse ${d.name} details`:`Expand ${d.name} details`} onClick={()=>setExpanded(isExpanded?null:d.name)}>{isExpanded?'Show less ▲':'Show more ▼'}</button>
+     {isExpanded&&<div className="discipline-expanded-panel">
+       <div><span className="eyebrow">MILESTONES</span><strong>{d.milestones} tracked · next: {d.nextMilestone}</strong></div>
+       <div><span className="eyebrow">VARIANCE EXPLANATION</span><p>{d.varianceNote}</p></div>
+       <div><span className="eyebrow">RECENT EVIDENCE</span>{evidence.length?evidence.map((e,i)=><p key={i}>“{e.text.replace(/^"|"$/g,'')}”</p>):<p className="helper">No recent field evidence for this discipline.</p>}</div>
+     </div>}
+   </div>;
+ })}</div><div className="schedule-detail-head"><div><span className="eyebrow">{discipline==='All'?'ALL DISCIPLINES':'DISCIPLINE SCHEDULE'}</span><h3>{discipline==='All'?'Select a discipline':' '+discipline}</h3><p>{discipline==='All'?'Click any workstream card above to open its schedule.':'Executable activities for this workstream, ordered by planned start.'}</p></div>{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>View all disciplines</button>}</div>{discipline!=='All'&&<div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>}{discipline!=='All'&&<div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>}<div className="schedule-selected"><div className="selected-summary"><span className="eyebrow">SELECTED ACTIVITY</span><h3>{currentSelected?.desc || selected.desc}</h3><code>{currentSelected?.id || selected.id}</code></div><div className="selected-stats"><div><span>Progress</span><b>{currentSelected?.progress ?? selected.progress}%</b></div><div><span>Planned</span><b>{currentSelected?.planStart ?? selected.planStart}</b><small>{currentSelected?.planFinish ?? selected.planFinish}</small></div><div><span>Actual</span><b>{currentSelected?.actStart ?? selected.actStart}</b><small>{currentSelected?.actFinish ?? selected.actFinish}</small></div><div><span>AI confidence</span><b>{currentSelected?.aiConf ? `${currentSelected.aiConf}%` : '—'}</b></div></div><div className="selected-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>“Line 24 spool erection completed.”</p><strong>Evidence remains attached to the activity for traceability.</strong></div><button className="outline-btn" onClick={()=>onOpenDetail(currentSelected?.id||selected.id)}>Open activity detail →</button></div></PageSection></div>
 }
 
 function Capture({text,setText,stage,busy,result,run,onImport}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void}){return <div className="capture-layout"><div className="capture-main"><PageSection label="FIELD INPUT / 01" title="Speak in the language of the site"><p className="lead">Paste a daily report, site diary note, or supervisor statement. Synchronex turns execution language into structured events without forcing field teams into a rigid form.</p><textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')run()}} aria-label="Field report input" placeholder="Example: Line 24 spool erection completed…"/><div className="capture-actions"><button className="primary-btn" disabled={busy} onClick={run}>{busy?'Extracting events…':'Extract execution events'} <span>↗</span></button><button className="outline-btn" onClick={onImport}>Import instead</button><span className="helper">Ctrl / ⌘ + Enter to extract · demo uses synthetic data</span></div>{result&&<ExtractionResult/>}</PageSection></div><aside className="process-panel"><span className="eyebrow">PROCESS / 02</span>{stages.map((s,i)=><div className={`process-step ${stage===i+1?'active':''} ${stage>i+1?'done':''}`} key={s}><b>0{i+1}</b><span>{s}</span><i>{stage>i+1?'✓':stage===i+1?'●':'○'}</i></div>)}<div className="human-loop"><b>Human stays in the loop.</b><p>Ambiguous matches never disappear. They move to review with candidate activities and evidence.</p></div></aside></div>}
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,onApprove,onChoose,onFlag}:{count:number;item:any;index:number;onApprove:()=>void;onChoose:()=>void;onFlag:()=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate?'Foundation Block A':'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
+function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate?'Foundation Block A':'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">QUEUE / {queue.length} ITEMS</span><div className="review-list" role="listbox" aria-label="Review queue">{queue.map((q,i)=><button key={q.id} type="button" role="option" aria-selected={i===index} className={`review-list-item ${i===index?'active':''} ${q.status==='Unmatched'?'unmatched':''}`} onClick={()=>onJump(i)}><code>{q.id}</code><span>{q.text.replace(/^"|"$/g,'')}</span><b>{q.conf?`${q.conf}%`:'—'}</b></button>)}</div><div className="review-rule"/><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
 
 function Memory(){return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type}><td><strong>{m.type}</strong></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>}
 
