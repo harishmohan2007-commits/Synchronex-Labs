@@ -8,7 +8,7 @@ Authentication
 
 Project workspace
 - 01 Command — baseline-to-actual operational control
-- 02 Schedule — L5/L6 activity lattice and selected-node inspector
+- 02 Schedule — discipline-first executable plan, then selected-discipline schedule and activity inspector
 - 03 Capture — free-text field intelligence and extraction pipeline
 - 04 Review — human validation / confidence gate
 - 05 Memory — validated historical execution knowledge
@@ -89,7 +89,7 @@ Error: red inline message with retry.
 Status strip → metric band → project pulse (trajectory + discipline signals) → recent execution signals. Right rail shows decision workload, next control, and project health.
 
 ### Schedule
-Toolbar → activity table → selected-node inspector. Inspector exposes progress, plan/actual dates, latest evidence, and AI confidence.
+Discipline overview cards → selected-discipline schedule → activity detail/inspector. The default state must not show a large all-discipline activity table. Each discipline card exposes progress, plan vs actual, variance, workload, milestone and status; clicking it opens a focused schedule for that discipline.
 
 ### Capture
 Field statement input → extraction action → six-stage process rail → extracted event cards → confidence/status. Import is an explicit alternative.
