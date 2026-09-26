@@ -169,3 +169,16 @@
 /* --- Status-color distinction: Delayed reads red, not amber ----------- */
 .status-badge.delayed{background:#f6dedb;color:#8f2a22;}
 .discipline-card.expanded{box-shadow:0 10px 24px rgba(15,35,29,.10);}
+
+/* Review queue completion state */
+.review-empty{display:flex;flex-direction:column;gap:5px;padding:18px 12px;border:1px dashed #cbd6d0;background:#f8faf7;color:#52615c;}
+.review-empty strong{font-size:14px;color:#1f3f35;}
+.review-empty span{font-size:12px;line-height:1.45;}
+
+/* Discipline-first Schedule emphasis */
+.discipline-card-grid{align-items:stretch;}
+.discipline-card-hit:focus-visible{outline:3px solid rgba(36,103,177,.55);outline-offset:2px;}
+.discipline-card .card-chevron{margin-left:auto;color:#6f7f7a;font:600 14px 'IBM Plex Mono';transition:transform .12s ease;}
+.discipline-card:hover .card-chevron,.discipline-card.active .card-chevron{transform:translateX(3px);color:var(--green2);}
+.schedule-detail-head{gap:18px;}
+.schedule-detail-head .filter-btn{white-space:nowrap;}
