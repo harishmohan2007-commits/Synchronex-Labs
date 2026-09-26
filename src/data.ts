@@ -102,6 +102,58 @@ export const MEMORY_ACTIVITIES = [
   { type: 'Structural Steel', baselineAvg: '10 days', actualAvg: '12.1 days', variance: '+2.1 days', occurrences: 15 },
 ];
 
+export const MEMORY_OCCURRENCES: Record<string, Array<{
+  id: string;
+  date: string;
+  activity: string;
+  baseline: string;
+  actual: string;
+  drift: string;
+  cause: string;
+  source: string;
+  status: string;
+  location: string;
+  discipline: string;
+  evidence: string;
+}>> = {
+  'Pipe Erection': [
+    { id:'MEM-PE-042', date:'23 Sep 2026', activity:'P-101 Spool A Erection', baseline:'5 days', actual:'7 days', drift:'+2 days', cause:'Material availability', source:'Daily Progress Report', status:'Validated', location:'P-101 Pipe Rack', discipline:'Piping', evidence:'Piping crew completed spool erection after material release.' },
+    { id:'MEM-PE-041', date:'21 Sep 2026', activity:'P-101 Spool B Erection', baseline:'5 days', actual:'6 days', drift:'+1 day', cause:'Crew sequencing', source:'Site Diary', status:'Validated', location:'P-101 Pipe Rack', discipline:'Piping', evidence:'Spool B erection progressed after crew handover from adjacent work front.' },
+    { id:'MEM-PE-038', date:'18 Sep 2026', activity:'Line 24 Spool Erection', baseline:'5 days', actual:'8 days', drift:'+3 days', cause:'Material availability', source:'Supervisor Report', status:'Validated', location:'Line 24 Corridor', discipline:'Piping', evidence:'Delivery of remaining spool supports delayed the erection sequence.' },
+    { id:'MEM-PE-031', date:'14 Sep 2026', activity:'Line 18 Spool Erection', baseline:'5 days', actual:'7 days', drift:'+2 days', cause:'Access constraint', source:'Daily Progress Report', status:'Validated', location:'Line 18 Corridor', discipline:'Piping', evidence:'Access was restricted while civil works were completed in the same work front.' },
+  ],
+  'Foundation Work': [
+    { id:'MEM-FW-031', date:'22 Sep 2026', activity:'Foundation Block A', baseline:'8 days', actual:'10 days', drift:'+2 days', cause:'Concrete pour sequencing', source:'Daily Progress Report', status:'Validated', location:'Foundation Zone A', discipline:'Civil', evidence:'Pour sequence was adjusted to accommodate inspection hold points.' },
+    { id:'MEM-FW-027', date:'19 Sep 2026', activity:'Foundation Block B', baseline:'8 days', actual:'9 days', drift:'+1 day', cause:'Rebar availability', source:'Site Diary', status:'Validated', location:'Foundation Zone B', discipline:'Civil', evidence:'Rebar delivery was received later than the planned work-front release.' },
+    { id:'MEM-FW-024', date:'16 Sep 2026', activity:'Pump Foundation P-201', baseline:'8 days', actual:'10 days', drift:'+2 days', cause:'Inspection hold', source:'Inspection Report', status:'Validated', location:'Pump Area', discipline:'Civil', evidence:'Inspection hold delayed the final concrete pour.' },
+    { id:'MEM-FW-019', date:'12 Sep 2026', activity:'Equipment Foundation E-04', baseline:'8 days', actual:'8 days', drift:'0 days', cause:'No delay', source:'Daily Progress Report', status:'Validated', location:'Equipment Area', discipline:'Civil', evidence:'Foundation completed within baseline duration.' },
+  ],
+  'Cable Installation': [
+    { id:'MEM-CI-027', date:'23 Sep 2026', activity:'Substation A Cable Laying', baseline:'4 days', actual:'5 days', drift:'+1 day', cause:'Cable route congestion', source:'Daily Progress Report', status:'Validated', location:'Substation A', discipline:'Electrical', evidence:'Existing temporary services constrained the cable route.' },
+    { id:'MEM-CI-024', date:'20 Sep 2026', activity:'Substation B Cable Laying', baseline:'4 days', actual:'6 days', drift:'+2 days', cause:'Tray readiness', source:'Site Diary', status:'Validated', location:'Substation B', discipline:'Electrical', evidence:'Cable tray handover was later than the planned work-front date.' },
+    { id:'MEM-CI-021', date:'17 Sep 2026', activity:'MCC-1 Cable Installation', baseline:'4 days', actual:'4 days', drift:'0 days', cause:'No delay', source:'Daily Progress Report', status:'Validated', location:'MCC Room', discipline:'Electrical', evidence:'Installation completed to baseline duration.' },
+    { id:'MEM-CI-018', date:'13 Sep 2026', activity:'Control Room Cable Laying', baseline:'4 days', actual:'5 days', drift:'+1 day', cause:'Access constraint', source:'Supervisor Report', status:'Validated', location:'Control Room', discipline:'Electrical', evidence:'Access was restricted during concurrent panel installation.' },
+  ],
+  'Instrument Hook-Up': [
+    { id:'MEM-IH-018', date:'22 Sep 2026', activity:'Zone 1 Instrument Hook-Up', baseline:'6 days', actual:'8 days', drift:'+2 days', cause:'Cable tray readiness', source:'Daily Progress Report', status:'Validated', location:'Process Area Zone 1', discipline:'Instrumentation', evidence:'Hook-up started after late cable-tray handover.' },
+    { id:'MEM-IH-015', date:'19 Sep 2026', activity:'Zone 2 Instrument Hook-Up', baseline:'6 days', actual:'9 days', drift:'+3 days', cause:'Material availability', source:'Site Diary', status:'Validated', location:'Process Area Zone 2', discipline:'Instrumentation', evidence:'Junction-box accessories were released in batches.' },
+    { id:'MEM-IH-012', date:'15 Sep 2026', activity:'Compressor Instrument Hook-Up', baseline:'6 days', actual:'8 days', drift:'+2 days', cause:'Inspection hold', source:'Inspection Report', status:'Validated', location:'Compressor Area', discipline:'Instrumentation', evidence:'Inspection release was required before final terminations.' },
+    { id:'MEM-IH-009', date:'11 Sep 2026', activity:'Utility Instrument Hook-Up', baseline:'6 days', actual:'8 days', drift:'+2 days', cause:'Crew sequencing', source:'Supervisor Report', status:'Validated', location:'Utility Area', discipline:'Instrumentation', evidence:'Instrumentation crew was reassigned to a priority work front.' },
+  ],
+  'Equipment Alignment': [
+    { id:'MEM-EA-022', date:'21 Sep 2026', activity:'P-201 Pump Alignment', baseline:'3 days', actual:'4 days', drift:'+1 day', cause:'Baseplate rework', source:'Daily Progress Report', status:'Validated', location:'Pump Area', discipline:'Mechanical', evidence:'Baseplate correction was completed before final alignment.' },
+    { id:'MEM-EA-019', date:'18 Sep 2026', activity:'P-202 Pump Alignment', baseline:'3 days', actual:'5 days', drift:'+2 days', cause:'Survey recheck', source:'Site Diary', status:'Validated', location:'Pump Area', discipline:'Mechanical', evidence:'Survey readings required a second alignment cycle.' },
+    { id:'MEM-EA-015', date:'15 Sep 2026', activity:'Compressor Skid Alignment', baseline:'3 days', actual:'4 days', drift:'+1 day', cause:'Foundation tolerance', source:'Supervisor Report', status:'Validated', location:'Compressor Area', discipline:'Mechanical', evidence:'Final shimming was required to meet tolerance.' },
+    { id:'MEM-EA-011', date:'11 Sep 2026', activity:'Fan Skid Alignment', baseline:'3 days', actual:'4 days', drift:'+1 day', cause:'Access constraint', source:'Daily Progress Report', status:'Validated', location:'Utility Area', discipline:'Mechanical', evidence:'Lifting access was shared with adjacent equipment work.' },
+  ],
+  'Structural Steel': [
+    { id:'MEM-SS-015', date:'20 Sep 2026', activity:'Pipe Rack Steel Erection A', baseline:'10 days', actual:'12 days', drift:'+2 days', cause:'Material availability', source:'Daily Progress Report', status:'Validated', location:'Pipe Rack A', discipline:'Structural', evidence:'Steel member delivery was staggered across the work front.' },
+    { id:'MEM-SS-012', date:'16 Sep 2026', activity:'Pipe Rack Steel Erection B', baseline:'10 days', actual:'13 days', drift:'+3 days', cause:'Crane access', source:'Site Diary', status:'Validated', location:'Pipe Rack B', discipline:'Structural', evidence:'Crane access was constrained by concurrent civil works.' },
+    { id:'MEM-SS-009', date:'13 Sep 2026', activity:'Equipment Platform Steel', baseline:'10 days', actual:'11 days', drift:'+1 day', cause:'Bolt inspection', source:'Inspection Report', status:'Validated', location:'Equipment Area', discipline:'Structural', evidence:'Additional bolt inspection extended the handover sequence.' },
+    { id:'MEM-SS-006', date:'10 Sep 2026', activity:'Access Platform Steel', baseline:'10 days', actual:'12 days', drift:'+2 days', cause:'Crew sequencing', source:'Supervisor Report', status:'Validated', location:'Process Area', discipline:'Structural', evidence:'Steel crew was sequenced behind priority equipment access.' },
+  ],
+};
+
 export const DISCIPLINE_PERF = [
   { disc: 'Civil', planned: 63, actual: 68 },
   { disc: 'Piping', planned: 57, actual: 51 },
