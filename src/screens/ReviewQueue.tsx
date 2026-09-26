@@ -12,7 +12,7 @@ const CANDIDATES_FOR_RQ001 = [
 ];
 
 export default function ReviewQueue({ showToast }: Props) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>('RQ-001');
   const [resolved, setResolved] = useState<string[]>([]);
   const [chosenActivity, setChosenActivity] = useState<string | null>(null);
 
@@ -49,7 +49,7 @@ export default function ReviewQueue({ showToast }: Props) {
         <div className="page-subtitle">Planner validation for ambiguous or unmatched field events.</div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ background: '#FEF3C7', color: '#B45309', borderRadius: 5, padding: '8px 14px', fontSize: 13, fontWeight: 700 }}>
           {activeItems.length} Items Awaiting Review
         </div>
@@ -60,7 +60,7 @@ export default function ReviewQueue({ showToast }: Props) {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 16 }}>
         <div className="section-card" style={{ overflow: 'auto' }}>
           <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -107,11 +107,10 @@ export default function ReviewQueue({ showToast }: Props) {
           </table>
         </div>
 
-        {/* Review detail — intentionally hidden until a queue row is selected */}
+        {/* Review detail */}
         {item && !resolved.includes(item.id) ? (
-          <div style={{ marginTop: 16 }}>
-            <div className="section-card" style={{ padding: 20, overflow: 'auto' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 10 }}>FIELD STATEMENT</div>
+          <div className="section-card" style={{ padding: 20, overflow: 'auto' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#94A3B8', textTransform: 'uppercase', marginBottom: 10 }}>FIELD STATEMENT</div>
             <div style={{ fontSize: 13, fontStyle: 'italic', color: '#111827', padding: '10px 12px', background: '#F8FAFC', borderRadius: 4, borderLeft: '3px solid #B45309', marginBottom: 16, lineHeight: 1.6 }}>
               {item.text}
             </div>
@@ -142,11 +141,14 @@ export default function ReviewQueue({ showToast }: Props) {
               <button className="btn-danger" onClick={handleReject}>✕ Reject Event</button>
             </div>
             <div style={{ marginTop: 14, padding: '8px 10px', background: '#FFF7ED', borderRadius: 4, border: '1px solid #FED7AA', fontSize: 11, color: '#92400E' }}>
-                Unmatched events are never silently discarded. All rejections are logged in the Audit Trail.
-              </div>
+              Unmatched events are never silently discarded. All rejections are logged in the Audit Trail.
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="section-card" style={{ padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 13 }}>
+            Select a queue item to review
+          </div>
+        )}
       </div>
     </div>
   );
