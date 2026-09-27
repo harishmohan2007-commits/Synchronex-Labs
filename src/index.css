@@ -295,3 +295,110 @@
 
 @media(max-width:1250px){.settings-page .section{max-width:100%}.settings-side{position:static;width:auto;margin:22px 38px 0}.theme-picker{grid-template-columns:repeat(3,1fr);max-width:520px}.settings-form-grid{grid-template-columns:1fr 1fr}.import-page{display:block}.import-side{border-left:0;border-top:1px solid var(--line);margin:20px 38px 0}.import-choice-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.import-any-file,.team-role-note,.settings-card{align-items:flex-start;flex-direction:column}.theme-picker{width:100%;grid-template-columns:1fr}.member-form-grid,.settings-form-grid{grid-template-columns:1fr}.member-manage-actions{flex-wrap:wrap}.member-manage-actions>span{display:none}.settings-card .setting-row{grid-template-columns:1fr}.threshold-control{width:100%}.threshold-control input{flex:1}.settings-side{margin-left:20px;margin-right:20px}}
+
+/* --- Final UX stabilization ------------------------------------------------ */
+.visually-hidden-file{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;opacity:0!important;pointer-events:none!important}
+
+/* Schedule discipline cards: one consistent surface, status shown only as an accent. */
+.discipline-card{background:#fff!important;color:var(--ink);border:1px solid var(--line);border-top:0!important;border-right:1px solid var(--line)!important;border-bottom:1px solid var(--line)!important;border-left:3px solid var(--discipline-accent,#2a6653)!important;box-shadow:none!important;min-height:100%;}
+.discipline-card:hover,.discipline-card.expanded{background:#fff!important;box-shadow:0 8px 22px rgba(15,35,29,.08)!important}
+.discipline-card .discipline-card-hit{color:var(--ink)}
+.discipline-card .discipline-card-title strong,.discipline-card .discipline-card-title b{color:var(--ink)}
+.discipline-card .discipline-card-milestone span,.discipline-card .discipline-expanded-panel p{color:#3f4e4d}
+.discipline-card .discipline-expand-btn{color:var(--green2);border-top-color:var(--line)}
+.discipline-card-grid{margin-bottom:0!important}
+.schedule-page .schedule-detail-head{margin-top:28px}
+
+/* Import: native file controls must never leak outside the designed cards. */
+.import-choice{background:#fff!important;color:var(--ink);min-height:330px}
+.import-choice:nth-child(2){border-top:3px solid #6f8790}
+.import-any-file{background:#f7faf7!important}
+
+/* Settings no longer has the detached bottom trust panel. */
+.settings-page{padding-bottom:36px}
+
+/* Dark/system readability: every major surface receives a dark token instead of inheriting white text on white cards. */
+:root[data-theme="dark"] .section,
+:root[data-theme="dark"] .page-head,
+:root[data-theme="dark"] .workspace,
+:root[data-theme="dark"] .schedule-page,
+:root[data-theme="dark"] .settings-page,
+:root[data-theme="dark"] .import-page,
+:root[data-theme="dark"] .field-page,
+:root[data-theme="dark"] .capture-main,
+:root[data-theme="dark"] .review-queue-page,
+:root[data-theme="dark"] .review-detail-page,
+:root[data-theme="dark"] .memory-table,
+:root[data-theme="dark"] .trace-table{color:var(--ink)}
+:root[data-theme="dark"] .discipline-card,
+:root[data-theme="dark"] .discipline-card:hover,
+:root[data-theme="dark"] .discipline-card.expanded,
+:root[data-theme="dark"] .schedule-activity-list,
+:root[data-theme="dark"] .schedule-activity,
+:root[data-theme="dark"] .schedule-filter-bar select,
+:root[data-theme="dark"] .capture-source-card,
+:root[data-theme="dark"] .capture-dropzone,
+:root[data-theme="dark"] .voice-recorder,
+:root[data-theme="dark"] .review-table-wrap,
+:root[data-theme="dark"] .memory-table,
+:root[data-theme="dark"] .trace-table,
+:root[data-theme="dark"] .memory-occurrence-card,
+:root[data-theme="dark"] .import-choice,
+:root[data-theme="dark"] .import-any-file,
+:root[data-theme="dark"] .settings-card,
+:root[data-theme="dark"] .team-table,
+:root[data-theme="dark"] .analytics-table,
+:root[data-theme="dark"] .analytics-panel,
+:root[data-theme="dark"] .field-work-card,
+:root[data-theme="dark"] .submission-card,
+:root[data-theme="dark"] .notification-card,
+:root[data-theme="dark"] .field-profile-card,
+:root[data-theme="dark"] .profile-details-grid{background:#182328!important;color:var(--ink);border-color:#354348}
+:root[data-theme="dark"] .discipline-card .discipline-card-milestone span,
+:root[data-theme="dark"] .discipline-card .discipline-expanded-panel p,
+:root[data-theme="dark"] .schedule-filter-bar label,
+:root[data-theme="dark"] .schedule-filter-bar .filter-count,
+:root[data-theme="dark"] .capture-source-head p,
+:root[data-theme="dark"] .capture-dropzone span,
+:root[data-theme="dark"] .setting-copy p,
+:root[data-theme="dark"] .setting-row p,
+:root[data-theme="dark"] .import-purpose p,
+:root[data-theme="dark"] .import-choice p,
+:root[data-theme="dark"] .import-note,
+:root[data-theme="dark"] .helper,
+:root[data-theme="dark"] .field-note p,
+:root[data-theme="dark"] .submission-card span,
+:root[data-theme="dark"] .notification-card p,
+:root[data-theme="dark"] .profile-details-grid span{color:#aebcbe!important}
+:root[data-theme="dark"] .discipline-card .discipline-card-title strong,
+:root[data-theme="dark"] .discipline-card .discipline-card-title b,
+:root[data-theme="dark"] .discipline-card .discipline-card-milestone span,
+:root[data-theme="dark"] .discipline-card .discipline-expanded-panel strong,
+:root[data-theme="dark"] .discipline-card .discipline-expanded-panel p,
+:root[data-theme="dark"] .schedule-activity strong,
+:root[data-theme="dark"] .schedule-activity small,
+:root[data-theme="dark"] .schedule-activity .activity-dates,
+:root[data-theme="dark"] .schedule-activity .activity-dates span,
+:root[data-theme="dark"] .schedule-activity .activity-progress b{color:var(--ink)!important}
+:root[data-theme="dark"] .discipline-card .discipline-card-hit{color:var(--ink)!important}
+:root[data-theme="dark"] .schedule-activity:hover{background:#1f302f!important}
+:root[data-theme="dark"] .schedule-activity.selected{background:#20312d!important}
+:root[data-theme="dark"] .schedule-filter-bar select,
+:root[data-theme="dark"] .settings-form-grid select,
+:root[data-theme="dark"] .member-form-grid select,
+:root[data-theme="dark"] .invite-form input,
+:root[data-theme="dark"] .invite-form select{background:#101a1e!important;color:var(--ink)!important;border-color:#405157!important}
+:root[data-theme="dark"] .import-any-file .outline-btn,
+:root[data-theme="dark"] .import-choice .outline-btn{background:#20312d!important;color:#dce8e3!important;border-color:#557168!important}
+:root[data-theme="dark"] .import-choice .primary-btn{color:#fff!important}
+:root[data-theme="dark"] th{background:#121c20!important;color:#aebbbe!important}
+:root[data-theme="dark"] td{color:#dbe4e1!important;border-color:#354348!important}
+:root[data-theme="dark"] .memory-table tbody tr:hover,
+:root[data-theme="dark"] .trace-table tbody tr:hover{background:#20302f!important}
+:root[data-theme="dark"] .memory-cards>div{background:#182328;color:var(--ink);border-color:#354348}
+:root[data-theme="dark"] .memory-cards p{color:#aebcbe!important}
+:root[data-theme="dark"] .settings-info span:last-child{color:#9eadaf!important}
+:root[data-theme="dark"] .settings-side{display:none!important}
+
+/* Auth and first-render surfaces are explicit, preventing inherited theme flashes. */
+.auth-shell,.auth-left,.auth-right,.auth-card{isolation:isolate}
