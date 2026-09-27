@@ -441,7 +441,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
  const currentSelected=visibleRows.find(a=>a.id===selectedId) || visibleRows[0] || selected;
  const selectDiscipline=(name:string)=>{setDiscipline(name);setStatusFilter('All');const first=rows.find(a=>a.discipline===name);if(first)onSelect(first.id);};
  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
- return <div className="schedule-page"><PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}><div className="schedule-intro"><div><strong>Choose a discipline to inspect its executable plan.</strong><span>Each workstream opens its own schedule so dates, progress, milestones, and evidence stay focused.</span></div><div className="schedule-count"><b>{visibleRows.length}</b><span>visible activities</span></div></div><div className="discipline-card-grid">{cards.map(d=>{
+ return <div className="schedule-page"><PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}><div className="schedule-intro"><div><strong>Choose a discipline to inspect its executable plan.</strong><span>Each workstream opens its own schedule so dates, progress, milestones, and evidence stay focused.</span></div><div className="schedule-count"><b>{visibleRows.length}</b><span>visible activities</span></div></div>{discipline==='All'&&<div className="discipline-card-grid">{cards.map(d=>{
    const isExpanded=expanded===d.name;
    const evidence=recentEvidence(d.name);
    return <div key={d.name} className={`discipline-card ${discipline===d.name?'active':''} ${d.variance<0?'risk':''} ${isExpanded?'expanded':''}`} style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
@@ -459,7 +459,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
        <div><span className="eyebrow">RECENT EVIDENCE</span>{evidence.length?evidence.map((e,i)=><p key={i}>“{e.text.replace(/^"|"$/g,'')}”</p>):<p className="helper">No recent field evidence for this discipline.</p>}</div>
      </div>}
    </div>;
- })}</div><div className="schedule-detail-head"><div><span className="eyebrow">{discipline==='All'?'DISCIPLINE OVERVIEW':'DISCIPLINE SCHEDULE'}</span><h3>{discipline==='All'?'Select a discipline':' '+discipline}</h3><p>{discipline==='All'?'Choose a workstream card to open its focused schedule.':'Activities, milestones, dates, progress and evidence for this workstream.'}</p></div>{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}</div>{discipline!=='All'&&<div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>}{discipline!=='All'&&<div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>}<div className="schedule-selected"><div className="selected-summary"><span className="eyebrow">SELECTED ACTIVITY</span><h3>{currentSelected?.desc || selected.desc}</h3><code>{currentSelected?.id || selected.id}</code></div><div className="selected-stats"><div><span>Progress</span><b>{currentSelected?.progress ?? selected.progress}%</b></div><div><span>Planned</span><b>{currentSelected?.planStart ?? selected.planStart}</b><small>{currentSelected?.planFinish ?? selected.planFinish}</small></div><div><span>Actual</span><b>{currentSelected?.actStart ?? selected.actStart}</b><small>{currentSelected?.actFinish ?? selected.actFinish}</small></div><div><span>AI confidence</span><b>{currentSelected?.aiConf ? `${currentSelected.aiConf}%` : '—'}</b></div></div><div className="selected-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>“Line 24 spool erection completed.”</p><strong>Evidence remains attached to the activity for traceability.</strong></div><button className="outline-btn" onClick={()=>onOpenDetail(currentSelected?.id||selected.id)}>Open activity detail →</button></div></PageSection></div>
+ })}</div>}<div className="schedule-detail-head"><div><span className="eyebrow">{discipline==='All'?'DISCIPLINE OVERVIEW':'DISCIPLINE SCHEDULE'}</span><h3>{discipline==='All'?'Select a discipline':' '+discipline}</h3><p>{discipline==='All'?'Choose a workstream card to open its focused schedule.':'Activities, milestones, dates, progress and evidence for this workstream.'}</p></div>{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}</div>{discipline!=='All'&&<div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>}{discipline!=='All'&&<div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>} </PageSection></div>
 }
 
 function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,processVoice,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;processVoice:()=>void;formatRecordingTime:(seconds:number)=>string}){
@@ -519,6 +519,7 @@ function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump,detailO
 }
 function Memory(){
   const [selectedType,setSelectedType]=useState<string|null>(null);
+  const [selectedOccurrence,setSelectedOccurrence]=useState<any|null>(null);
   const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
 
   const occurrenceData: Record<string, Array<{id:string;date:string;duration:string;discipline:string;evidence:string;status:string}>> = {
@@ -583,7 +584,7 @@ function Memory(){
       <div className="memory-table">
         <table>
           <thead><tr><th>Occurrence</th><th>Date</th><th>Duration</th><th>Discipline</th><th>Execution evidence</th><th>Status</th></tr></thead>
-          <tbody>{occurrences.map(o=><tr key={o.id}>
+          <tbody>{occurrences.map(o=><tr key={o.id} className="memory-occurrence-row" onClick={()=>setSelectedOccurrence(o)} tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedOccurrence(o)}}>
             <td><code>{o.id}</code></td><td>{o.date}</td><td>{o.duration}</td><td>{o.discipline}</td><td style={{maxWidth:420}}>{o.evidence}</td><td><span className="trace-chip">{o.status}</span></td>
           </tr>)}</tbody>
         </table>
@@ -593,6 +594,26 @@ function Memory(){
         <div><span className="eyebrow">BENCHMARK</span><strong>{selected.actualAvg}</strong><p>Observed average duration across {selected.occurrences} occurrences.</p></div>
         <div><span className="eyebrow">REUSE</span><strong>Planning reference</strong><p>Available as historical context for future similar activities.</p></div>
       </div>
+      {selectedOccurrence&&<div className="memory-occurrence-overlay" role="dialog" aria-modal="true" aria-labelledby="occurrence-detail-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedOccurrence(null)}}>
+        <div className="memory-occurrence-card">
+          <div className="memory-occurrence-head">
+            <div><span className="eyebrow">OCCURRENCE DETAIL / VALIDATED EVIDENCE</span><h2 id="occurrence-detail-title">{selectedOccurrence.id}</h2><p>{selected.type} · {selectedOccurrence.discipline}</p></div>
+            <button className="icon-btn memory-occurrence-close" aria-label="Close occurrence details" onClick={()=>setSelectedOccurrence(null)}>×</button>
+          </div>
+          <div className="memory-occurrence-status"><span className="trace-chip">{selectedOccurrence.status}</span><span>Linked to institutional memory</span></div>
+          <div className="memory-occurrence-grid">
+            <div><span>OCCURRENCE DATE</span><b>{selectedOccurrence.date}</b></div>
+            <div><span>ACTUAL DURATION</span><b>{selectedOccurrence.duration}</b></div>
+            <div><span>DISCIPLINE</span><b>{selectedOccurrence.discipline}</b></div>
+            <div><span>ACTIVITY TYPE</span><b>{selected.type}</b></div>
+            <div><span>UPLOADED ON</span><b>{selectedOccurrence.date} · 18:30 IST</b></div>
+            <div><span>UPLOADED BY</span><b>{selectedOccurrence.discipline==='Piping'?'Site Supervisor · Arun Kumar':selectedOccurrence.discipline==='Civil'?'Civil Supervisor · Karthik R':'Discipline Supervisor · Priya S'}</b></div>
+            <div className="wide"><span>SOURCE FILE</span><b>Daily_{selectedOccurrence.discipline.replace(/\s+/g,'_')}_Report_{selectedOccurrence.id}.pdf</b></div>
+            <div className="wide"><span>EXECUTION EVIDENCE</span><p>{selectedOccurrence.evidence}</p></div>
+          </div>
+          <div className="memory-occurrence-footer"><button className="outline-btn" onClick={()=>setSelectedOccurrence(null)}>← Back to occurrences</button><span>Source preserved · audit trace available</span></div>
+        </div>
+      </div>}
     </PageSection>;
   }
 
