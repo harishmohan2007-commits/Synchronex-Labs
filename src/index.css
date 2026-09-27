@@ -967,3 +967,187 @@ button,input,textarea,select{font-family:var(--font-ui)}
 .schedule-page .schedule-instruction,
 .schedule-page .discipline-instruction,
 .schedule-page .schedule-overview-note {display:none!important}
+
+/* =====================================================================
+   FINAL ROUTE + CONTRAST STABILIZATION
+   ===================================================================== */
+/* Analytics and Team were previously unresolved components. These styles
+   give both routes a complete, theme-aware presentation. */
+.analytics-page,.team-page{min-height:calc(100vh - 132px)}
+.analytics-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--border);margin-bottom:22px;background:var(--border);gap:1px}
+.analytics-kpi{background:var(--surface);padding:18px 20px;min-height:116px}
+.analytics-kpi strong{display:block;font:600 28px var(--font-mono);margin:8px 0 4px;color:var(--text)}
+.analytics-kpi small{display:block;color:var(--text-2);font-size:12px;line-height:1.45}
+.analytics-grid-two{display:grid;grid-template-columns:1.35fr 1fr;gap:20px;margin-bottom:20px}
+.analytics-panel{border:1px solid var(--border);background:var(--surface);padding:20px;min-width:0}
+.analytics-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:18px}
+.analytics-panel-head h3{margin:6px 0 0;font-size:20px;color:var(--text)}
+.analytics-chart{display:grid;grid-template-columns:42px minmax(0,1fr);gap:10px;min-height:260px}
+.analytics-ylabels{display:flex;flex-direction:column;justify-content:space-between;padding:4px 0 23px;color:var(--text-3);font:10px var(--font-mono);text-align:right}
+.analytics-plot{position:relative;min-width:0;padding-bottom:22px}
+.analytics-gridlines{position:absolute;inset:0 0 22px;display:flex;flex-direction:column;justify-content:space-between}
+.analytics-gridlines i{display:block;border-top:1px solid var(--surface-3)}
+.analytics-plot svg{display:block;width:100%;height:230px;position:relative;z-index:1}
+.analytics-xlabels{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;color:var(--text-3);font:9px var(--font-mono)}
+.analytics-legend{display:flex;gap:22px;color:var(--text-2);font-size:12px;margin-top:5px}
+.legend-dot{width:20px;height:3px;display:inline-block;vertical-align:middle;margin-right:7px;background:var(--accent)}
+.planned-dot{background:var(--info);border-top:1px dashed var(--info)}
+.analytics-bars{display:flex;flex-direction:column;gap:15px}
+.analytics-bar-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--text-2)}
+.analytics-bar-label b{font:600 11px var(--font-mono);color:var(--text)}
+.analytics-bar-track{position:relative;height:9px;background:var(--surface-3);border:1px solid var(--border);overflow:visible}
+.analytics-bar-track i{display:block;height:100%;background:var(--accent)}
+.analytics-bar-track span{position:absolute;top:-4px;width:1px;height:17px;background:var(--info)}
+.analytics-bar-row small{display:block;margin-top:5px;color:var(--text-3);font-size:10px}
+.analytics-table{width:100%;border-collapse:collapse}
+.analytics-table th,.analytics-table td{padding:12px 10px;border-bottom:1px solid var(--border);text-align:left}
+.analytics-table th{background:var(--surface-2);color:var(--text-3)}
+.analytics-table td{background:var(--surface);color:var(--text)}
+.analytics-table tr:last-child td{border-bottom:0}
+.analytics-table code{font:600 11px var(--font-mono);color:var(--info)}
+.analytics-routing-list{display:flex;flex-direction:column;gap:13px;margin-bottom:20px}
+.analytics-routing-list>div{display:flex;justify-content:space-between;align-items:center;padding-bottom:11px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-2)}
+.analytics-routing-list b{font:600 15px var(--font-mono);color:var(--text)}
+.analytics-event-total{border:1px solid var(--border);background:var(--surface-2);padding:16px}
+.analytics-event-total strong{display:block;font:600 30px var(--font-mono);margin:7px 0 2px;color:var(--text)}
+.analytics-event-total small{color:var(--text-2);font-size:11px}
+.team-role-note{border:1px solid var(--border);background:var(--surface);padding:20px;display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:16px}
+.team-role-note strong{display:block;font-size:17px;color:var(--text);margin:6px 0 4px}
+.team-role-note p{margin:0;color:var(--text-2);font-size:13px;line-height:1.55;max-width:900px}
+.team-table-wrap{border:1px solid var(--border);background:var(--surface);overflow:auto}
+.team-table{width:100%;border-collapse:collapse}
+.team-table th,.team-table td{padding:14px 16px;border-bottom:1px solid var(--border);background:var(--surface);color:var(--text)}
+.team-table th{background:var(--surface-2);color:var(--text-3)}
+.team-table tbody tr:hover td{background:var(--surface-2)}
+.team-table td:first-child{display:flex;align-items:center;gap:10px;min-width:240px}
+.member-avatar{width:32px;height:32px;display:inline-grid;place-items:center;border:1px solid var(--border);background:var(--surface-2);color:var(--brand);font:600 10px var(--font-mono);flex:0 0 auto}
+.member-avatar.large{width:48px;height:48px}
+.team-footer{display:flex;justify-content:space-between;gap:20px;padding:14px 2px;color:var(--text-3);font:10px var(--font-mono);text-transform:uppercase;letter-spacing:.04em}
+
+/* Command: make every chart/stat surface readable in dark mode. */
+.pulse-kpis>div{background:var(--surface);border:1px solid var(--border)}
+.pulse-kpis span{color:var(--text-3)}
+.pulse-kpis b{color:var(--text)}
+.metric strong.blue{color:var(--blue)}
+.metric strong.red{color:var(--red)}
+.metric strong.amber{color:var(--amber)}
+
+:root[data-theme="dark"] .pulse-kpis>div{background:#1b2d32!important;border-color:#3a5156!important}
+:root[data-theme="dark"] .pulse-kpis span{color:#94aaa5!important}
+:root[data-theme="dark"] .pulse-kpis b{color:#f4f8f6!important}
+:root[data-theme="dark"] .pulse-kpis .negative{color:#ff8b82!important}
+:root[data-theme="dark"] .chart polyline:first-of-type{stroke:#9bb8c9!important}
+:root[data-theme="dark"] .chart polyline:last-of-type{stroke:#72c3a0!important}
+:root[data-theme="dark"] .legend-line.planned{background:#9bb8c9!important;border-top-color:#9bb8c9!important}
+:root[data-theme="dark"] .legend-line.actual{background:#72c3a0!important}
+:root[data-theme="dark"] .chart-axis{color:#9aaba8!important}
+:root[data-theme="dark"] .gridlines{background:repeating-linear-gradient(to bottom,transparent 0,transparent 43px,#2a3c40 44px)!important}
+:root[data-theme="dark"] .count-badge{background:#d8ede5!important;color:#17382e!important}
+:root[data-theme="dark"] .status-good{color:#9bd8b7!important}
+:root[data-theme="dark"] .status-strip{background:var(--surface)!important;border-color:var(--border)!important;color:var(--text)!important}
+:root[data-theme="dark"] .status-strip strong{color:var(--text)!important}
+:root[data-theme="dark"] .metric{background:var(--surface)!important;color:var(--text)!important}
+:root[data-theme="dark"] .metric span,:root[data-theme="dark"] .metric small{color:var(--text-2)!important}
+:root[data-theme="dark"] .pulse-grid{background:var(--surface)!important;border-color:var(--border)!important}
+:root[data-theme="dark"] .trend{background:var(--surface)!important;border-color:var(--border)!important}
+:root[data-theme="dark"] .command-aside{background:var(--surface-2)!important}
+:root[data-theme="dark"] .aside-block{background:var(--surface)!important;border-color:var(--border)!important}
+:root[data-theme="dark"] .aside-block p,:root[data-theme="dark"] .aside-copy{color:var(--text-2)!important}
+
+/* Occurrence modal close control: never inherit a white icon button in dark theme. */
+.memory-occurrence-close{display:grid!important;place-items:center!important;width:34px!important;height:34px!important;font-size:18px!important;line-height:1!important;background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
+.memory-occurrence-close:hover{background:var(--surface-2)!important;color:var(--text)!important}
+:root[data-theme="dark"] .memory-occurrence-close{background:#223438!important;color:#f4f8f6!important;border-color:#55706f!important}
+:root[data-theme="dark"] .memory-occurrence-close:hover{background:#2b4549!important}
+
+/* Shared dark-mode readability for less-visible metadata and controls. */
+:root[data-theme="dark"] .eyebrow,.rail-label{color:#91a7a2}
+:root[data-theme="dark"] .rail-num{color:#7f9692}
+:root[data-theme="dark"] .rail-glyph{color:#b6c7c2}
+:root[data-theme="dark"] .rail-item{color:#d1ddda}
+:root[data-theme="dark"] .rail-item.active,:root[data-theme="dark"] .rail-item:hover{color:#fff}
+:root[data-theme="dark"] .top-project code{color:#aebfbb}
+:root[data-theme="dark"] .top-project .eyebrow{color:#94a7a3}
+:root[data-theme="dark"] .global-search span,:root[data-theme="dark"] .global-search kbd{color:#9aaea9}
+:root[data-theme="dark"] .breadcrumb{color:#8fa49f}
+:root[data-theme="dark"] .queue-status{background:#d9eee5!important;color:#17382e!important}
+
+@media(max-width:1050px){
+  .analytics-summary-grid{grid-template-columns:repeat(2,1fr)}
+  .analytics-grid-two{grid-template-columns:1fr}
+}
+
+/* =====================================================================
+   COMPLETE ROUTE STABILITY + COMMAND POLISH
+   ===================================================================== */
+.field-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;border:1px solid var(--border);background:var(--border);margin-bottom:20px}
+.field-summary{background:var(--surface);padding:18px 20px;min-height:112px}
+.field-summary strong{display:block;font:600 27px var(--font-mono);margin:7px 0 3px;color:var(--text)}
+.field-summary small{color:var(--text-2);font-size:12px}
+.field-home-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:20px}
+.field-panel{border:1px solid var(--border);background:var(--surface);padding:20px}
+.panel-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:15px;margin-bottom:12px}
+.panel-heading h3{margin:6px 0 0;font-size:20px;color:var(--text)}
+.field-work-list{display:flex;flex-direction:column}
+.field-work-card{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 150px 20px;gap:18px;align-items:center;text-align:left;border:1px solid var(--border);border-bottom:0;background:var(--surface);padding:16px;color:var(--text)}
+.field-work-card:last-child{border-bottom:1px solid var(--border)}
+.field-work-card:hover{background:var(--surface-2)}
+.field-work-card code{display:block;color:var(--info);font:600 10px var(--font-mono);margin-bottom:4px}
+.field-work-card strong{display:block;font-size:15px;color:var(--text)}
+.field-work-card small{display:block;margin-top:4px;color:var(--text-2);font-size:11px}
+.field-work-card>div:nth-child(2){display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.field-work-card>div:nth-child(2) span{font-size:10px;color:var(--text-3)}
+.field-work-card>div:nth-child(2) b{font:600 12px var(--font-mono);color:var(--text)}
+.field-progress{display:grid!important;grid-template-columns:auto auto;gap:5px 8px}
+.field-progress .bar-track{grid-column:1/-1;width:100%;height:6px;background:var(--surface-3)}
+.field-progress .bar-track i{display:block;height:100%;background:var(--accent)}
+.field-work-card>i{font-style:normal;color:var(--text-3)}
+.submission-mini{border:1px solid var(--border);padding:14px 15px;margin-bottom:10px;display:flex;flex-direction:column;gap:5px;background:var(--surface-2)}
+.submission-mini strong{color:var(--text);font-size:14px}.submission-mini small{color:var(--text-2);font-size:11px}.submission-state{width:max-content;padding:4px 7px;font:600 9px var(--font-mono);text-transform:uppercase;border:1px solid var(--border)}
+.submission-state.accepted{background:#e7f3ec;color:#266c52}.submission-state.review{background:#f6ead7;color:#9a5c17}.submission-state.needs{background:#f7dfdc;color:#a13f36}
+.field-submissions-list{display:flex;flex-direction:column;gap:10px}.submission-card{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);background:var(--surface);padding:18px 20px}.submission-card>div{display:flex;flex-direction:column;gap:6px}.submission-card strong{font-size:15px;color:var(--text)}.submission-card small{font-size:11px;color:var(--text-2)}.submission-arrow{color:var(--text-3)}
+.field-notification-list{display:flex;flex-direction:column;gap:10px}.notification-card{display:flex;justify-content:space-between;gap:20px;border:1px solid var(--border);background:var(--surface);padding:18px}.notification-card strong{display:block;margin:6px 0 3px;font-size:15px;color:var(--text)}.notification-card p{margin:0;color:var(--text-2);font-size:13px;line-height:1.5}.notification-card>span{color:var(--accent)}
+.field-profile-card{border:1px solid var(--border);background:var(--surface);padding:22px;display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center}.field-profile-card h3{margin:5px 0;font-size:21px;color:var(--text)}.field-profile-card p{margin:0;color:var(--text-2);font-size:13px}.profile-actions{display:flex;gap:10px}.profile-details-grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:14px;border:1px solid var(--border);background:var(--border);gap:1px}.profile-details-grid>div{background:var(--surface);padding:15px}.profile-details-grid span{display:block;font:600 9px var(--font-mono);color:var(--text-3);margin-bottom:6px}.profile-details-grid b{font-size:13px;color:var(--text)}
+
+/* Command pulse had an empty second grid column. Use the available width for the real chart. */
+.pulse-grid{grid-template-columns:1fr!important}
+.trend{border-right:0!important}
+
+/* Theme-safe modal close buttons across the entire application. */
+.modal .icon-btn{display:grid;place-items:center;background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important;font-size:18px;line-height:1}
+.modal .icon-btn:hover{background:var(--surface-2)!important}
+
+:root[data-theme="dark"] .field-work-card,
+:root[data-theme="dark"] .submission-card,
+:root[data-theme="dark"] .notification-card,
+:root[data-theme="dark"] .field-profile-card,
+:root[data-theme="dark"] .profile-details-grid>div,
+:root[data-theme="dark"] .field-panel,
+:root[data-theme="dark"] .field-summary,
+:root[data-theme="dark"] .submission-mini{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+:root[data-theme="dark"] .field-work-card:hover{background:var(--surface-2)!important}
+:root[data-theme="dark"] .field-work-card strong,
+:root[data-theme="dark"] .field-work-card b,
+:root[data-theme="dark"] .field-profile-card h3,
+:root[data-theme="dark"] .submission-card strong,
+:root[data-theme="dark"] .notification-card strong,
+:root[data-theme="dark"] .profile-details-grid b{color:var(--text)!important}
+:root[data-theme="dark"] .field-work-card small,
+:root[data-theme="dark"] .field-work-card>div:nth-child(2) span,
+:root[data-theme="dark"] .field-profile-card p,
+:root[data-theme="dark"] .submission-card small,
+:root[data-theme="dark"] .notification-card p,
+:root[data-theme="dark"] .field-summary small{color:var(--text-2)!important}
+:root[data-theme="dark"] .submission-state.accepted{background:#23493b!important;color:#c8ecdc!important}
+:root[data-theme="dark"] .submission-state.review{background:#4c371f!important;color:#f4c87f!important}
+:root[data-theme="dark"] .submission-state.needs{background:#4e2926!important;color:#f1aaa2!important}
+:root[data-theme="dark"] .field-progress .bar-track{background:#26393e!important}
+:root[data-theme="dark"] .profile-details-grid{background:var(--border)!important}
+:root[data-theme="dark"] .analytics-table td,
+:root[data-theme="dark"] .analytics-table th,
+:root[data-theme="dark"] .team-table td,
+:root[data-theme="dark"] .team-table th{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
+:root[data-theme="dark"] .analytics-table th,
+:root[data-theme="dark"] .team-table th{background:var(--surface-2)!important;color:var(--text-3)!important}
+:root[data-theme="dark"] .analytics-table tr:hover td,
+:root[data-theme="dark"] .team-table tr:hover td{background:var(--surface-2)!important}

@@ -771,6 +771,113 @@ function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle
   </div>
 }
 
+function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
+  const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
+  return <div className="field-page">
+    <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
+      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>REV 04</strong><small>Approved company schedule</small></div></div>
+      <div className="field-home-grid">
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+      </div>
+    </PageSection>
+  </div>
+}
+
+function MyWork({onCapture}:{onCapture:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ASSIGNED WORK" title="My work" action={<button className="primary-btn" onClick={onCapture}>Report progress →</button>}><div className="field-work-list">{ACTIVITIES.slice(0,10).map(a=><button className="field-work-card" key={a.id} onClick={onCapture}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.planStart} → {a.planFinish}</small></div><div className="field-progress"><span>Current</span><b>{a.progress}%</b><div className="bar-track"><i style={{width:`${a.progress}%`}}/></div></div><i>→</i></button>)}</div></PageSection></div>
+}
+
+function Submissions({onCapture}:{onCapture:()=>void}){
+  const submissions=[
+    {status:'Accepted',cls:'accepted',title:'P-101 Spool B erection',meta:'Today · 10:32 · linked to PIP-261'},
+    {status:'Under review',cls:'review',title:'Line 25 erection started',meta:'Today · 11:14 · planner validation pending'},
+    {status:'Needs information',cls:'needs',title:'Foundation Block A update',meta:'Yesterday · 17:45 · add workfront context'},
+  ];
+  return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}><div className="field-submissions-list">{submissions.map(s=><div className="submission-card" key={s.title}><div><span className={`submission-state ${s.cls}`}>{s.status}</span><strong>{s.title}</strong><small>{s.meta}</small></div><span className="submission-arrow">→</span></div>)}</div></PageSection></div>
+}
+
+function FieldNotifications(){
+  const items=[
+    ['Assignment updated','P-101 Spool B remains assigned to your workfront.','10 min ago'],
+    ['Submission under review','Line 25 erection started is awaiting planner validation.','35 min ago'],
+    ['Schedule notice','MCC-2 panel installation is planned for 25 Sep.','2 hr ago'],
+  ];
+  return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
+}
+
+function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="outline-btn" onClick={onSwitch}>Switch to company portal</button><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div><div><span>BASELINE</span><b>Rev 04 · Read only</b></div></div></PageSection></div>
+}
+
+function Analytics(){
+  const totalActivities=ACTIVITIES.length;
+  const avgActual=Math.round(ACTIVITIES.reduce((sum,a)=>sum+a.progress,0)/Math.max(totalActivities,1));
+  const matched=FIELD_EVENTS.filter(e=>e.conf>=90).length;
+  const review=REVIEW_QUEUE.filter(r=>r.status==='Review').length;
+  const unmatched=REVIEW_QUEUE.filter(r=>r.status==='Unmatched').length;
+  return <div className="analytics-page">
+    <PageSection label="ANALYTICS / PROJECT PERFORMANCE" title="Project analytics">
+      <div className="analytics-summary-grid">
+        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{avgActual}%</strong><small>Across {totalActivities} executable demo activities</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>57%</strong><small>Current planned project progress</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{review}</strong><small>Ambiguous events awaiting planner action</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{unmatched}</strong><small>Explicit new-activity proposals</small></div>
+      </div>
+      <div className="analytics-grid-two">
+        <div className="analytics-panel">
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">Rev 04</span></div>
+          <div className="analytics-chart">
+            <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
+            <div className="analytics-plot">
+              <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
+              <svg viewBox="0 0 640 240" preserveAspectRatio="none" aria-label="Planned and actual progress chart">
+                <polyline points="0,150 106,130 213,105 320,83 427,64 533,43 640,23" fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/>
+                <polyline points="0,166 106,146 213,118 320,91 427,72 533,63 640,49" fill="none" stroke="var(--accent)" strokeWidth="4"/>
+              </svg>
+              <div className="analytics-xlabels"><span>01 Sep</span><span>05 Sep</span><span>10 Sep</span><span>15 Sep</span><span>18 Sep</span><span>20 Sep</span><span>23 Sep</span></div>
+            </div>
+          </div>
+          <div className="analytics-legend"><span><i className="legend-dot actual-dot"/>Actual</span><span><i className="legend-dot planned-dot"/>Planned</span></div>
+        </div>
+        <div className="analytics-panel">
+          <div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div>
+          <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div>
+        </div>
+      </div>
+      <div className="analytics-grid-two">
+        <div className="analytics-panel">
+          <div className="analytics-panel-head"><div><span className="eyebrow">ACTIVITY DURATION</span><h3>Variance snapshot</h3></div></div>
+          <table className="analytics-table"><thead><tr><th>Activity</th><th>Baseline</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{[
+            ['PIP-245','5 days','6 days','+1 day'],['CIV-022','8 days','8 days','0'],['MECH-018','4 days','5 days','+1 day'],['ELE-014','5 days','5 days','0'],['INST-045','5 days','6 days','+1 day']
+          ].map(r=><tr key={r[0]}><td><code>{r[0]}</code></td><td>{r[1]}</td><td>{r[2]}</td><td className={r[3].startsWith('+')?'negative':'positive'}>{r[3]}</td></tr>)}</tbody></table>
+        </div>
+        <div className="analytics-panel">
+          <div className="analytics-panel-head"><div><span className="eyebrow">AI LINKING</span><h3>Evidence routing</h3></div></div>
+          <div className="analytics-routing-list"><div><span>High-confidence linked</span><b>{matched?85:0}%</b></div><div><span>Planner review</span><b>{review?12:0}%</b></div><div><span>Unmatched</span><b>{unmatched?3:0}%</b></div></div>
+          <div className="analytics-event-total"><span className="eyebrow">EVENTS PROCESSED</span><strong>247</strong><small>Last 30 days · synthetic demo dataset</small></div>
+        </div>
+      </div>
+    </PageSection>
+  </div>
+}
+
+function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:string;name:string;role:string;workspace:string;status:string})=>void}){
+  const members=[
+    {initials:'PC',name:'Priya Menon',role:'Project Manager',workspace:'Company',status:'Active'},
+    {initials:'PL',name:'Arun Kumar',role:'Planner / Reviewer',workspace:'Company',status:'Active'},
+    {initials:'SV',name:'Karthik R',role:'Field Supervisor',workspace:'Field',status:'Active'},
+    {initials:'EN',name:'Meera S',role:'Field Engineer',workspace:'Field',status:'Active'},
+  ];
+  return <div className="team-page">
+    <PageSection label="ACCESS / PROJECT TEAM" title="Who can see and change what" action={<button className="primary-btn" onClick={onInvite}>Invite member +</button>}>
+      <div className="team-role-note"><div><span className="eyebrow">ROLE SEPARATION</span><strong>Company users control the plan. Field users report execution.</strong><p>Access is separated by workspace so field teams never need baseline administration or planner controls.</p></div><span className="trace-chip">Workspace scoped</span></div>
+      <div className="team-table-wrap"><table className="team-table"><thead><tr><th>Member</th><th>Role</th><th>Workspace</th><th>Status</th><th>Access</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td><span className="member-avatar">{m.initials}</span><strong>{m.name}</strong></td><td>{m.role}</td><td>{m.workspace}</td><td><span className="status-badge track">{m.status}</span></td><td><button className="text-action" onClick={()=>onManage(m)}>Manage →</button></td></tr>)}</tbody></table></div>
+      <div className="team-footer"><span>4 active members · 2 company · 2 field</span><span>Permissions are evaluated per workspace.</span></div>
+    </PageSection>
+  </div>
+}
+
 function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,autoSave,setAutoSave,dateFormat,setDateFormat,timezone,setTimezone,retention,setRetention}:{threshold:number;setThreshold:(n:number)=>void;saved:boolean;onSave:()=>void;themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void;retention:string;setRetention:(v:string)=>void}){
  return <div className="settings-page"><PageSection label="WORKSPACE / APPEARANCE" title="Make Synchronex work your way"><div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for this workspace. System follows your operating system preference.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div><div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible in tables and lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div></PageSection>
  <PageSection label="TRUST / AUTOMATION" title="Control when AI may apply changes"><div className="settings-card stacked"><div className="setting-row"><div><strong>Auto-apply confidence threshold</strong><p>Events at or above this threshold may be eligible for automatic application if all validation checks pass.</p></div><div className="threshold-control"><input aria-label="Auto apply confidence threshold" type="range" min="80" max="99" value={threshold} onChange={e=>setThreshold(Number(e.target.value))}/><b>{threshold}%</b></div></div><div className="setting-row"><div><strong>Auto-save drafts</strong><p>Preserve unfinished company form changes locally before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div><div className="setting-row"><div><strong>Human review gate</strong><p>Ambiguous, low-confidence, unmatched, and granularity-mismatch events always require planner review.</p></div><span className="locked-setting">Required</span></div></div></PageSection>
