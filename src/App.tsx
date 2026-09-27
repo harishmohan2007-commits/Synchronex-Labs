@@ -157,7 +157,7 @@ export default function App(){
   const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
-  const [reviewIndex,setReviewIndex]=useState(0);
+  const [reviewIndex,setReviewIndex]=useState<number|null>(null);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
@@ -185,7 +185,7 @@ export default function App(){
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
   const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
-  const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
+  const activeReview=reviewIndex===null ? null : (openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || null);
 
   const searchResults=useMemo(()=>searchAll(query),[query]);
   const groupedResults=useMemo(()=>{
@@ -252,7 +252,7 @@ export default function App(){
     setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
     setReviewCount(c=>Math.max(0,c-1));
     notify(`Match ${activeReview.candidate || 'new activity'} confirmed. Actual update queued with provenance.`);
-    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
+    setReviewIndex(null);
   };
   const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
@@ -416,95 +416,54 @@ function Capture({text,setText,stage,busy,result,run,onImport}:{text:string;setT
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){return <div className="review-layout"><div className="review-main"><PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Resolve before apply" action={<span className="queue-count">{count} open</span>}><div className="review-hero"><div><span className="eyebrow">EVENT {String(index+1).padStart(2,'0')} / {item?.id}</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div><div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div><div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p></PageSection></div><aside className="review-aside"><span className="eyebrow">QUEUE / {queue.length} ITEMS</span><div className="review-list" role="listbox" aria-label="Review queue">{queue.length ? queue.map((q,i)=><button key={q.id} type="button" role="option" aria-selected={i===index} className={`review-list-item ${i===index?'active':''} ${q.status==='Unmatched'?'unmatched':''}`} onClick={()=>onJump(i)}><code>{q.id}</code><span>{q.text.replace(/^"|"$/g,'')}</span><b>{q.conf?`${q.conf}%`:'—'}</b></button>) : <div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div>}</div><div className="review-rule"/><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside></div>}
+function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump}:{count:number;item:any;index:number|null;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void}){
+ return <div className="review-page">
+   <PageSection label="HUMAN VALIDATION / CONFIDENCE GATE" title="Review queue" action={<span className="queue-count">{count} open</span>}>
+     <div className="review-queue-panel">
+       <div className="review-queue-head">
+         <div><strong>Select a field event to open planner validation.</strong><span>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</span></div>
+         <div className="review-filters"><select><option>All Confidence</option><option>&gt;80%</option><option>60–80%</option><option>&lt;60%</option></select><select><option>All Disciplines</option><option>Civil</option><option>Piping</option><option>Mechanical</option></select><select><option>All Issues</option><option>Multiple candidates</option><option>No match</option><option>Granularity</option></select></div>
+       </div>
+       <div className="review-table-wrap">
+         <table className="data-table review-queue-table">
+           <thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th></tr></thead>
+           <tbody>
+             {queue.length ? queue.map((q,i)=><tr key={q.id} onClick={()=>onJump(i)} className={index===i?'selected-review-row':''}>
+               <td><code>{q.id}</code></td>
+               <td className="review-event-text">{q.text.replace(/^"|"$/g,'')}</td>
+               <td>{q.candidate||'—'}</td>
+               <td><b className={q.conf>=80?'review-high':q.conf>=70?'review-mid':'review-low'}>{q.conf?`${q.conf}%`:'—'}</b></td>
+               <td>{q.issue}</td>
+               <td><span className={`review-status ${q.status==='Unmatched'?'unmatched':'reviewing'}`}>{q.status}</span></td>
+             </tr>) : <tr><td colSpan={6} className="review-empty-cell">Queue cleared · all open decisions have been resolved.</td></tr>}
+           </tbody>
+         </table>
+       </div>
+     </div>
+   </PageSection>
 
-function Memory(){
-  const [selectedType,setSelectedType]=useState<string|null>(null);
-  const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
-
-  const occurrenceData: Record<string, Array<{id:string;date:string;duration:string;discipline:string;evidence:string;status:string}>> = {
-    'Pipe Erection': [
-      {id:'PE-042',date:'23 Sep 2026',duration:'8 days',discipline:'Piping',evidence:'P-101 Spool B erection completed after material release.',status:'Validated'},
-      {id:'PE-041',date:'19 Sep 2026',duration:'7 days',discipline:'Piping',evidence:'Pipe erection progressed across the north rack workfront.',status:'Validated'},
-      {id:'PE-040',date:'14 Sep 2026',duration:'6 days',discipline:'Piping',evidence:'Spool erection completed with inspection handover.',status:'Validated'},
-      {id:'PE-039',date:'08 Sep 2026',duration:'9 days',discipline:'Piping',evidence:'Erection extended due to material availability constraint.',status:'Validated'},
-      {id:'PE-038',date:'01 Sep 2026',duration:'7 days',discipline:'Piping',evidence:'Pipe erection completed for the assigned workfront.',status:'Validated'},
-    ],
-    'Foundation Work': [
-      {id:'FW-031',date:'22 Sep 2026',duration:'10 days',discipline:'Civil',evidence:'Foundation block concrete and curing activities completed.',status:'Validated'},
-      {id:'FW-030',date:'16 Sep 2026',duration:'9 days',discipline:'Civil',evidence:'Foundation work completed after inspection clearance.',status:'Validated'},
-      {id:'FW-029',date:'10 Sep 2026',duration:'8 days',discipline:'Civil',evidence:'Foundation excavation, reinforcement and pour completed.',status:'Validated'},
-      {id:'FW-028',date:'03 Sep 2026',duration:'11 days',discipline:'Civil',evidence:'Additional preparation work extended the foundation cycle.',status:'Validated'},
-      {id:'FW-027',date:'27 Aug 2026',duration:'9 days',discipline:'Civil',evidence:'Foundation block released for the next work package.',status:'Validated'},
-    ],
-    'Cable Installation': [
-      {id:'CI-027',date:'23 Sep 2026',duration:'6 days',discipline:'Electrical',evidence:'Cable pulling and termination completed for the panel area.',status:'Validated'},
-      {id:'CI-026',date:'17 Sep 2026',duration:'5 days',discipline:'Electrical',evidence:'Cable installation completed after route clearance.',status:'Validated'},
-      {id:'CI-025',date:'11 Sep 2026',duration:'4 days',discipline:'Electrical',evidence:'Cable pulling completed for the assigned tray section.',status:'Validated'},
-      {id:'CI-024',date:'05 Sep 2026',duration:'5 days',discipline:'Electrical',evidence:'Cable installation and tagging verified.',status:'Validated'},
-      {id:'CI-023',date:'29 Aug 2026',duration:'5 days',discipline:'Electrical',evidence:'Installation completed and handed over for testing.',status:'Validated'},
-    ],
-    'Instrument Hook-Up': [
-      {id:'IH-018',date:'24 Sep 2026',duration:'9 days',discipline:'Instrumentation',evidence:'Instrument hook-up completed and prepared for loop checks.',status:'Validated'},
-      {id:'IH-017',date:'18 Sep 2026',duration:'8 days',discipline:'Instrumentation',evidence:'Field instruments connected after cable readiness.',status:'Validated'},
-      {id:'IH-016',date:'12 Sep 2026',duration:'7 days',discipline:'Instrumentation',evidence:'Hook-up completed with inspection sign-off.',status:'Validated'},
-      {id:'IH-015',date:'06 Sep 2026',duration:'9 days',discipline:'Instrumentation',evidence:'Additional calibration checks extended execution.',status:'Validated'},
-      {id:'IH-014',date:'30 Aug 2026',duration:'8 days',discipline:'Instrumentation',evidence:'Instrument hook-up completed for the assigned package.',status:'Validated'},
-    ],
-    'Equipment Alignment': [
-      {id:'EA-022',date:'21 Sep 2026',duration:'5 days',discipline:'Mechanical',evidence:'Pump alignment completed and recorded in the field report.',status:'Validated'},
-      {id:'EA-021',date:'15 Sep 2026',duration:'4 days',discipline:'Mechanical',evidence:'Equipment alignment completed after baseplate correction.',status:'Validated'},
-      {id:'EA-020',date:'09 Sep 2026',duration:'4 days',discipline:'Mechanical',evidence:'Alignment verified within accepted tolerance.',status:'Validated'},
-      {id:'EA-019',date:'03 Sep 2026',duration:'3 days',discipline:'Mechanical',evidence:'Initial alignment completed for the equipment package.',status:'Validated'},
-      {id:'EA-018',date:'28 Aug 2026',duration:'5 days',discipline:'Mechanical',evidence:'Re-alignment required following inspection feedback.',status:'Validated'},
-    ],
-    'Structural Steel': [
-      {id:'SS-015',date:'20 Sep 2026',duration:'13 days',discipline:'Structural',evidence:'Structural steel erection completed for the north module.',status:'Validated'},
-      {id:'SS-014',date:'12 Sep 2026',duration:'12 days',discipline:'Structural',evidence:'Steel erection progressed with staged material releases.',status:'Validated'},
-      {id:'SS-013',date:'04 Sep 2026',duration:'11 days',discipline:'Structural',evidence:'Structural frame completed and released for follow-on work.',status:'Validated'},
-      {id:'SS-012',date:'27 Aug 2026',duration:'13 days',discipline:'Structural',evidence:'Erection cycle extended due to access constraints.',status:'Validated'},
-      {id:'SS-011',date:'15 Aug 2026',duration:'12 days',discipline:'Structural',evidence:'Steel package completed with inspection evidence retained.',status:'Validated'},
-    ],
-  };
-
-  if(selected){
-    const occurrences=occurrenceData[selected.type] || [];
-    return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCE DETAIL" title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button>}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20,marginBottom:22}}>
-        <div>
-          <p className="lead" style={{marginBottom:6}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
-          <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'#64748B'}}>{selected.occurrences} total occurrences · synthetic demo evidence</span>
-        </div>
-        <div style={{display:'flex',gap:28,flexShrink:0}}>
-          <div><span className="eyebrow">BASELINE AVG</span><strong style={{display:'block',fontSize:20}}>{selected.baselineAvg}</strong></div>
-          <div><span className="eyebrow">ACTUAL AVG</span><strong style={{display:'block',fontSize:20}}>{selected.actualAvg}</strong></div>
-          <div><span className="eyebrow">DRIFT</span><strong style={{display:'block',fontSize:20,color:'#B91C1C'}}>{selected.variance}</strong></div>
-        </div>
-      </div>
-      <div className="memory-table">
-        <table>
-          <thead><tr><th>Occurrence</th><th>Date</th><th>Duration</th><th>Discipline</th><th>Execution evidence</th><th>Status</th></tr></thead>
-          <tbody>{occurrences.map(o=><tr key={o.id}>
-            <td><code>{o.id}</code></td><td>{o.date}</td><td>{o.duration}</td><td>{o.discipline}</td><td style={{maxWidth:420}}>{o.evidence}</td><td><span className="trace-chip">{o.status}</span></td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-      <div className="memory-cards" style={{marginTop:16}}>
-        <div><span className="eyebrow">TRACEABILITY</span><strong>Evidence retained</strong><p>Each occurrence remains linked to validated execution evidence.</p></div>
-        <div><span className="eyebrow">BENCHMARK</span><strong>{selected.actualAvg}</strong><p>Observed average duration across {selected.occurrences} occurrences.</p></div>
-        <div><span className="eyebrow">REUSE</span><strong>Planning reference</strong><p>Available as historical context for future similar activities.</p></div>
-      </div>
-    </PageSection>;
-  }
-
-  return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}>
-    <p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p>
-    <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
-      <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
-    </tr>)}</tbody></table></div>
-    <div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div>
-  </PageSection>;
+   {item && index!==null && <div className="review-detail-card">
+     <div className="review-detail-main">
+       <div className="review-detail-header">
+         <div><span className="eyebrow">HUMAN VALIDATION / EVENT {String(index+1).padStart(2,'0')} / {item.id}</span><h2>Resolve before apply</h2></div>
+         <div className="confidence-ring"><b>{item.conf||0}%</b><span>AI confidence</span></div>
+       </div>
+       <div className="review-hero">
+         <div><blockquote>{item.text}</blockquote><span className="issue-chip">{item.issue}</span></div>
+       </div>
+       <div className="candidate-grid">
+         <div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item.candidate || 'No activity'}</code><strong>{item.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item.conf || 0}%</span></div>
+         <div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div>
+       </div>
+       <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div>
+       <p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+     </div>
+     <aside className="review-detail-aside"><span className="eyebrow">VALIDATION CHECKS</span>{['Source preserved','Activity exists in baseline','Discipline consistent','Date is valid','Confidence below auto-apply threshold'].map((x,i)=><div className="check-row" key={x}><span>{i<4?'✓':'!'}</span><p>{x}<small>{i<4?'Passed':'Planner decision required'}</small></p></div>)}<div className="review-rule"/><span className="eyebrow">EDGE CASE</span><p className="aside-copy">Granularity mismatch is surfaced explicitly. Field detail can be richer than the plan; the system must never silently discard it.</p></aside>
+   </div>}
+ </div>
 }
+
+function Memory(){return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}><p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p><div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type}><td><strong>{m.type}</strong></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div><div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div></PageSection>}
 
 function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
 
