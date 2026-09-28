@@ -391,6 +391,7 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
+      <div className="rail-footer"><button className="rail-signout" onClick={()=>{setAuthenticated(false);setModal(null);setDirty(false);}}>↪ <span>Sign out</span></button></div>
     </aside>
 
     <main className="workspace">
@@ -419,7 +420,6 @@ export default function App(){
               )})}
             </div>}
           </div>
-          <button className="outline-btn" onClick={()=>notify(role==='company'?'Baseline Rev 04 is active. Changes are tracked against this revision.':'Field execution workspace is connected to the approved company baseline.')}>{role==='company'?<>Baseline <b>04</b></>:'Field mode'}</button>
         </div>
       </div>
 
@@ -437,7 +437,7 @@ export default function App(){
       {role==='field' && screen==='my-work'&&<MyWork onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
-      {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
+      {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
     </main>
 
     {modal==='profile'&&<Modal title="Account" onClose={()=>setModal(null)}>
@@ -457,11 +457,9 @@ export default function App(){
           <div><span>PROJECT</span><b>North Field / Phase 1</b></div>
           <div><span>EMAIL</span><b>{role==='company'?'planner@northfield.example':'field.supervisor@northfield.example'}</b></div>
           <div><span>ACCESS</span><b>{role==='company'?'Plan · Review · Control':'Work · Capture · Submit'}</b></div>
-          <div><span>BASELINE</span><b>{role==='company'?'Rev 04 · Managed':'Rev 04 · Read only'}</b></div>
         </div>
         <div className="profile-modal-actions">
           <button className="outline-btn" onClick={()=>{setModal(null);go(role==='company'?'settings':'profile')}}>{role==='company'?'Open account settings':'Open profile'}</button>
-          <button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal</button>
           <button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null);setDirty(false)}}>Sign out</button>
         </div>
       </div>
@@ -516,7 +514,7 @@ function PageSection({label,title,children,action}:{label?:string;title:string;c
 
 function Command({onGo,onSelect,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id:string)=>void;reviewCount:number}){
  const commandSignals=FIELD_EVENTS.slice(0,5);
- return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">BASELINE REV 04</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div><div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div></div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('review')}>Open review →</button>}><div className="signal-table">{commandSignals.map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block decision-card"><span className="eyebrow">DECISION QUEUE</span><div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block capture-card"><div className="capture-card-icon">↗</div><span className="eyebrow">NEXT CONTROL</span><h3>Review incoming field evidence</h3><p>Field teams submit text, voice, and files. Your team validates uncertain matches before they become schedule actuals.</p><div className="capture-card-meta"><span>FIELD INTAKE</span><span>HUMAN GATE</span></div><button className="outline-btn" onClick={()=>onGo('review')}>Review incoming evidence <span>→</span></button></div><div className="aside-block health-card"><div className="health-head"><span className="eyebrow">PROJECT HEALTH</span><span className="health-dot">● LIVE</span></div><div className="health-line"><span>Baseline completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
+ return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">PROJECT STATUS</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div><div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div></div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('review')}>Open review →</button>}><div className="signal-table">{commandSignals.map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block decision-card"><span className="eyebrow">DECISION QUEUE</span><div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block capture-card"><div className="capture-card-icon">↗</div><span className="eyebrow">NEXT CONTROL</span><h3>Review incoming field evidence</h3><p>Field teams submit text, voice, and files. Your team validates uncertain matches before they become schedule actuals.</p><div className="capture-card-meta"><span>FIELD INTAKE</span><span>HUMAN GATE</span></div><button className="outline-btn" onClick={()=>onGo('review')}>Review incoming evidence <span>→</span></button></div><div className="aside-block health-card"><div className="health-head"><span className="eyebrow">PROJECT HEALTH</span><span className="health-dot">● LIVE</span></div><div className="health-line"><span>Schedule completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
@@ -727,7 +725,72 @@ function Memory(){
   </PageSection>;
 }
 
-function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
+type TraceFile = {
+  id:string; name:string; type:string; uploadedOn:string; uploadedBy:string; size:string;
+  status:string; summary:string; events:number; linkedActivities:string[]; source:string;
+};
+
+const TRACE_FILES:Record<string,TraceFile[]> = {
+  AI:[
+    {id:'AI-F-001',name:'Daily_Progress_Report_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:42 IST',uploadedBy:'AI ingestion agent',size:'184 KB',status:'Processed',summary:'Daily progress report containing progress changes for piping and electrical work.',events:18,linkedActivities:['PIP-245','PIP-261','ELE-020'],source:'Company evidence import'},
+    {id:'AI-F-002',name:'Site_Diary_23Sep.pdf',type:'PDF document',uploadedOn:'23 Sep 2026 · 09:50 IST',uploadedBy:'AI ingestion agent',size:'1.8 MB',status:'Processed',summary:'Site diary with field notes used to identify execution events and activity references.',events:9,linkedActivities:['ELE-014','MECH-018'],source:'Evidence import'},
+    {id:'AI-F-003',name:'Piping_Field_Update_23Sep.txt',type:'Text report',uploadedOn:'23 Sep 2026 · 10:22 IST',uploadedBy:'AI ingestion agent',size:'14 KB',status:'Processed',summary:'Unstructured piping update normalized into execution events before matching.',events:6,linkedActivities:['PIP-261'],source:'Field evidence intake'},
+    {id:'AI-F-004',name:'Piping_Voice_Update_23Sep.webm',type:'Voice recording',uploadedOn:'23 Sep 2026 · 10:28 IST',uploadedBy:'AI ingestion agent',size:'3.2 MB',status:'Processed',summary:'Voice evidence converted into structured field events for matching.',events:3,linkedActivities:['PIP-245'],source:'Voice capture'},
+  ],
+  Planner:[
+    {id:'PL-F-001',name:'Review_Decisions_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:45 IST',uploadedBy:'Planner workspace',size:'92 KB',status:'Reviewed',summary:'Planner decisions and approved links from the review queue.',events:7,linkedActivities:['CIV-022','MECH-018'],source:'Review workspace'},
+    {id:'PL-F-002',name:'Manual_Progress_Entry_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:52 IST',uploadedBy:'Planner workspace',size:'48 KB',status:'Reviewed',summary:'Manual progress update applied after planner validation.',events:1,linkedActivities:['MECH-018'],source:'Manual update'},
+  ],
+  System:[
+    {id:'SYS-F-001',name:'Batch_Import_23Sep.csv',type:'CSV dataset',uploadedOn:'23 Sep 2026 · 10:35 IST',uploadedBy:'System processor',size:'276 KB',status:'Processed',summary:'Batch import containing multiple execution records.',events:38,linkedActivities:['PIP-245','PIP-261','ELE-014','ELE-020'],source:'File import'},
+    {id:'SYS-F-002',name:'Matching_Run_23Sep.json',type:'JSON run log',uploadedOn:'23 Sep 2026 · 10:36 IST',uploadedBy:'Matching service',size:'61 KB',status:'Processed',summary:'Deterministic matching and confidence-scoring output for the import run.',events:31,linkedActivities:['PIP-245','ELE-014','ELE-020'],source:'Matching service'},
+  ]
+};
+
+function Trace(){
+  const [selectedActor,setSelectedActor]=useState<string|null>(null);
+  const [selectedFile,setSelectedFile]=useState<TraceFile|null>(null);
+
+  if(selectedFile){
+    return <div className="trace-page"><PageSection label="AUDIT / FILE DETAIL" title={selectedFile.name} action={<button className="outline-btn" onClick={()=>setSelectedFile(null)}>← Back to {selectedActor || 'actor'} files</button>}>
+      <div className="trace-file-detail-card">
+        <div className="trace-file-detail-head"><div><span className="eyebrow">SOURCE FILE / VALIDATED PROVENANCE</span><h3>{selectedFile.name}</h3><p>{selectedFile.type} · {selectedFile.source}</p></div><span className="trace-chip">{selectedFile.status}</span></div>
+        <div className="trace-file-meta-grid">
+          <div><span>UPLOADED ON</span><b>{selectedFile.uploadedOn}</b></div>
+          <div><span>UPLOADED BY</span><b>{selectedFile.uploadedBy}</b></div>
+          <div><span>FILE SIZE</span><b>{selectedFile.size}</b></div>
+          <div><span>EVENTS EXTRACTED</span><b>{selectedFile.events}</b></div>
+          <div className="wide"><span>LINKED ACTIVITIES</span><div className="trace-file-links">{selectedFile.linkedActivities.map(x=><span key={x}><code>{x}</code></span>)}</div></div>
+          <div className="wide"><span>FILE SUMMARY</span><p>{selectedFile.summary}</p></div>
+        </div>
+        <div className="trace-file-consequence"><span className="eyebrow">TRACE CONSEQUENCE</span><strong>Source preserved → extraction → matching → governed schedule update</strong><p>This file remains available as the provenance source for the events it produced.</p></div>
+      </div>
+    </PageSection></div>;
+  }
+
+  if(selectedActor){
+    const files=TRACE_FILES[selectedActor] || [];
+    return <div className="trace-page"><PageSection label={`AUDIT / ${selectedActor.toUpperCase()} ACTOR`} title={`${selectedActor} evidence files`} action={<button className="outline-btn" onClick={()=>setSelectedActor(null)}>← Back to trace ledger</button>}>
+      <div className="trace-actor-summary"><div><span className="eyebrow">ACTOR</span><h3>{selectedActor}</h3><p>Files and evidence produced or processed by this actor.</p></div><span className="trace-chip">{files.length} files</span></div>
+      <div className="trace-file-grid">{files.map(file=><button type="button" key={file.id} className="trace-file-card" onClick={()=>setSelectedFile(file)}>
+        <div className="trace-card-top"><span className="trace-file-icon">↗</span><span className="trace-chip">{file.status}</span></div>
+        <span className="eyebrow">{file.type.toUpperCase()}</span><h3>{file.name}</h3><p>{file.summary}</p>
+        <div className="trace-card-meta"><span>{file.uploadedOn}</span><span>{file.events} events</span></div>
+        <div className="trace-card-footer"><span>Uploaded by {file.uploadedBy}</span><b>Open details →</b></div>
+      </button>)}</div>
+    </PageSection></div>;
+  }
+
+  return <div className="trace-page"><PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}>
+    <div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">{AUDIT_TRAIL.length} demo records</span></div>
+    <div className="trace-card-grid">{AUDIT_TRAIL.map((a,i)=><article className="trace-event-card" key={i}>
+      <div className="trace-event-head"><span className="trace-event-time">{a.ts}</span><button type="button" className="trace-actor-btn" onClick={()=>setSelectedActor(a.actor)}>{a.actor} →</button></div>
+      <div className="trace-event-main"><div><span className="eyebrow">ACTION</span><h3>{a.action}</h3><p><code>{a.activity}</code> · {a.source}</p></div><strong>{a.conf?`${a.conf}%`:'—'}</strong></div>
+      <div className="trace-event-change"><span>{a.prev}</span><b>→</b><span>{a.next}</span></div>
+      <div className="trace-event-footer"><span>Actor files available</span><button type="button" className="text-action" onClick={()=>setSelectedActor(a.actor)}>View {a.actor} files →</button></div>
+    </article>)}</div>
+  </PageSection></div>;
+}
 
 function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
@@ -748,7 +811,7 @@ function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle
   const formats=kind==='schedule'?['Primavera','MS Project','ProjectLibre','Excel','CSV']:['PDF','Word','Excel','CSV','TXT','Images','Any file'];
   return <div className="import-page">
     <PageSection label="COMPANY / DATA INTAKE" title="Import center" action={<span className="trace-chip">Company controlled</span>}>
-      <div className="import-purpose"><span className="eyebrow">WHY IMPORT EXISTS</span><h3>Bring existing company data into the Synchronex bridge.</h3><p>Use <b>Schedule Import</b> for the approved baseline. Use <b>Evidence Import</b> for project documents already produced by the organization. Field teams use Capture for live execution updates.</p></div>
+      <div className="import-purpose"><div className="import-purpose-icon">↓</div><div className="import-purpose-copy"><span className="eyebrow">COMPANY DATA INTAKE</span><h3>Bring existing project information into the Synchronex bridge.</h3><p>Use <b>Schedule Import</b> to establish the approved plan and <b>Evidence Import</b> to process documents already produced by the project. Live field updates stay in Capture.</p></div><div className="import-purpose-flow"><span>Plan</span><b>→</b><span>Evidence</span><b>→</b><span>Synchronex</span></div></div>
       <div className="import-choice-grid import-choice-grid-clean">
         <article className={`import-choice ${kind==='schedule'?'selected-source':''}`}>
           <div className="import-choice-top"><span className="import-choice-icon">▤</span><span className="trace-chip">BASELINE</span></div>
@@ -793,7 +856,7 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
   return <div className="field-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>REV 04</strong><small>Approved company schedule</small></div></div>
+      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">SCHEDULE</span><strong>APPROVED</strong><small>Current company plan</small></div></div>
       <div className="field-home-grid">
         <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
         <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
@@ -824,8 +887,8 @@ function FieldNotifications(){
   return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
 }
 
-function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="outline-btn" onClick={onSwitch}>Switch to company portal</button><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div><div><span>BASELINE</span><b>Rev 04 · Read only</b></div></div></PageSection></div>
+function FieldProfile({onSignOut}:{onSignOut:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div></div></PageSection></div>
 }
 
 function Analytics(){
@@ -844,7 +907,7 @@ function Analytics(){
       </div>
       <div className="analytics-grid-two">
         <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">Rev 04</span></div>
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div></div>
           <div className="analytics-chart">
             <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
             <div className="analytics-plot">
@@ -900,7 +963,7 @@ function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,de
  return <div className="settings-page"><PageSection label="WORKSPACE / APPEARANCE" title="Make Synchronex work your way"><div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for this workspace. System follows your operating system preference.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div><div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible in tables and lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div></PageSection>
  <PageSection label="TRUST / AUTOMATION" title="Control when AI may apply changes"><div className="settings-card stacked"><div className="setting-row"><div><strong>Auto-apply confidence threshold</strong><p>Events at or above this threshold may be eligible for automatic application if all validation checks pass.</p></div><div className="threshold-control"><input aria-label="Auto apply confidence threshold" type="range" min="80" max="99" value={threshold} onChange={e=>setThreshold(Number(e.target.value))}/><b>{threshold}%</b></div></div><div className="setting-row"><div><strong>Auto-save drafts</strong><p>Preserve unfinished company form changes locally before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div><div className="setting-row"><div><strong>Human review gate</strong><p>Ambiguous, low-confidence, unmatched, and granularity-mismatch events always require planner review.</p></div><span className="locked-setting">Required</span></div></div></PageSection>
  <PageSection label="NOTIFICATIONS" title="Choose how Synchronex keeps you informed"><div className="settings-card stacked"><div className="setting-row"><div><strong>In-app notifications</strong><p>Review decisions, failed validation, new submissions, and schedule changes.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><strong>Email notifications</strong><p>Receive important project and access alerts at your work email.</p></div><button className={`toggle ${emailNotifications?'on':''}`} aria-pressed={emailNotifications} onClick={()=>setEmailNotifications(!emailNotifications)}><span/></button></div></div></PageSection>
- <PageSection label="REGIONAL / DATA" title="Project defaults"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><label>Evidence retention<select value={retention} onChange={e=>setRetention(e.target.value)}><option value="project">Project lifetime</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option></select></label><div className="settings-info"><span className="eyebrow">CURRENT WORKSPACE</span><strong>North Field Gas Processing / Phase 1</strong><span>Baseline Rev 04 · Asia/Kolkata · Human-gated ambiguity</span></div></div><div className="settings-actions"><button className="primary-btn" onClick={onSave}>{saved?'Saved ✓':'Save workspace settings'}</button><span className="helper">Settings are scoped to the active company workspace.</span></div></PageSection></div>
+ <PageSection label="REGIONAL / DATA" title="Project defaults"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><label>Evidence retention<select value={retention} onChange={e=>setRetention(e.target.value)}><option value="project">Project lifetime</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option></select></label><div className="settings-info"><span className="eyebrow">CURRENT WORKSPACE</span><strong>North Field Gas Processing / Phase 1</strong><span>Approved schedule · Asia/Kolkata · Human-gated ambiguity</span></div></div><div className="settings-actions"><button className="primary-btn" onClick={onSave}>{saved?'Saved ✓':'Save workspace settings'}</button><span className="helper">Settings are scoped to the active company workspace.</span></div></PageSection></div>
 }
 function Popover({title,children}:{title:string;children:React.ReactNode}){return <div className="popover"><span className="eyebrow">{title}</span>{children}</div>}
 function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){return <div className="modal-backdrop" onMouseDown={e=>e.currentTarget===e.target&&onClose()}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><h2 id="modal-title">{title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}>×</button></div>{children}</div></div>}
