@@ -1475,3 +1475,44 @@ button,input,textarea,select{font-family:var(--font-ui)}
 .schedule-page .schedule-detail-head h3{margin:7px 0 6px;line-height:1.15;}
 .schedule-page .schedule-detail-head p{margin:0;line-height:1.5;}
 .activity-detail-footer{display:flex;justify-content:flex-end;align-items:center;margin-top:4px;}
+
+/* Final Schedule / Import UI cleanup */
+.schedule-page .schedule-detail-head{
+  width:100%;
+  display:flex;
+  align-items:flex-start;
+  justify-content:flex-start;
+  padding:24px 0 22px;
+  margin:28px 0 0;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  text-align:left;
+}
+.schedule-page .schedule-detail-head > div{
+  width:100%;
+  min-width:0;
+}
+.schedule-page .schedule-detail-head .eyebrow{
+  display:block;
+  margin:0 0 7px;
+  line-height:1.2;
+}
+.schedule-page .schedule-detail-head h3{
+  display:block;
+  margin:0 0 7px;
+  font-size:30px;
+  line-height:1.12;
+  letter-spacing:-.025em;
+}
+.schedule-page .schedule-detail-head p{
+  display:block;
+  width:100%;
+  max-width:900px;
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+  white-space:normal;
+  overflow-wrap:normal;
+}
+.import-actions-submit .helper{display:none!important}
+.import-actions-submit{justify-content:flex-end}
