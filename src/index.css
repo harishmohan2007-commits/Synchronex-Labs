@@ -1320,3 +1320,42 @@ button,input,textarea,select{font-family:var(--font-ui)}
   .command-pulse-decision{max-width:420px}
   .command-pulse-graph{margin-left:28px;margin-right:28px}
 }
+
+/* Command page: compact two-card summary followed by a full-width project pulse. */
+.command-page{padding-bottom:56px}
+.command-top{display:block}
+.command-metrics{margin:28px 38px 0!important;grid-template-columns:repeat(4,minmax(0,1fr));width:auto!important}
+.command-metrics .metric{min-height:154px;padding:28px 24px}
+.command-metrics .metric strong{font-size:37px;margin:12px 0 5px}
+.command-summary-row{margin:24px 38px 0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px;align-items:stretch}
+.command-summary-card{min-height:198px;padding:24px!important;background:var(--surface)!important;border:1px solid var(--border)!important;border-top:3px solid var(--brand)!important;color:var(--text)}
+.command-summary-row .decision-card .primary-btn{width:100%;margin-top:16px}
+.command-summary-row .decision-card p{color:var(--text-2);line-height:1.55}
+.command-summary-row .pulse-summary{justify-content:space-between;gap:20px}
+.command-summary-row .pulse-summary strong{font-size:22px;color:var(--text)}
+.summary-arrow{color:var(--brand-2);padding:0 5px}
+.summary-progress-list{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.summary-progress-list>div{display:grid;grid-template-columns:auto auto;gap:6px 10px;align-items:center}
+.summary-progress-list span{font:600 9px var(--font-mono);letter-spacing:.12em;color:var(--text-3)}
+.summary-progress-list b{font:600 14px var(--font-mono);color:var(--text)}
+.summary-progress-list i{grid-column:1/-1;display:block;height:7px;background:var(--surface-3);overflow:hidden}
+.summary-progress-list i em{display:block;height:100%;background:var(--brand-2)}
+.command-pulse-heading{margin:28px 38px 18px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px}
+.command-pulse-heading h2{margin:6px 0 0;font-size:28px;letter-spacing:-.03em}
+.command-pulse-graph{margin:0 38px}
+.command-pulse-graph .pulse-grid{display:block!important;width:100%!important}
+.command-pulse-graph .trend{width:100%!important;border-right:0!important;padding:24px!important}
+.command-pulse-graph .chart{width:100%!important;height:360px!important}
+.command-pulse-graph .chart svg{width:100%!important;height:100%!important}
+.command-pulse-graph .pulse-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+.top-actions{display:none!important}
+@media(max-width:1200px){
+  .command-metrics{margin-left:28px!important;margin-right:28px!important}
+  .command-summary-row{margin-left:28px;margin-right:28px;grid-template-columns:1fr 1.2fr}
+  .command-pulse-heading,.command-pulse-graph{margin-left:28px;margin-right:28px}
+}
+@media(max-width:900px){
+  .command-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .command-summary-row{grid-template-columns:1fr}
+  .command-pulse-heading{align-items:flex-start}
+}
