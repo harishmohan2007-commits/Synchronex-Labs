@@ -370,18 +370,20 @@ export default function App(){
   const detailTrail=detailId?AUDIT_TRAIL.filter(t=>t.activity===detailId):[];
   const detailEvidence=detailId?FIELD_EVENTS.find(e=>e.actId===detailId):undefined;
 
+  const currentUser = role==='company'
+    ? {name:'Arun Kumar', initials:'AK', roleLabel:'Planner / Reviewer', email:'arun.kumar@northfield.example', portal:'Company Portal', workspace:'Planning & Control', access:'Plan · Import · Review · Trace'}
+    : {name:'Karthik R', initials:'KR', roleLabel:'Field Supervisor', email:'karthik.r@northfield.example', portal:'Field Portal', workspace:'Execution & Reporting', access:'Work · Capture · Submit'};
+
   return <div className="app-shell">
     <header className="topbar">
-      <button className="brand" onClick={()=>setScreen('command')} aria-label="Go to command">
+      <button className="brand" onClick={()=>setScreen(role==='company'?'command':'field-home')} aria-label="Go to home">
         <span className="brand-mark">S</span><span><strong>SYNCHRONEX</strong><small>EXECUTION INTELLIGENCE</small></span>
       </button>
-      <div className="top-project"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field Gas Processing / Phase 1</strong><span className="live"><i/> EXECUTION</span><code>NGFPF-P1-2026</code></div>
+      <div className="topbar-spacer" aria-hidden="true"/>
       <div className="top-actions">
-        <button className="icon-btn" aria-label="Notifications" onClick={()=>setModal(modal==='notifications'?null:'notifications')}>●<span className={reviewCount?'alert-dot':''}/></button>
-        <button className="icon-btn" aria-label="Help" onClick={()=>setModal('help')}>?</button>
-        <button className="profile-chip" aria-label="Open profile" onClick={()=>setModal('profile')}>{role==='company'?'PC':'FS'}</button>
+        <button className="profile-chip" aria-label="Open profile" aria-expanded={modal==='profile'} onClick={()=>setModal(modal==='profile'?null:'profile')}><span className="profile-chip-initials">{currentUser.initials}</span></button>
       </div>
-      {modal==='notifications' && <Popover title={role==='company'?'Open decisions':'Latest field updates'}>{role==='company'?<><p><b>{reviewCount}</b> field events require planner validation.</p><p>Baseline Rev 04 synced at 09:42.</p><button className="text-action" onClick={()=>{setModal(null);go('review')}}>Open review queue →</button></>:<><p><b>2</b> submissions are being processed.</p><p>One report needs additional information.</p><button className="text-action" onClick={()=>{setModal(null);go('submissions')}}>Open submissions →</button></>}</Popover>}
+      {modal==='profile' && <ProfilePopover user={currentUser} onClose={()=>setModal(null)} onSwitch={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}} onSignOut={()=>{setAuthenticated(false);setModal(null)}} />}
     </header>
 
     <aside className="rail">
@@ -390,7 +392,7 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
-      <div className="rail-bottom"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field / Phase 1</strong><small>{role==='company'?'Baseline Rev 04 · Synced 09:42':'Field execution · Today'}</small><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
+      <div className="rail-bottom rail-bottom-actions"><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
@@ -447,7 +449,6 @@ export default function App(){
       ['04','Confidence gate','High-confidence valid events can auto-apply; ambiguous or unmatched events go to a planner.'],
       ['05','Apply + trace','Write the accepted actual to the schedule and preserve source, actor, confidence, and decision.'],
     ].map(x=><div className="flow-row" key={x[0]}><b>{x[0]}</b><div><strong>{x[1]}</strong><p>{x[2]}</p></div></div>)}</div></Modal>}
-    {modal==='profile'&&<Modal title={role==='company'?'Project Controls Engineer':'Field Supervisor'} onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">{role==='company'?'PC':'FS'}</div><p><b>{role==='company'?'Planner workspace':'Field execution workspace'}</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null)}}>Switch to {role==='company'?'field':'company'} portal</button><button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
     {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
       {detailActivity ? <div className="activity-detail">
@@ -487,9 +488,9 @@ export default function App(){
 }
 
 function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';setMode:(v:'login'|'forgot')=>void;role:Role;setRole:(v:Role)=>void;onLogin:()=>void}){
- const [email,setEmail]=useState(role==='company'?'planner@northfield.example':'field.supervisor@northfield.example');
+ const [email,setEmail]=useState(role==='company'?'arun.kumar@northfield.example':'karthik.r@northfield.example');
  const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);
- const chooseRole=(next:Role)=>{setRole(next);setEmail(next==='company'?'planner@northfield.example':'field.supervisor@northfield.example');setError('');setPassword('')};
+ const chooseRole=(next:Role)=>{setRole(next);setEmail(next==='company'?'arun.kumar@northfield.example':'karthik.r@northfield.example');setError('');setPassword('')};
  const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');if(!email.includes('@')){setError('Enter a valid work email.');return}if(mode==='login'&&!password){setError('Enter your password.');return}setBusy(true);window.setTimeout(()=>{setBusy(false);if(mode==='forgot'){setError('Demo reset link generated. Check the workspace inbox.')}else onLogin()},700)};
  return <div className="auth-shell"><div className="auth-left"><div className="auth-brand"><span className="brand-mark">S</span><div><strong>SYNCHRONEX</strong><small>EXECUTION INTELLIGENCE</small></div></div><div className="auth-hero"><span className="eyebrow">PLANNING → EXECUTION</span><h1>{role==='company'?'Control the plan. Connect execution.':'Report the work. Keep the plan moving.'}</h1><p>{role==='company'?'Manage the baseline, review field evidence, validate actuals, and preserve project intelligence.':'Report site progress with text, voice, or evidence files without exposing company planning controls.'}</p><div className="auth-path">{role==='company'?<><span>01 Plan</span><i>→</i><span>02 Review</span><i>→</i><span>03 Apply</span><i>→</i><span>04 Learn</span></>:<><span>01 Work</span><i>→</i><span>02 Capture</span><i>→</i><span>03 Submit</span><i>→</i><span>04 Track</span></>}</div></div><div className="auth-note">Demo workspace · synthetic data only · no live project data</div></div><div className="auth-right"><div className="auth-card"><span className="eyebrow">{mode==='login'?'SECURE WORKSPACE':'ACCOUNT RECOVERY'}</span><h2>{mode==='login'?'Choose your workspace':'Recover access'}</h2>{mode==='login'&&<div className="role-switch" role="tablist" aria-label="Workspace type"><button type="button" className={role==='company'?'selected':''} onClick={()=>chooseRole('company')}><strong>Company portal</strong><span>Planning, review & control</span></button><button type="button" className={role==='field'?'selected':''} onClick={()=>chooseRole('field')}><strong>Field portal</strong><span>Work, capture & submissions</span></button></div>}<p>{mode==='login'?(role==='company'?'Use your project-controls account to manage the project workspace.':'Use your field account to report execution and track submissions.'):'Enter your work email to generate a recovery link.'}</p><form onSubmit={submit}><label>Work email<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email"/></label>{mode==='login'&&<label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>}{error&&<div className="form-error" role="alert">{error}</div>}<button className="primary-btn" disabled={busy}>{busy?'Working…':mode==='login'?`Enter ${role==='company'?'company':'field'} portal`:'Generate reset link'} <span>→</span></button></form><button className="link-btn" onClick={()=>{setMode(mode==='login'?'forgot':'login');setError('')}}>{mode==='login'?'Forgot password?':'Back to sign in'}</button></div></div></div>
 }
@@ -884,5 +885,18 @@ function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,de
  <PageSection label="NOTIFICATIONS" title="Choose how Synchronex keeps you informed"><div className="settings-card stacked"><div className="setting-row"><div><strong>In-app notifications</strong><p>Review decisions, failed validation, new submissions, and schedule changes.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><strong>Email notifications</strong><p>Receive important project and access alerts at your work email.</p></div><button className={`toggle ${emailNotifications?'on':''}`} aria-pressed={emailNotifications} onClick={()=>setEmailNotifications(!emailNotifications)}><span/></button></div></div></PageSection>
  <PageSection label="REGIONAL / DATA" title="Project defaults"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><label>Evidence retention<select value={retention} onChange={e=>setRetention(e.target.value)}><option value="project">Project lifetime</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option></select></label><div className="settings-info"><span className="eyebrow">CURRENT WORKSPACE</span><strong>North Field Gas Processing / Phase 1</strong><span>Baseline Rev 04 · Asia/Kolkata · Human-gated ambiguity</span></div></div><div className="settings-actions"><button className="primary-btn" onClick={onSave}>{saved?'Saved ✓':'Save workspace settings'}</button><span className="helper">Settings are scoped to the active company workspace.</span></div></PageSection></div>
 }
+function ProfilePopover({user,onClose,onSwitch,onSignOut}:{user:{name:string;initials:string;roleLabel:string;email:string;portal:string;workspace:string;access:string};onClose:()=>void;onSwitch:()=>void;onSignOut:()=>void}){
+  return <div className="profile-popover" role="dialog" aria-label="Account profile">
+    <div className="profile-popover-head">
+      <div className="profile-avatar profile-avatar-lg">{user.initials}</div>
+      <div className="profile-identity"><strong>{user.name}</strong><span>{user.roleLabel}</span><small>{user.email}</small></div>
+      <button className="profile-close" type="button" aria-label="Close profile" onClick={onClose}>×</button>
+    </div>
+    <div className="profile-portal"><span className="profile-portal-dot"/><div><span className="eyebrow">SIGNED IN THROUGH</span><strong>{user.portal}</strong><small>{user.workspace}</small></div></div>
+    <div className="profile-meta-grid"><div><span>PROJECT</span><b>North Field / Phase 1</b></div><div><span>ACCESS</span><b>{user.access}</b></div><div><span>BASELINE</span><b>Rev 04 · Read only for field</b></div><div><span>STATUS</span><b className="profile-active">Active</b></div></div>
+    <div className="profile-popover-actions"><button className="outline-btn full" type="button" onClick={onSwitch}>Switch to {user.portal==='Company Portal'?'Field':'Company'} Portal</button><button className="danger-btn full" type="button" onClick={onSignOut}>Sign out</button></div>
+  </div>
+}
+
 function Popover({title,children}:{title:string;children:React.ReactNode}){return <div className="popover"><span className="eyebrow">{title}</span>{children}</div>}
 function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){return <div className="modal-backdrop" onMouseDown={e=>e.currentTarget===e.target&&onClose()}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><h2 id="modal-title">{title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}>×</button></div>{children}</div></div>}
