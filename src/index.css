@@ -1440,3 +1440,21 @@ button,input,textarea,select{font-family:var(--font-ui)}
 :root[data-theme="dark"] .activity-detail-progress{background:#334348}
 .schedule-page .activity-main code{color:var(--green2)!important}
 :root[data-theme="dark"] .schedule-page .activity-main code{color:#79c0a0!important}
+
+/* Final polish: schedule controls and import intake width. */
+.schedule-head-actions .filter-btn,
+.schedule-head-actions .primary-btn{
+  min-height:40px;
+  height:40px;
+  min-width:150px;
+  padding:0 16px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.schedule-head-actions .filter-btn{white-space:nowrap}
+.import-purpose-clean{
+  width:100%;
+  max-width:none;
+}
+.import-page .section-head{margin-bottom:24px}
