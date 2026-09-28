@@ -395,8 +395,8 @@ export default function App(){
     </aside>
 
     <main className="workspace">
-      <div className="page-head">
-        <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
+      <div className={`page-head ${screen==='command'?'page-head-command':''}`}>
+        <div>{screen!=='command'&&<div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div>}<h1>{pageMeta[screen].title}</h1>{screen!=='command'&&<p>{pageMeta[screen].subtitle}</p>}</div>
         <div className="head-tools">
           <div className="global-search-wrap" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setSearchOpen(false);}}>
             <label className="global-search">
@@ -429,7 +429,7 @@ export default function App(){
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
-      {role==='company' && screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
+      {role==='company' && screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenSchedule={()=>go('schedule')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
@@ -513,9 +513,47 @@ function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';s
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
 function Command({onGo,onSelect,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id:string)=>void;reviewCount:number}){
- const commandSignals=FIELD_EVENTS.slice(0,5);
- return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">PROJECT STATUS</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div><div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div></div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('review')}>Open review →</button>}><div className="signal-table">{commandSignals.map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block decision-card"><span className="eyebrow">DECISION QUEUE</span><div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block capture-card"><div className="capture-card-icon">↗</div><span className="eyebrow">NEXT CONTROL</span><h3>Review incoming field evidence</h3><p>Field teams submit text, voice, and files. Your team validates uncertain matches before they become schedule actuals.</p><div className="capture-card-meta"><span>FIELD INTAKE</span><span>HUMAN GATE</span></div><button className="outline-btn" onClick={()=>onGo('review')}>Review incoming evidence <span>→</span></button></div><div className="aside-block health-card"><div className="health-head"><span className="eyebrow">PROJECT HEALTH</span><span className="health-dot">● LIVE</span></div><div className="health-line"><span>Schedule completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
+ return <div className="command-layout">
+   <div className="command-main">
+     <div className="status-strip">
+       <div><span className="eyebrow">PROJECT STATUS</span><strong>North Field Gas Processing Facility — Phase 1</strong></div>
+     </div>
+     <div className="metric-band">
+       <Metric label="L5/L6 activities" value="246" note="executable nodes"/>
+       <Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/>
+       <Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/>
+       <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
+     </div>
+     <PageSection label="PROJECT PERFORMANCE" title="Project pulse">
+       <div className="pulse-grid pulse-grid-full">
+         <div className="trend">
+           <div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div>
+           <div className="chart command-chart-large"><div className="gridlines"/><svg viewBox="0 0 1000 300" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,210 140,190 280,152 420,122 560,96 720,70 1000,30" fill="none" stroke="var(--text-3)" strokeWidth="3" strokeDasharray="8 8"/><polyline points="0,224 140,205 280,168 420,138 560,114 720,102 1000,86" fill="none" stroke="var(--brand-2)" strokeWidth="5"/></svg></div>
+           <div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div>
+           <div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div>
+         </div>
+       </div>
+     </PageSection>
+   </div>
+   <aside className="command-aside">
+     <div className="aside-block decision-card">
+       <span className="eyebrow">DECISION QUEUE</span>
+       <div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div>
+       <p>Ambiguous or unmatched events need a planner before schedule application.</p>
+       <button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button>
+     </div>
+     <div className="aside-block control-focus-card">
+       <span className="eyebrow">CONTROL FOCUS</span>
+       <h3>Where attention is needed</h3>
+       <div className="control-item"><span>Piping</span><b>−6%</b><small>Line 25 erection</small></div>
+       <div className="control-item"><span>Instrumentation</span><b>−6%</b><small>Zone 2 hook-up</small></div>
+       <div className="control-item"><span>Mechanical</span><b>−3%</b><small>Pump Set P-102</small></div>
+       <div className="control-item positive-control"><span>Civil</span><b>+5%</b><small>Foundation Block B</small></div>
+     </div>
+   </aside>
+ </div>
 }
+
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
 function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
@@ -534,13 +572,11 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
     const first=rows.find(a=>a.discipline===name);
     if(first) onSelect(first.id);
   };
-  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
   return <div className="schedule-page">
     <PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}>
       {discipline==='All' ? <div className="discipline-card-grid">
         {DISCIPLINES.map(d=>{
-          const evidence=recentEvidence(d.name);
           return <div key={d.name} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
             <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
               <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
@@ -549,7 +585,6 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
               <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
               <div className="discipline-card-milestone"><small>NEXT MILESTONE</small><span>{d.nextMilestone}</span></div>
             </button>
-            <div className="discipline-card-foot"><span>{d.milestones} milestones tracked</span><span>{evidence.length} recent evidence signals</span></div>
           </div>;
         })}
       </div> : <>
@@ -792,61 +827,43 @@ function Trace(){
   </PageSection></div>;
 }
 
-function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
+function Import({state,file,setFile,onProcess,onRetry,onOpenSchedule}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenSchedule:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
-  const [kind,setKind]=useState<'schedule'|'evidence'>('evidence');
-  const [dragOver,setDragOver]=useState<'schedule'|'evidence'|null>(null);
-  const choose=(nextKind:'schedule'|'evidence')=>{setKind(nextKind);inputRef.current?.click()};
-  const handleFiles=(files:FileList|null,nextKind:typeof kind=kind)=>{
-    const first=files?.[0];
-    if(!first) return;
-    setKind(nextKind);
-    setFile(first.name);
-  };
-  const onDrop=(e:React.DragEvent<HTMLDivElement>,nextKind:typeof kind)=>{
-    e.preventDefault();
-    setDragOver(null);
-    handleFiles(e.dataTransfer.files,nextKind);
-  };
-  const formats=kind==='schedule'?['Primavera','MS Project','ProjectLibre','Excel','CSV']:['PDF','Word','Excel','CSV','TXT','Images','Any file'];
+  const [dragOver,setDragOver]=useState(false);
+  const handleFiles=(files:FileList|null)=>{const first=files?.[0];if(first)setFile(first.name)};
+  const onDrop=(e:React.DragEvent<HTMLDivElement>)=>{e.preventDefault();setDragOver(false);handleFiles(e.dataTransfer.files)};
   return <div className="import-page">
     <PageSection label="COMPANY / DATA INTAKE" title="Import center" action={<span className="trace-chip">Company controlled</span>}>
-      <div className="import-purpose"><div className="import-purpose-icon">↓</div><div className="import-purpose-copy"><span className="eyebrow">COMPANY DATA INTAKE</span><h3>Bring existing project information into the Synchronex bridge.</h3><p>Use <b>Schedule Import</b> to establish the approved plan and <b>Evidence Import</b> to process documents already produced by the project. Live field updates stay in Capture.</p></div><div className="import-purpose-flow"><span>Plan</span><b>→</b><span>Evidence</span><b>→</b><span>Synchronex</span></div></div>
-      <div className="import-choice-grid import-choice-grid-clean">
-        <article className={`import-choice ${kind==='schedule'?'selected-source':''}`}>
-          <div className="import-choice-top"><span className="import-choice-icon">▤</span><span className="trace-chip">BASELINE</span></div>
-          <span className="eyebrow">01 / SCHEDULE IMPORT</span><h3>Bring in the baseline plan</h3><p>Upload the approved planning file and prepare WBS, activity IDs, dates, dependencies, and levels for a new baseline revision.</p>
-          <div className="import-format-list">{['Primavera','MS Project','ProjectLibre','Excel','CSV'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='schedule'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('schedule')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('schedule')}} onDragOver={e=>{e.preventDefault();setDragOver('schedule')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'schedule')}>
-            <strong>{file&&kind==='schedule'?file:'Drop schedule file here'}</strong><span>Any file can be selected. Validation happens after upload.</span><small>Choose a file or drag it into this area</small>
-          </div>
-          <button className="primary-btn import-select-btn" onClick={()=>choose('schedule')}>{file&&kind==='schedule'?'Replace schedule file':'Select schedule file'} <span>→</span></button>
-          <small className="import-note">Creates a candidate baseline revision; publishing remains company-controlled.</small>
-        </article>
-
-        <article className={`import-choice ${kind==='evidence'?'selected-source':''}`}>
-          <div className="import-choice-top"><span className="import-choice-icon">↑</span><span className="trace-chip">EVIDENCE</span></div>
-          <span className="eyebrow">02 / EVIDENCE IMPORT</span><h3>Process existing project evidence</h3><p>Upload reports and documents already collected by the project. Synchronex extracts execution events, matches them to the baseline, and routes ambiguity to Review.</p>
-          <div className="import-format-list">{['PDF','Word','Excel','CSV','TXT','Images','Any file'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='evidence'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('evidence')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('evidence')}} onDragOver={e=>{e.preventDefault();setDragOver('evidence')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'evidence')}>
-            <strong>{file&&kind==='evidence'?file:'Drop any evidence file here'}</strong><span>PDF, Word, Excel, images, archives, text, or any other file type.</span><small>Source is preserved before extraction</small>
-          </div>
-          <button className="outline-btn import-select-btn" onClick={()=>choose('evidence')}>{file&&kind==='evidence'?'Replace evidence file':'Select evidence file'} <span>→</span></button>
-          <small className="import-note">Use Capture instead when a field user is reporting live from site.</small>
-        </article>
+      <div className="import-purpose import-purpose-wide">
+        <div className="import-purpose-icon">↓</div>
+        <div className="import-purpose-copy"><span className="eyebrow">COMPANY DATA INTAKE</span><h3>Load the approved project plan into Synchronex.</h3><p>Import the schedule used by the company to establish the project structure that field execution will be linked against.</p></div>
+        <div className="import-purpose-flow"><span>Schedule</span><b>→</b><span>Synchronex</span><b>→</b><span>Execution</span></div>
       </div>
-      <input ref={inputRef} className="file-input-hidden" type="file" multiple accept="*/*" onChange={e=>{handleFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select import file" />
+      <article className="import-choice import-choice-primary import-choice-single">
+        <div className="import-choice-top"><span className="import-choice-icon">▤</span><span className="trace-chip">SCHEDULE</span></div>
+        <span className="eyebrow">01 / SCHEDULE IMPORT</span>
+        <h3>Bring in the company schedule</h3>
+        <p>Upload the approved planning file and prepare WBS, activity IDs, planned dates, dependencies, levels, milestones and schedule context before publishing it to the project.</p>
+        <div className="import-format-list">{['Primavera','MS Project','ProjectLibre','Excel','CSV'].map(x=><span key={x}>{x}</span>)}</div>
+        <div className="import-main-grid">
+          <div>
+            <div className={`import-drop-zone import-drop-zone-large ${dragOver?'dragging':''}`} role="button" tabIndex={0} onClick={()=>inputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')inputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={onDrop}>
+              <span className="import-drop-icon">↑</span><strong>{file||'Drop the approved schedule file here'}</strong><span>Drag and drop or browse. The source file is preserved before validation.</span><small>Schedule data is mapped only after the file is received.</small>
+            </div>
+            <div className="import-action-row"><button className="primary-btn import-select-btn" onClick={()=>inputRef.current?.click()}>{file?'Replace schedule file':'Choose schedule file'} <span>→</span></button><button className="outline-btn import-process-btn" disabled={!file||state==='processing'} onClick={onProcess}>{state==='processing'?'Validating…':'Validate schedule →'}</button></div>
+          </div>
+          <div className="import-mapping-panel">
+            <span className="eyebrow">PRE-PUBLISH CHECK</span><h4>Synchronex will map</h4>
+            <div className="import-map-list"><span><b>01</b> WBS hierarchy</span><span><b>02</b> Activity IDs</span><span><b>03</b> Planned dates</span><span><b>04</b> Dependencies</span><span><b>05</b> L5 / L6 levels</span><span><b>06</b> Milestones</span></div>
+            <p>Existing execution evidence is captured separately by field teams.</p>
+          </div>
+        </div>
+        <small className="import-note">Publishing a new schedule remains company-controlled.</small>
+      </article>
+      <input ref={inputRef} className="file-input-hidden" type="file" multiple accept="*/*" onChange={e=>{handleFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select schedule file" />
       {(state!=='idle'||file) && <div className={`import-status-banner ${state}`} role="status">
-        <div>
-          <span className="eyebrow">IMPORT STATUS</span>
-          <strong>{state==='processing'?'Processing import…':state==='success'?'Import processed successfully':state==='error'?'Import needs attention':'File selected'}</strong>
-          <p>{file ? `${file} · ${kind==='schedule'?'Schedule baseline':'Project evidence'}` : 'Select a schedule or evidence file to begin.'}</p>
-        </div>
-        <div className="import-status-actions">
-          {state==='processing' && <span className="import-status-chip">Processing</span>}
-          {state==='success' && <><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}
-          {state==='error' && <button className="outline-btn" onClick={onRetry}>Retry</button>}
-        </div>
+        <div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Processing schedule…':state==='success'?'Schedule imported successfully':state==='error'?'Import needs attention':'Schedule file selected'}</strong><p>{file||'Select the approved schedule file to begin.'}</p></div>
+        <div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenSchedule}>Open schedule →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div>
       </div>}
     </PageSection>
   </div>
