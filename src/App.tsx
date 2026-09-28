@@ -845,15 +845,42 @@ function Memory(){
     </PageSection>;
   }
 
-  return <div className="memory-overview"><PageSection title="What execution teaches the next project" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
-    <p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p>
+  return <div className="memory-overview"><PageSection title="Memory" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
     <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
       <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
     </tr>)}</tbody></table></div>
   </PageSection></div>;
 }
 
-function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
+function Trace(){
+  const [selectedActor,setSelectedActor]=useState<string>('AI');
+  const actors=Array.from(new Set(AUDIT_TRAIL.map(a=>a.actor)));
+  const actorUpdates=(actor:string)=>AUDIT_TRAIL.filter(a=>a.actor===actor);
+  const downloadCsv=(rows:any[],filename:string)=>{
+    const headers=['Time','Actor','Action','Object','Source','Previous','Next','Confidence'];
+    const csv=[headers.join(','),...rows.map(a=>[a.ts,a.actor,a.action,a.activity,a.source,a.prev,a.next,a.conf||''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),0);
+  };
+  const selectedUpdates=actorUpdates(selectedActor);
+  const actorMeta:Record<string,{label:string;description:string;glyph:string}>= {
+    AI:{label:'AI',description:'Automated extraction, linking, and progress signals.',glyph:'AI'},
+    Planner:{label:'Planner',description:'Human validation, matching decisions, and progress updates.',glyph:'PL'},
+    System:{label:'System',description:'Import and processing events recorded by the platform.',glyph:'SY'},
+  };
+  return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn" onClick={()=>downloadCsv(AUDIT_TRAIL,'synchronex-trace-ledger.csv')}>Export ledger ↓</button>}>
+    <div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">{AUDIT_TRAIL.length} demo records</span></div>
+    <div className="trace-actor-grid">{actors.map(actor=>{const meta=actorMeta[actor]||{label:actor,description:'Recorded provenance events.',glyph:actor.slice(0,2).toUpperCase()}; const rows=actorUpdates(actor); return <div key={actor} className={`trace-actor-card ${selectedActor===actor?'active':''}`} onClick={()=>setSelectedActor(actor)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedActor(actor)}}>
+      <div className="trace-actor-card-top"><div className="trace-actor-mark">{meta.glyph}</div><span className="trace-actor-count">{rows.length} updates</span></div>
+      <strong>{meta.label}</strong><p>{meta.description}</p>
+      <button className="outline-btn trace-actor-export" onClick={e=>{e.stopPropagation();downloadCsv(rows,`synchronex-${actor.toLowerCase()}-trace.csv`)}}>Export {meta.label} ↓</button>
+    </div>})}</div>
+    <div className="trace-updates-head"><div><span className="eyebrow">ACTOR UPDATES</span><h3>{selectedActor} updates</h3><p>Recorded changes attributed to this actor.</p></div><button className="outline-btn" onClick={()=>downloadCsv(selectedUpdates,`synchronex-${selectedActor.toLowerCase()}-trace.csv`)}>Export updates ↓</button></div>
+    <div className="trace-table"><table><thead><tr><th>Time</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{selectedUpdates.map((a,i)=><tr key={i}><td>{a.ts}</td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div>
+  </PageSection>
+}
 
 function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';files:File[];setFiles:(files:File[])=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
