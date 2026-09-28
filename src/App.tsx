@@ -439,18 +439,29 @@ export default function App(){
 
     {modal==='profile'&&<Modal title={role==='company'?'Project Controls Engineer':'Field Supervisor'} onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">{role==='company'?'PC':'FS'}</div><p><b>{role==='company'?'Planner workspace':'Field execution workspace'}</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null)}}>Switch to {role==='company'?'field':'company'} portal</button><button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
-    {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
-      {detailActivity ? <div className="activity-detail">
-        <div className="activity-detail-meta"><span className="eyebrow">{detailActivity.discipline} · {detailActivity.wbs} executable node</span><span className={`status-badge ${detailActivity.status==='Completed'?'track':detailActivity.status==='Planned'?'':'risk'}`}>{detailActivity.status}</span></div>
+    {modal==='activity'&&<Modal title={detailActivity?detailActivity.desc:'Activity detail'} onClose={()=>setModal(null)}>
+      {detailActivity ? <div className="activity-detail activity-detail-modern">
+        <div className="activity-detail-hero">
+          <div>
+            <span className="activity-detail-id">{detailActivity.id}</span>
+            <p>{detailActivity.discipline} · {detailActivity.wbs} executable node</p>
+          </div>
+          <span className={`status-badge ${detailActivity.status==='Completed'?'track':detailActivity.status==='Planned'?'':'risk'}`}>{detailActivity.status}</span>
+        </div>
         <div className="activity-detail-grid">
-          <div><span>PLAN</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
-          <div><span>ACTUAL</span><b>{detailActivity.actStart} → {detailActivity.actFinish}</b></div>
-          <div><span>PROGRESS</span><b>{detailActivity.progress}%</b></div>
+          <div><span>PLAN WINDOW</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
+          <div><span>ACTUAL WINDOW</span><b>{detailActivity.actStart} → {detailActivity.actFinish}</b></div>
+          <div><span>PROGRESS</span><b className="activity-detail-progress-value">{detailActivity.progress}%</b></div>
           <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'—'}</b></div>
         </div>
-        <div className="activity-detail-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
-        <div className="activity-detail-trace"><span className="eyebrow">TRACE ({detailTrail.length})</span>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>{setModal(null);go('trace')}}>Open full trace ledger →</button></div>
+        <div className="activity-detail-evidence activity-evidence-card">
+          <div><span className="eyebrow">LATEST FIELD EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
+          {detailEvidence&&<span className="evidence-source">{detailEvidence.status.includes('AI')?'AI':'Field report'}</span>}
+        </div>
+        <div className="activity-detail-trace">
+          <div className="activity-trace-head"><span className="eyebrow">PROGRESS HISTORY</span><span>{detailTrail.length} update{detailTrail.length===1?'':'s'}</span></div>
+          {detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row activity-update-row"><div><span className="update-time">{t.ts}</span><span className="actor">{t.actor}</span></div><strong>Progress update by {t.actor}</strong><span className="update-change">{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No progress updates recorded yet for this activity.</p>}
+        </div>
       </div> : <p>Activity not found.</p>}
     </Modal>}
     {modal==='member'&&memberTarget&&<Modal title={`Manage ${memberTarget.name}`} onClose={()=>setModal(null)}>
@@ -568,6 +579,21 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
+function exportSchedule(rows:any[]){
+  const headers=['Activity ID','Description','Discipline','WBS','Plan Start','Plan Finish','Actual Start','Actual Finish','Progress','Status','AI Confidence'];
+  const escape=(v:any)=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const csv=[headers,...rows.map(a=>[a.id,a.desc,a.discipline,a.wbs,a.planStart,a.planFinish,a.actStart,a.actFinish,`${a.progress}%`,a.status,a.aiConf?`${a.aiConf}%`:'' ])].map(r=>r.map(escape).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download='Synchronex-Schedule-Export.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
   const [statusFilter,setStatusFilter]=useState('All');
   const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
@@ -587,7 +613,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
   const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
   return <div className="schedule-page">
-    <PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}>
+    <PageSection title="Schedule by discipline" action={<button className="primary-btn" onClick={()=>exportSchedule(rows)}>Export schedule ↓</button>}>
       {discipline==='All' ? <div className="discipline-card-grid">
         {DISCIPLINES.map(d=>{
           const evidence=recentEvidence(d.name);
@@ -603,7 +629,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
           </div>;
         })}
       </div> : <>
-        <div className="schedule-detail-head"><div><span className="eyebrow">DISCIPLINE SCHEDULE</span><h3>{discipline}</h3><p>Executable activities, dates, progress, and linkage evidence for this workstream.</p></div><button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button></div>
+        <div className="schedule-detail-head"><div><h3>{discipline}</h3><p>Executable activities, dates, progress, and linkage evidence for this workstream.</p></div><button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button></div>
         <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
         <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
       </>}

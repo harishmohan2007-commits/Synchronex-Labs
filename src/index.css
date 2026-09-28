@@ -1369,3 +1369,73 @@ button,input,textarea,select{font-family:var(--font-ui)}
 
 /* Revision labels are intentionally not part of the visible UI. */
 .baseline-revision-label,.baseline-rev-label,.baseline-version-label{display:none!important}
+
+/* =====================================================================
+   SCHEDULE FINAL POLISH
+   ===================================================================== */
+/* The schedule screen already has the page heading, so the redundant
+   workstream eyebrow is intentionally omitted from the rendered markup. */
+.schedule-page .section-head{margin-bottom:24px}
+.schedule-page .section-head h2{font-size:26px}
+.schedule-page .discipline-card-grid{margin-top:0}
+
+/* Activity IDs use the structural green rather than the low-contrast blue
+   used by the earlier schedule implementation. */
+.schedule-page .activity-main code,
+.schedule-page .activity-main .activity-id,
+.schedule-page .schedule-activity code{color:var(--brand-2)!important;font-weight:600}
+:root[data-theme="dark"] .schedule-page .activity-main code,
+:root[data-theme="dark"] .schedule-page .schedule-activity code{color:#7fc5a8!important}
+
+/* Make the discipline detail header clean and balanced after removing the
+   redundant EXECUTABLE PLAN / WORKSTREAMS label. */
+.schedule-page .schedule-detail-head{border-top:0;margin-top:8px;padding-top:8px}
+.schedule-page .schedule-detail-head h3{font-size:30px;margin:0 0 5px}
+.schedule-page .schedule-detail-head p{font-size:14px}
+
+/* Activity detail modal: compact, readable, and consistent with both themes. */
+.activity-detail-modern{gap:18px}
+.activity-detail-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:2px 0 16px;border-bottom:1px solid var(--border)}
+.activity-detail-id{display:inline-block;font:600 12px var(--font-mono);letter-spacing:.08em;color:var(--brand-2)}
+.activity-detail-hero p{margin:7px 0 0;color:var(--text-2);font-size:13px}
+.activity-detail-modern .activity-detail-grid{gap:10px}
+.activity-detail-modern .activity-detail-grid>div{background:var(--surface-2);border-color:var(--border);border-radius:0;padding:14px 15px;min-height:78px}
+.activity-detail-modern .activity-detail-grid span{color:var(--text-3);font:600 9px var(--font-mono);letter-spacing:.1em}
+.activity-detail-modern .activity-detail-grid b{display:block;color:var(--text);font-size:14px;line-height:1.45}
+.activity-detail-progress-value{color:var(--brand-2)!important}
+.activity-evidence-card{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;background:var(--surface-2);border:1px solid var(--border);padding:16px 17px}
+.activity-evidence-card p{margin:8px 0 0;color:var(--text)!important;font-size:14px;line-height:1.55;font-style:normal}
+.evidence-source{flex:0 0 auto;padding:5px 8px;background:var(--surface);border:1px solid var(--border);color:var(--brand-2);font:600 9px var(--font-mono);text-transform:uppercase;letter-spacing:.05em}
+.activity-detail-modern .activity-detail-trace{border-top:0;padding-top:0;gap:9px}
+.activity-trace-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.activity-trace-head>span:last-child{color:var(--text-3);font:10px var(--font-mono)}
+.activity-update-row{display:grid;grid-template-columns:minmax(155px,1fr) auto;gap:12px;align-items:center;border:1px solid var(--border);background:var(--surface-2);padding:11px 13px;font-size:12px}
+.activity-update-row>div{display:flex;align-items:center;gap:9px;min-width:0}
+.activity-update-row .update-time{color:var(--text-3);font:10px var(--font-mono)}
+.activity-update-row .actor{color:var(--text-2);background:var(--surface);border:1px solid var(--border);padding:3px 6px}
+.activity-update-row strong{color:var(--text);font-size:12px;font-weight:600}
+.activity-update-row .update-change{font:600 11px var(--font-mono);color:var(--text-2);white-space:nowrap}
+.activity-update-row .update-change b{color:var(--brand-2)}
+
+/* Modal sizing is slightly wider for the four stat cards and evidence block. */
+.modal:has(.activity-detail-modern){width:min(790px,92vw);padding:24px}
+:root[data-theme="dark"] .activity-detail-hero,
+:root[data-theme="dark"] .activity-trace-head{border-color:var(--border)}
+:root[data-theme="dark"] .activity-detail-id,
+:root[data-theme="dark"] .activity-update-row .update-change b{color:#7fc5a8}
+:root[data-theme="dark"] .activity-evidence-card,
+:root[data-theme="dark"] .activity-detail-modern .activity-detail-grid>div,
+:root[data-theme="dark"] .activity-update-row{background:#1b2b30!important;border-color:#3b5054!important}
+:root[data-theme="dark"] .activity-evidence-card p,
+:root[data-theme="dark"] .activity-detail-modern .activity-detail-grid b,
+:root[data-theme="dark"] .activity-update-row strong{color:#edf4f1!important}
+:root[data-theme="dark"] .evidence-source,
+:root[data-theme="dark"] .activity-update-row .actor{background:#152226!important;border-color:#3b5054!important;color:#9fc7b6!important}
+:root[data-theme="dark"] .activity-detail-modern .activity-detail-grid span,
+:root[data-theme="dark"] .activity-trace-head>span:last-child,
+:root[data-theme="dark"] .activity-update-row .update-time{color:#9aafaa!important}
+
+@media(max-width:720px){
+  .activity-update-row{grid-template-columns:1fr}
+  .activity-evidence-card{flex-direction:column}
+}
