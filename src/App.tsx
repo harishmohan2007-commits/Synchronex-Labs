@@ -497,7 +497,61 @@ function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';s
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
 function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
- return <div className="command-page"><div className="command-top"><div className="metric-band command-metrics"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><aside className="command-aside"><div className="aside-block decision-card"><span className="eyebrow">DECISION QUEUE</span><div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div></aside></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div><div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div></div></div></PageSection></div>
+ return <div className="command-page">
+   <div className="command-top">
+     <div className="metric-band command-metrics">
+       <Metric label="L5/L6 activities" value="246" note="executable nodes"/>
+       <Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/>
+       <Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/>
+       <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
+     </div>
+   </div>
+
+   <div className="command-pulse-row">
+     <div className="command-pulse-heading">
+       <div>
+         <span className="eyebrow">BASELINE → ACTUAL</span>
+         <h2>Project pulse</h2>
+       </div>
+       <button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>
+     </div>
+     <aside className="command-pulse-decision">
+       <div className="decision-card">
+         <span className="eyebrow">DECISION QUEUE</span>
+         <div className="decision-number-row">
+           <strong className="aside-number">{reviewCount}</strong>
+           <span className="queue-status">OPEN</span>
+         </div>
+         <p>Ambiguous or unmatched events need a planner before schedule application.</p>
+         <button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button>
+       </div>
+     </aside>
+   </div>
+
+   <section className="command-pulse-graph">
+     <div className="pulse-grid">
+       <div className="trend">
+         <div className="trend-head">
+           <span>Progress trajectory</span>
+           <span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span>
+         </div>
+         <div className="chart">
+           <div className="gridlines"/>
+           <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
+             <polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/>
+             <polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/>
+           </svg>
+         </div>
+         <div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div>
+         <div className="pulse-kpis">
+           <div><span>ACTUAL</span><b>52.3%</b></div>
+           <div><span>PLANNED</span><b>57.0%</b></div>
+           <div><span>VARIANCE</span><b className="negative">−4.7%</b></div>
+         </div>
+       </div>
+     </div>
+   </section>
+ </div>
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 

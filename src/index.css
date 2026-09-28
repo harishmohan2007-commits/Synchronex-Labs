@@ -1288,3 +1288,35 @@ button,input,textarea,select{font-family:var(--font-ui)}
 .command-page .pulse-grid .chart svg{width:100%!important;height:100%!important}
 @media(max-width:1200px){.command-top{grid-template-columns:minmax(0,1fr) 280px}.command-metrics{margin-left:28px}.command-top .command-aside{padding-right:28px}.command-page > .section{padding-left:28px;padding-right:28px}}
 @media(max-width:900px){.command-top{grid-template-columns:1fr}.command-top .command-aside{border-left:0;padding:16px 28px 0}.command-metrics{margin-right:28px}}
+
+/* Command page final layout: metrics first, pulse heading next, full-width graph below. */
+.command-page{padding-bottom:56px}
+.command-top{display:block}
+.command-metrics{margin:28px 38px 0!important;grid-template-columns:repeat(4,minmax(0,1fr));width:auto!important}
+.command-metrics .metric{min-height:142px;padding:25px 22px}
+.command-metrics .metric strong{font-size:35px;margin:11px 0 4px}
+.command-pulse-row{margin:32px 38px 18px;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:30px;align-items:center}
+.command-pulse-heading{display:flex;justify-content:space-between;align-items:end;gap:24px;min-height:92px}
+.command-pulse-heading h2{margin:6px 0 0;font-size:28px;letter-spacing:-.03em}
+.command-pulse-decision .decision-card{margin:0;width:100%;background:var(--surface);color:var(--text);border:1px solid var(--border);border-top:2px solid var(--green);padding:18px 18px 20px;box-shadow:0 4px 14px rgba(30,50,43,.05)}
+.command-pulse-decision .aside-number{margin:7px 0 3px}
+.command-pulse-decision p{margin:10px 0 0;color:var(--text-2);line-height:1.55}
+.command-pulse-decision .primary-btn{width:100%;margin-top:14px}
+.command-pulse-graph{margin:0 38px}
+.command-pulse-graph .pulse-grid{display:block!important;grid-template-columns:1fr!important;width:100%!important}
+.command-pulse-graph .trend{width:100%!important;border-right:0!important;padding:22px 22px 18px!important}
+.command-pulse-graph .chart{width:100%!important;height:340px!important}
+.command-pulse-graph .chart svg{width:100%!important;height:100%!important}
+.command-pulse-graph .pulse-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1200px){
+  .command-metrics{margin-left:28px!important;margin-right:28px!important}
+  .command-pulse-row{margin-left:28px;margin-right:28px;grid-template-columns:minmax(0,1fr) 280px}
+  .command-pulse-graph{margin-left:28px;margin-right:28px}
+}
+@media(max-width:900px){
+  .command-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .command-pulse-row{grid-template-columns:1fr}
+  .command-pulse-heading{align-items:flex-start}
+  .command-pulse-decision{max-width:420px}
+  .command-pulse-graph{margin-left:28px;margin-right:28px}
+}
