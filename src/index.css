@@ -1516,3 +1516,57 @@ button,input,textarea,select{font-family:var(--font-ui)}
 }
 .import-actions-submit .helper{display:none!important}
 .import-actions-submit{justify-content:flex-end}
+
+
+/* Definitive discipline detail header polish. The old eyebrow is intentionally removed. */
+.schedule-page .schedule-detail-head{
+  width:100%;
+  min-height:112px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:28px;
+  padding:22px 24px;
+  margin:24px 0 0;
+  border:1px solid var(--border, var(--line));
+  background:var(--surface-2, #16262b);
+  text-align:left;
+}
+.schedule-page .schedule-detail-head > div{
+  flex:1 1 auto;
+  min-width:0;
+}
+.schedule-page .schedule-detail-head h3{
+  display:block;
+  margin:0 0 8px;
+  font-size:30px;
+  line-height:1.12;
+  letter-spacing:-.025em;
+  color:var(--text, var(--ink));
+}
+.schedule-page .schedule-detail-head p{
+  display:block;
+  width:auto;
+  max-width:none;
+  margin:0;
+  font-size:14px;
+  line-height:1.55;
+  color:var(--text-2, var(--muted));
+  white-space:normal;
+  overflow-wrap:normal;
+}
+.schedule-detail-count{
+  flex:0 0 auto;
+  padding:9px 12px;
+  border:1px solid var(--border, var(--line));
+  background:var(--surface, #182a2f);
+  color:var(--text-2, var(--muted));
+  font:600 10px var(--font-mono, 'IBM Plex Mono');
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.schedule-page .schedule-filter-bar{margin-top:16px;}
+@media(max-width:760px){
+  .schedule-page .schedule-detail-head{align-items:flex-start;flex-direction:column;min-height:0;gap:14px;}
+}
