@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF } from './data';
 
 type Role = 'company'|'field';
-type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'notifications'|'profile';
+type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'my-work'|'submissions'|'notifications'|'profile';
 type Modal = 'help'|'notifications'|'activity'|'confirm'|'profile'|'member'|'invite'|null;
 type ThemeMode = 'light'|'dark'|'system';
 
@@ -19,11 +19,11 @@ const companyNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
 ];
 const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
   {id:'field-home',num:'01',label:'Field Home',glyph:'⌂'},
-  {id:'capture',num:'02',label:'Capture',glyph:'↗'},
-  {id:'submissions',num:'03',label:'Submissions',glyph:'↥'},
-  {id:'notifications',num:'04',label:'Notifications',glyph:'!'},
-  {id:'profile',num:'05',label:'Profile',glyph:'●'},
-  {id:'settings',num:'06',label:'Settings',glyph:'⚙'},
+  {id:'my-work',num:'02',label:'My Work',glyph:'✓'},
+  {id:'capture',num:'03',label:'Capture',glyph:'↗'},
+  {id:'submissions',num:'04',label:'Submissions',glyph:'↥'},
+  {id:'notifications',num:'05',label:'Notifications',glyph:'!'},
+  {id:'profile',num:'06',label:'Profile',glyph:'●'},
 ];
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
@@ -37,7 +37,8 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  analytics:{eyebrow:'ANALYTICS / PROJECT PERFORMANCE',title:'Project analytics',subtitle:'Turn validated execution data into schedule variance, productivity, delay, and progress insight.'},
  team:{eyebrow:'TEAM / ACCESS CONTROL',title:'Project team',subtitle:'Manage company planners, reviewers, supervisors, and field access.'},
  settings:{eyebrow:'SYSTEM / TRUST CONTROLS',title:'Workspace settings',subtitle:'Define confidence thresholds, project defaults, access, and evidence handling.'},
- 'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'Receive the approved baseline, report execution evidence, and track your submissions.'},
+ 'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'See assigned work, recent submissions, and the next action without the planning complexity.'},
+ 'my-work':{eyebrow:'FIELD / ASSIGNED WORK',title:'My work',subtitle:'View the activities assigned to you and report progress against the approved baseline.'},
  submissions:{eyebrow:'FIELD / SUBMISSIONS',title:'My submissions',subtitle:'Track what you have reported and whether Synchronex accepted or needs more information.'},
  notifications:{eyebrow:'FIELD / NOTIFICATIONS',title:'Notifications',subtitle:'See assignment changes, submission decisions, and messages that need your attention.'},
  profile:{eyebrow:'FIELD / ACCOUNT',title:'My profile',subtitle:'Review your field role, project access, and account details.'},
@@ -275,7 +276,7 @@ export default function App(){
   const openResult=(r:SearchResult)=>{
     setSearchOpen(false);setQuery('');
     if(role==='field'){
-      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('capture');return;}
+      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('my-work');return;}
       setScreen('submissions');return;
     }
     if(r.action.reviewId){
@@ -389,6 +390,7 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
+      <div className="rail-bottom"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field / Phase 1</strong><small>{role==='company'?'Baseline Rev 04 · Synced 09:42':'Field execution · Today'}</small><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
@@ -432,10 +434,10 @@ export default function App(){
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
+      {role==='field' && screen==='my-work'&&<MyWork onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
       {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
-      {role==='field' && screen==='settings'&&<FieldSettings themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone}/>}
     </main>
 
     {modal==='help'&&<Modal title="How the planning-to-execution bridge works" onClose={()=>setModal(null)}><div className="flow-list">{[
@@ -770,15 +772,20 @@ function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle
 }
 
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
+  const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
   return <div className="field-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">RECEIVED BASELINE</span><strong>REV 04</strong><small>Approved company schedule · read only</small></div><div className="field-summary"><span className="eyebrow">REPORTING</span><strong>TEXT · VOICE · FILE</strong><small>Send execution updates with supporting evidence</small></div><div className="field-summary"><span className="eyebrow">SUBMISSIONS</span><strong>2</strong><small>Reports currently processing or under review</small></div></div>
+      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>REV 04</strong><small>Approved company schedule</small></div></div>
       <div className="field-home-grid">
-        <div className="field-panel field-baseline-panel"><div className="panel-heading"><div><span className="eyebrow">COMPANY BASELINE</span><h3>Project schedule received</h3></div><span className="field-live"><i/> READ ONLY</span></div><p>The company has issued <b>North Field Gas Processing / Phase 1</b> baseline Rev 04. Use it as the execution reference; field users do not edit the baseline.</p><div className="field-baseline-meta"><div><span>REVISION</span><b>04</b></div><div><span>SYNCED</span><b>09:42 IST</b></div><div><span>ACCESS</span><b>Read only</b></div></div><button className="outline-btn full" onClick={()=>onGo('capture')}>Report against this baseline →</button></div>
-        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT SUBMISSIONS</span><h3>Your latest reports</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
       </div>
     </PageSection>
   </div>
+}
+
+function MyWork({onCapture}:{onCapture:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ASSIGNED WORK" title="My work" action={<button className="primary-btn" onClick={onCapture}>Report progress →</button>}><div className="field-work-list">{ACTIVITIES.slice(0,10).map(a=><button className="field-work-card" key={a.id} onClick={onCapture}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.planStart} → {a.planFinish}</small></div><div className="field-progress"><span>Current</span><b>{a.progress}%</b><div className="bar-track"><i style={{width:`${a.progress}%`}}/></div></div><i>→</i></button>)}</div></PageSection></div>
 }
 
 function Submissions({onCapture}:{onCapture:()=>void}){
@@ -792,21 +799,11 @@ function Submissions({onCapture}:{onCapture:()=>void}){
 
 function FieldNotifications(){
   const items=[
-    ['Baseline received','Approved company baseline Rev 04 is available for execution reporting.','10 min ago'],
+    ['Assignment updated','P-101 Spool B remains assigned to your workfront.','10 min ago'],
     ['Submission under review','Line 25 erection started is awaiting planner validation.','35 min ago'],
     ['Schedule notice','MCC-2 panel installation is planned for 25 Sep.','2 hr ago'],
   ];
   return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
-}
-
-function FieldSettings({themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,dateFormat,setDateFormat,timezone,setTimezone}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void}){
-  return <div className="settings-page">
-    <PageSection label="FIELD / APPEARANCE" title="Field settings">
-      <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose Light, Dark, or System appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>
-    </PageSection>
-    <PageSection label="FIELD / LAYOUT" title="Workspace preferences"><div className="settings-card stacked"><div className="setting-row"><div><strong>Density</strong><p>Choose how much information is visible in field lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div><div className="setting-row"><div><strong>In-app notifications</strong><p>Show submission and schedule notices inside Synchronex.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><strong>Email notifications</strong><p>Receive important reporting and account updates by email.</p></div><button className={`toggle ${emailNotifications?'on':''}`} aria-pressed={emailNotifications} onClick={()=>setEmailNotifications(!emailNotifications)}><span/></button></div></div></PageSection>
-    <PageSection label="FIELD / REGIONAL" title="Date and time"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><div className="settings-info"><span className="eyebrow">BASELINE ACCESS</span><strong>Rev 04 · Read only</strong><span>Field users report execution; they do not change the approved company baseline.</span></div></div></PageSection>
-  </div>
 }
 
 function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){

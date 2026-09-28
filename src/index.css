@@ -1151,3 +1151,109 @@ button,input,textarea,select{font-family:var(--font-ui)}
 :root[data-theme="dark"] .team-table th{background:var(--surface-2)!important;color:var(--text-3)!important}
 :root[data-theme="dark"] .analytics-table tr:hover td,
 :root[data-theme="dark"] .team-table tr:hover td{background:var(--surface-2)!important}
+
+/* =====================================================================
+   REVIEW DARK THEME — final contrast correction
+   The validation panel previously kept its light-theme surface while
+   inheriting dark-theme text, which produced the washed-out white block.
+   Keep the entire review detail surface in the same dark visual language.
+   ===================================================================== */
+:root[data-theme="dark"] .review-validation-panel{
+  background:#182328!important;
+  color:#eef5f1!important;
+  border-color:#3b5054!important;
+  box-shadow:none!important;
+}
+:root[data-theme="dark"] .review-validation-panel .eyebrow{
+  color:#96aaa6!important;
+}
+:root[data-theme="dark"] .review-validation-panel .check-row{
+  border-bottom-color:#33474b!important;
+}
+:root[data-theme="dark"] .review-validation-panel .check-row>span{
+  color:#78c7a5!important;
+}
+:root[data-theme="dark"] .review-validation-panel .check-row p{
+  color:#e6efeb!important;
+}
+:root[data-theme="dark"] .review-validation-panel .check-row small{
+  color:#9fb2ae!important;
+}
+:root[data-theme="dark"] .review-validation-panel .review-rule{
+  border-top-color:#33474b!important;
+}
+:root[data-theme="dark"] .review-validation-panel .aside-copy{
+  color:#afbfbb!important;
+}
+/* Keep warning/decision text visible without reverting to white-theme colors. */
+:root[data-theme="dark"] .review-validation-panel .check-row:last-of-type>span{
+  color:#efc070!important;
+}
+
+
+/* =====================================================================
+   FINAL REVIEW PANEL THEME FIX
+   Use the canonical theme tokens directly so the validation panel can
+   never fall back to the legacy light surface in Dark/System-dark mode.
+   ===================================================================== */
+.review-validation-panel{
+  background:var(--surface)!important;
+  color:var(--text)!important;
+  border-color:var(--border)!important;
+  box-shadow:none!important;
+}
+.review-validation-panel .eyebrow{
+  color:var(--text-3)!important;
+}
+.review-validation-panel .check-row{
+  border-bottom:1px solid var(--border)!important;
+}
+.review-validation-panel .check-row>span{
+  color:var(--brand-2)!important;
+}
+.review-validation-panel .check-row p{
+  color:var(--text)!important;
+}
+.review-validation-panel .check-row small{
+  color:var(--text-2)!important;
+}
+.review-validation-panel .review-rule{
+  border-top-color:var(--border)!important;
+}
+.review-validation-panel .aside-copy{
+  color:var(--text-2)!important;
+}
+.review-validation-panel .check-row:last-of-type>span{
+  color:var(--warn)!important;
+}
+
+/* Keep the review detail's remaining surfaces on the same token system. */
+.review-detail-main .review-hero,
+.review-detail-main .candidate{
+  background:var(--surface)!important;
+  color:var(--text)!important;
+  border-color:var(--border)!important;
+}
+.review-detail-main .review-hero blockquote,
+.review-detail-main .candidate strong{
+  color:var(--text)!important;
+}
+.review-detail-main .candidate p{
+  color:var(--text-2)!important;
+}
+.review-detail-main .candidate code{
+  color:var(--info)!important;
+}
+.review-detail-main .confidence-ring{
+  border-color:var(--border)!important;
+  border-top-color:var(--brand-2)!important;
+  border-right-color:var(--brand-2)!important;
+}
+.review-detail-main .confidence-ring span{
+  color:var(--text-2)!important;
+}
+.review-detail-main .issue-chip{
+  background:var(--surface-2)!important;
+  color:var(--warn)!important;
+  border:1px solid var(--border)!important;
+}
