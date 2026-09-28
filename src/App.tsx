@@ -376,6 +376,9 @@ export default function App(){
         <span className="brand-mark">S</span><span><strong>SYNCHRONEX</strong><small>EXECUTION INTELLIGENCE</small></span>
       </button>
       <div className="top-project"><strong>North Field Gas Processing / Phase 1</strong></div>
+      <div className="top-actions">
+        <button className="profile-chip" aria-label="Open profile" onClick={()=>setModal('profile')}>{role==='company'?'PC':'FS'}</button>
+      </div>
     </header>
 
     <aside className="rail">
@@ -494,31 +497,43 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
      </div>
    </div>
 
-   <div className="command-summary-row">
-     <div className="decision-card command-summary-card">
-       <span className="eyebrow">DECISION QUEUE</span>
-       <div className="decision-number-row">
-         <strong className="aside-number">{reviewCount}</strong>
-         <span className="queue-status">OPEN</span>
+   <section className="command-summary-row">
+     <div className="command-summary-card decision-summary-card">
+       <div>
+         <span className="eyebrow">DECISION QUEUE</span>
+         <div className="summary-number-row">
+           <strong>{reviewCount}</strong>
+           <span className="queue-status">OPEN</span>
+         </div>
+         <p>Ambiguous or unmatched events need a planner before schedule application.</p>
        </div>
-       <p>Ambiguous or unmatched events need a planner before schedule application.</p>
        <button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button>
      </div>
 
-     <div className="pulse-summary command-summary-card">
-       <div>
-         <span className="eyebrow">PLANNED TRAJECTORY &amp; ACTUAL PROGRESS</span>
-         <strong>57.0% planned <span className="summary-arrow">→</span> 52.3% actual</strong>
-         <p>Execution is currently 4.7 percentage points behind the approved plan.</p>
+     <div className="command-summary-card progress-summary-card">
+       <div className="summary-card-head">
+         <div>
+           <span className="eyebrow">PROJECT PROGRESS</span>
+           <h3>Planned trajectory &amp; actual progress</h3>
+         </div>
+         <span className="summary-delta">−4.7%</span>
        </div>
-       <div className="summary-progress-list">
-         <div><span>PLANNED</span><b>57.0%</b><i><em style={{width:'57%'}}/></i></div>
-         <div><span>ACTUAL</span><b>52.3%</b><i><em style={{width:'52.3%'}}/></i></div>
+       <div className="summary-progress-grid">
+         <div>
+           <span>PLANNED</span>
+           <strong>57.0%</strong>
+           <div className="summary-bar"><i style={{width:'57%'}}/></div>
+         </div>
+         <div>
+           <span>ACTUAL</span>
+           <strong>52.3%</strong>
+           <div className="summary-bar actual"><i style={{width:'52.3%'}}/></div>
+         </div>
        </div>
      </div>
-   </div>
+   </section>
 
-   <div className="command-pulse-heading">
+   <div className="command-pulse-heading command-pulse-heading-full">
      <div>
        <span className="eyebrow">BASELINE → ACTUAL</span>
        <h2>Project pulse</h2>
@@ -536,8 +551,8 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
          <div className="chart">
            <div className="gridlines"/>
            <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
-             <polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeDasharray="5 5"/>
-             <polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="var(--brand-2)" strokeWidth="4"/>
+             <polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/>
+             <polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/>
            </svg>
          </div>
          <div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div>
