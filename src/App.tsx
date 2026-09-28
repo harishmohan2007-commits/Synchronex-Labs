@@ -197,7 +197,7 @@ export default function App(){
   const recordingChunksRef=useRef<Blob[]>([]);
   const recordingTimerRef=useRef<number|null>(null);
   const [importState,setImportState]=useState<'idle'|'processing'|'success'|'error'>('idle');
-  const [importFile,setImportFile]=useState('');
+  const [importFiles,setImportFiles]=useState<File[]>([]);
   const [saved,setSaved]=useState(false);
   const [threshold,setThreshold]=useState(90);
   const [themeMode,setThemeMode]=useState<ThemeMode>(()=>{try{const v=localStorage.getItem('synchronex-theme');return v==='light'||v==='dark'||v==='system'?v:'light'}catch{return 'light'}});
@@ -359,9 +359,17 @@ export default function App(){
   const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
   const processImport=()=>{
-    if(!importFile){notify('Choose a supported file first.');return;}
+    if(!importFiles.length){notify('Choose one or more schedule files first.');return;}
     setImportState('processing');
-    window.setTimeout(()=>setImportState('success'),1600);
+    window.setTimeout(()=>{setImportState('success');setDirty(false);notify(`${importFiles.length} schedule file${importFiles.length===1?'':'s'} processed and queued for baseline review.`)},1600);
+  };
+  const exportSchedule=()=>{
+    const headers=['Activity ID','Discipline','Activity','WBS','Plan Start','Plan Finish','Actual Start','Actual Finish','Progress','Status','AI Confidence'];
+    const csv=[headers.join(','),...ACTIVITIES.map(a=>[a.id,a.discipline,a.desc,a.wbs,a.planStart,a.planFinish,a.actStart,a.actFinish,`${a.progress}%`,a.status,a.aiConf?`${a.aiConf}%`:''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url; link.download='synchronex-schedule-export.csv'; link.click();
+    URL.revokeObjectURL(url); notify('Schedule exported successfully.');
   };
 
   if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} role={role} setRole={setRole} onLogin={()=>{setScreen(role==='company'?'command':'field-home');setScheduleDiscipline('All');setSelectedId(ACTIVITIES[0]?.id||'');setDetailId(null);setModal(null);setDirty(false);setAuthenticated(true)}} />;
@@ -421,12 +429,12 @@ export default function App(){
       </div>
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
-      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
+      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the file evidence card below to attach a report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} processVoice={processVoice} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
-      {role==='company' && screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
+      {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
@@ -439,29 +447,21 @@ export default function App(){
 
     {modal==='profile'&&<Modal title={role==='company'?'Project Controls Engineer':'Field Supervisor'} onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">{role==='company'?'PC':'FS'}</div><p><b>{role==='company'?'Planner workspace':'Field execution workspace'}</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null)}}>Switch to {role==='company'?'field':'company'} portal</button><button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
-    {modal==='activity'&&<Modal title={detailActivity?detailActivity.desc:'Activity detail'} onClose={()=>setModal(null)}>
+    {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
       {detailActivity ? <div className="activity-detail activity-detail-modern">
         <div className="activity-detail-hero">
-          <div>
-            <span className="activity-detail-id">{detailActivity.id}</span>
-            <p>{detailActivity.discipline} · {detailActivity.wbs} executable node</p>
-          </div>
+          <div><span className="eyebrow">{detailActivity.discipline} · {detailActivity.wbs} EXECUTABLE NODE</span><h3>{detailActivity.desc}</h3><p>Schedule status, execution progress, and the latest linked evidence.</p></div>
           <span className={`status-badge ${detailActivity.status==='Completed'?'track':detailActivity.status==='Planned'?'':'risk'}`}>{detailActivity.status}</span>
         </div>
         <div className="activity-detail-grid">
-          <div><span>PLAN WINDOW</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
-          <div><span>ACTUAL WINDOW</span><b>{detailActivity.actStart} → {detailActivity.actFinish}</b></div>
-          <div><span>PROGRESS</span><b className="activity-detail-progress-value">{detailActivity.progress}%</b></div>
-          <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'—'}</b></div>
+          <div><span>PLAN</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
+          <div><span>ACTUAL</span><b>{detailActivity.actStart} → {detailActivity.actFinish}</b></div>
+          <div><span>PROGRESS</span><b>{detailActivity.progress}%</b><i className="activity-detail-progress"><em style={{width:`${detailActivity.progress}%`}}/></i></div>
+          <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'No link'}</b></div>
         </div>
-        <div className="activity-detail-evidence activity-evidence-card">
-          <div><span className="eyebrow">LATEST FIELD EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
-          {detailEvidence&&<span className="evidence-source">{detailEvidence.status.includes('AI')?'AI':'Field report'}</span>}
-        </div>
-        <div className="activity-detail-trace">
-          <div className="activity-trace-head"><span className="eyebrow">PROGRESS HISTORY</span><span>{detailTrail.length} update{detailTrail.length===1?'':'s'}</span></div>
-          {detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row activity-update-row"><div><span className="update-time">{t.ts}</span><span className="actor">{t.actor}</span></div><strong>Progress update by {t.actor}</strong><span className="update-change">{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No progress updates recorded yet for this activity.</p>}
-        </div>
+        <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
+        <div className="activity-detail-trace activity-detail-panel"><div className="activity-detail-panel-head"><span className="eyebrow">RECENT PROGRESS UPDATES</span><span className="trace-chip">{detailTrail.length} recorded</span></div>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action.toLowerCase().includes('progress update')?`Progress update by ${t.actor}`:t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
+        <div className="activity-detail-footer"><span>Source, actor, and timestamp remain attached to every recorded update.</span><button className="outline-btn" onClick={()=>setModal(null)}>Close</button></div>
       </div> : <p>Activity not found.</p>}
     </Modal>}
     {modal==='member'&&memberTarget&&<Modal title={`Manage ${memberTarget.name}`} onClose={()=>setModal(null)}>
@@ -579,22 +579,7 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function exportSchedule(rows:any[]){
-  const headers=['Activity ID','Description','Discipline','WBS','Plan Start','Plan Finish','Actual Start','Actual Finish','Progress','Status','AI Confidence'];
-  const escape=(v:any)=>`"${String(v??'').replace(/"/g,'""')}"`;
-  const csv=[headers,...rows.map(a=>[a.id,a.desc,a.discipline,a.wbs,a.planStart,a.planFinish,a.actStart,a.actFinish,`${a.progress}%`,a.status,a.aiConf?`${a.aiConf}%`:'' ])].map(r=>r.map(escape).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement('a');
-  link.href=url;
-  link.download='Synchronex-Schedule-Export.csv';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
+function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
   const [statusFilter,setStatusFilter]=useState('All');
   const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
   const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
@@ -613,7 +598,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
   const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
   return <div className="schedule-page">
-    <PageSection title="Schedule by discipline" action={<button className="primary-btn" onClick={()=>exportSchedule(rows)}>Export schedule ↓</button>}>
+    <PageSection title="Schedule by discipline" action={<div className="schedule-head-actions">{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}<button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
       {discipline==='All' ? <div className="discipline-card-grid">
         {DISCIPLINES.map(d=>{
           const evidence=recentEvidence(d.name);
@@ -629,7 +614,7 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
           </div>;
         })}
       </div> : <>
-        <div className="schedule-detail-head"><div><h3>{discipline}</h3><p>Executable activities, dates, progress, and linkage evidence for this workstream.</p></div><button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button></div>
+        <div className="schedule-detail-head"><div><span className="eyebrow">DISCIPLINE SCHEDULE</span><h3>{discipline}</h3><p>Executable activities, dates, progress, and linkage evidence for this workstream.</p></div></div>
         <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
         <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
       </>}
@@ -803,66 +788,39 @@ function Memory(){
 
 function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
 
-function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
+function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';files:File[];setFiles:(files:File[])=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
-  const [kind,setKind]=useState<'schedule'|'evidence'>('evidence');
-  const [dragOver,setDragOver]=useState<'schedule'|'evidence'|null>(null);
-  const choose=(nextKind:'schedule'|'evidence')=>{setKind(nextKind);inputRef.current?.click()};
-  const handleFiles=(files:FileList|null,nextKind:typeof kind=kind)=>{
-    const first=files?.[0];
-    if(!first) return;
-    setKind(nextKind);
-    setFile(first.name);
+  const [dragOver,setDragOver]=useState(false);
+  const supported='.mpp,.xer,.xml,.pod,.xlsx,.xls,.csv';
+  const supportedExt=new Set(['mpp','xer','xml','pod','xlsx','xls','csv']);
+  const addFiles=(incoming:FileList|null)=>{
+    if(!incoming) return;
+    const incomingFiles=Array.from(incoming);
+    const valid=incomingFiles.filter(file=>supportedExt.has(file.name.split('.').pop()?.toLowerCase()||''));
+    const next=[...files,...valid].filter((file,i,arr)=>arr.findIndex(x=>x.name===file.name&&x.size===file.size&&x.lastModified===file.lastModified)===i);
+    setFiles(next);
   };
-  const onDrop=(e:React.DragEvent<HTMLDivElement>,nextKind:typeof kind)=>{
-    e.preventDefault();
-    setDragOver(null);
-    handleFiles(e.dataTransfer.files,nextKind);
-  };
-  const formats=kind==='schedule'?['Primavera','MS Project','ProjectLibre','Excel','CSV']:['PDF','Word','Excel','CSV','TXT','Images','Any file'];
+  const removeFile=(index:number)=>setFiles(files.filter((_,i)=>i!==index));
   return <div className="import-page">
-    <PageSection label="COMPANY / DATA INTAKE" title="Import center" action={<span className="trace-chip">Company controlled</span>}>
-      <div className="import-purpose"><span className="eyebrow">WHY IMPORT EXISTS</span><h3>Bring existing company data into the Synchronex bridge.</h3><p>Use <b>Schedule Import</b> for the approved baseline. Use <b>Evidence Import</b> for project documents already produced by the organization. Field teams use Capture for live execution updates.</p></div>
-      <div className="import-choice-grid import-choice-grid-clean">
-        <article className={`import-choice ${kind==='schedule'?'selected-source':''}`}>
-          <div className="import-choice-top"><span className="import-choice-icon">▤</span><span className="trace-chip">BASELINE</span></div>
-          <span className="eyebrow">01 / SCHEDULE IMPORT</span><h3>Bring in the baseline plan</h3><p>Upload the approved planning file and prepare WBS, activity IDs, dates, dependencies, and levels for a new baseline revision.</p>
-          <div className="import-format-list">{['Primavera','MS Project','ProjectLibre','Excel','CSV'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='schedule'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('schedule')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('schedule')}} onDragOver={e=>{e.preventDefault();setDragOver('schedule')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'schedule')}>
-            <strong>{file&&kind==='schedule'?file:'Drop schedule file here'}</strong><span>Any file can be selected. Validation happens after upload.</span><small>Choose a file or drag it into this area</small>
-          </div>
-          <button className="primary-btn import-select-btn" onClick={()=>choose('schedule')}>{file&&kind==='schedule'?'Replace schedule file':'Select schedule file'} <span>→</span></button>
-          <small className="import-note">Creates a candidate baseline revision; publishing remains company-controlled.</small>
-        </article>
-
-        <article className={`import-choice ${kind==='evidence'?'selected-source':''}`}>
-          <div className="import-choice-top"><span className="import-choice-icon">↑</span><span className="trace-chip">EVIDENCE</span></div>
-          <span className="eyebrow">02 / EVIDENCE IMPORT</span><h3>Process existing project evidence</h3><p>Upload reports and documents already collected by the project. Synchronex extracts execution events, matches them to the baseline, and routes ambiguity to Review.</p>
-          <div className="import-format-list">{['PDF','Word','Excel','CSV','TXT','Images','Any file'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='evidence'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('evidence')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('evidence')}} onDragOver={e=>{e.preventDefault();setDragOver('evidence')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'evidence')}>
-            <strong>{file&&kind==='evidence'?file:'Drop any evidence file here'}</strong><span>PDF, Word, Excel, images, archives, text, or any other file type.</span><small>Source is preserved before extraction</small>
-          </div>
-          <button className="outline-btn import-select-btn" onClick={()=>choose('evidence')}>{file&&kind==='evidence'?'Replace evidence file':'Select evidence file'} <span>→</span></button>
-          <small className="import-note">Use Capture instead when a field user is reporting live from site.</small>
-        </article>
-      </div>
-      <input ref={inputRef} className="file-input-hidden" type="file" multiple accept="*/*" onChange={e=>{handleFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select import file" />
-      {(state!=='idle'||file) && <div className={`import-status-banner ${state}`} role="status">
-        <div>
-          <span className="eyebrow">IMPORT STATUS</span>
-          <strong>{state==='processing'?'Processing import…':state==='success'?'Import processed successfully':state==='error'?'Import needs attention':'File selected'}</strong>
-          <p>{file ? `${file} · ${kind==='schedule'?'Schedule baseline':'Project evidence'}` : 'Select a schedule or evidence file to begin.'}</p>
+    <PageSection title="Import center" action={<span className="trace-chip">Company controlled</span>}>
+      <div className="import-purpose import-purpose-clean"><div><span className="eyebrow">SCHEDULE DATA INTAKE</span><h3>Bring approved planning files into the Synchronex bridge.</h3><p>Select one or more schedule files. Synchronex validates the selected formats together and prepares them for the company-controlled baseline review.</p></div><div className="import-supported-inline"><span>SUPPORTED</span><b>MS Project</b><b>Primavera</b><b>ProjectLibre</b><b>Excel / CSV</b></div></div>
+      <article className="import-choice import-choice-single">
+        <div className="import-choice-top"><div><span className="import-choice-icon">▤</span></div><span className="trace-chip">SCHEDULE</span></div>
+        <span className="eyebrow">01 / SCHEDULE IMPORT</span>
+        <h3>Upload project schedules</h3>
+        <p>Select multiple planning files in one submission. Supported project formats include Microsoft Project, Primavera, ProjectLibre, Excel, and CSV.</p>
+        <div className="import-format-list">{['MS Project · .mpp / .xml','Primavera · .xer / .xml','ProjectLibre · .pod / .xml','Excel · .xlsx / .xls','CSV · .csv'].map(x=><span key={x}>{x}</span>)}</div>
+        <input ref={inputRef} className="file-input-hidden" type="file" multiple accept={supported} onChange={e=>{addFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select schedule files" />
+        <div className={`import-drop-zone import-drop-zone-large ${dragOver?'dragging':''}`} role="button" tabIndex={0} onClick={()=>inputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')inputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);addFiles(e.dataTransfer.files)}}>
+          <span className="import-drop-icon">↑</span><strong>{files.length?`${files.length} schedule file${files.length===1?'':'s'} selected`:'Drop schedule files here'}</strong><span>Drag and drop multiple files or browse from your computer.</span><small>MS Project · Primavera · ProjectLibre · Excel · CSV</small>
         </div>
-        <div className="import-status-actions">
-          {state==='processing' && <span className="import-status-chip">Processing</span>}
-          {state==='success' && <><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}
-          {state==='error' && <button className="outline-btn" onClick={onRetry}>Retry</button>}
-        </div>
-      </div>}
+        {files.length>0&&<div className="import-file-list">{files.map((file,i)=><div className="import-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Schedule file'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" className="icon-btn" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
+        <div className="import-actions import-actions-submit"><span className="helper">Multiple files are submitted together and remain company-controlled until review.</span><button className="primary-btn" disabled={!files.length||state==='processing'} onClick={onProcess}>{state==='processing'?'Processing schedules…':state==='success'?'Submit again':'Submit schedules'} <span>→</span></button></div>
+      </article>
+      {(state!=='idle'||files.length>0) && <div className={`import-status-banner ${state}`} role="status"><div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Processing selected schedules…':state==='success'?'Schedules processed successfully':state==='error'?'Import needs attention':'Ready to submit'}</strong><p>{files.length?`${files.length} file${files.length===1?'':'s'} selected · ${files.map(f=>f.name).join(', ')}`:'Select schedule files to begin.'}</p></div><div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div></div>}
     </PageSection>
   </div>
 }
-
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
   return <div className="field-page">
