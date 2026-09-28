@@ -356,7 +356,14 @@ export default function App(){
     setReviewDetailOpen(false);
     setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
   };
-  const chooseCandidate=()=>notify('Candidate picker opened. Select the correct L5/L6 activity before applying.');
+  const rejectReview=()=>{
+    if(!activeReview) return;
+    setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
+    setReviewCount(c=>Math.max(0,c-1));
+    notify(`Suggested activity ${activeReview.candidate || "match"} rejected. The field event was not accepted as the correct activity.`);
+    setReviewDetailOpen(false);
+    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
+  };
   const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
   const processImport=()=>{
     if(!importFiles.length){notify('Choose one or more schedule files first.');return;}
@@ -431,7 +438,7 @@ export default function App(){
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
       {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the file evidence card below to attach a report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} processVoice={processVoice} formatRecordingTime={formatRecordingTime} />}
-      {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
+      {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
@@ -656,7 +663,7 @@ function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,remo
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
-function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onChoose:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
+function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
   const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
     return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
@@ -668,8 +675,8 @@ function Review({count,item,index,queue,onApprove,onChoose,onFlag,onJump,detailO
     <div className="review-detail-grid">
       <main className="review-detail-main">
         <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or choose another':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
-        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="outline-btn" onClick={onChoose}>Choose different activity</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
+        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
       </main>
       
     </div>
