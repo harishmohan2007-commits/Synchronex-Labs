@@ -853,35 +853,43 @@ function Memory(){
 }
 
 function Trace(){
-  const [selectedActor,setSelectedActor]=useState<string>('AI');
+  const [selectedActor,setSelectedActor]=useState<string|null>(null);
   const actors=Array.from(new Set(AUDIT_TRAIL.map(a=>a.actor)));
   const actorUpdates=(actor:string)=>AUDIT_TRAIL.filter(a=>a.actor===actor);
   const downloadCsv=(rows:any[],filename:string)=>{
     const headers=['Time','Actor','Action','Object','Source','Previous','Next','Confidence'];
-    const csv=[headers.join(','),...rows.map(a=>[a.ts,a.actor,a.action,a.activity,a.source,a.prev,a.next,a.conf||''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const csv=[headers.join(','),...rows.map(a=>[a.ts,a.actor,a.action,a.activity,a.source,a.prev,a.next,a.conf||''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
     window.setTimeout(()=>URL.revokeObjectURL(url),0);
   };
-  const selectedUpdates=actorUpdates(selectedActor);
   const actorMeta:Record<string,{label:string;description:string;glyph:string}>= {
     AI:{label:'AI',description:'Automated extraction, linking, and progress signals.',glyph:'AI'},
     Planner:{label:'Planner',description:'Human validation, matching decisions, and progress updates.',glyph:'PL'},
     System:{label:'System',description:'Import and processing events recorded by the platform.',glyph:'SY'},
   };
-  return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn" onClick={()=>downloadCsv(AUDIT_TRAIL,'synchronex-trace-ledger.csv')}>Export ledger ↓</button>}>
-    <div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">{AUDIT_TRAIL.length} demo records</span></div>
-    <div className="trace-actor-grid">{actors.map(actor=>{const meta=actorMeta[actor]||{label:actor,description:'Recorded provenance events.',glyph:actor.slice(0,2).toUpperCase()}; const rows=actorUpdates(actor); return <div key={actor} className={`trace-actor-card ${selectedActor===actor?'active':''}`} onClick={()=>setSelectedActor(actor)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedActor(actor)}}>
+  const selectedUpdates=selectedActor?actorUpdates(selectedActor):[];
+  const selectedMeta=selectedActor?(actorMeta[selectedActor]||{label:selectedActor,description:'Recorded provenance events.',glyph:selectedActor.slice(0,2).toUpperCase()}):null;
+  return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn" onClick={()=>downloadCsv(AUDIT_TRAIL,'synchronex-all-trace-updates.csv')}>Export all updates ↓</button>}>
+    <div className="trace-actor-grid trace-actor-grid-only">{actors.map(actor=>{const meta=actorMeta[actor]||{label:actor,description:'Recorded provenance events.',glyph:actor.slice(0,2).toUpperCase()}; const rows=actorUpdates(actor); return <div key={actor} className="trace-actor-card" onClick={()=>setSelectedActor(actor)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedActor(actor)}}>
       <div className="trace-actor-card-top"><div className="trace-actor-mark">{meta.glyph}</div><span className="trace-actor-count">{rows.length} updates</span></div>
       <strong>{meta.label}</strong><p>{meta.description}</p>
-      <button className="outline-btn trace-actor-export" onClick={e=>{e.stopPropagation();downloadCsv(rows,`synchronex-${actor.toLowerCase()}-trace.csv`)}}>Export {meta.label} ↓</button>
+      <span className="trace-actor-open">View {meta.label} updates →</span>
     </div>})}</div>
-    <div className="trace-updates-head"><div><span className="eyebrow">ACTOR UPDATES</span><h3>{selectedActor} updates</h3><p>Recorded changes attributed to this actor.</p></div><button className="outline-btn" onClick={()=>downloadCsv(selectedUpdates,`synchronex-${selectedActor.toLowerCase()}-trace.csv`)}>Export updates ↓</button></div>
-    <div className="trace-table"><table><thead><tr><th>Time</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{selectedUpdates.map((a,i)=><tr key={i}><td>{a.ts}</td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div>
+    {selectedActor&&<div className="trace-actor-modal" role="dialog" aria-modal="true" aria-labelledby="trace-actor-modal-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedActor(null)}}>
+      <div className="trace-actor-modal-card">
+        <div className="trace-actor-modal-head">
+          <div><span className="eyebrow">ACTOR UPDATES</span><h2 id="trace-actor-modal-title">{selectedMeta?.label} updates</h2><p>{selectedMeta?.description}</p></div>
+          <button className="icon-btn" aria-label="Close actor updates" onClick={()=>setSelectedActor(null)}>×</button>
+        </div>
+        <div className="trace-actor-modal-toolbar"><span>{selectedUpdates.length} recorded update{selectedUpdates.length===1?'':'s'}</span><button className="outline-btn" onClick={()=>downloadCsv(selectedUpdates,`synchronex-${selectedActor?.toLowerCase()}-trace.csv`)}>Export {selectedMeta?.label} updates ↓</button></div>
+        <div className="trace-table trace-modal-table"><table><thead><tr><th>Time</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{selectedUpdates.map((a,i)=><tr key={i}><td>{a.ts}</td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div>
+        <div className="trace-actor-modal-footer"><button className="outline-btn" onClick={()=>setSelectedActor(null)}>Close</button></div>
+      </div>
+    </div>}
   </PageSection>
 }
-
 function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';files:File[];setFiles:(files:File[])=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
   const [dragOver,setDragOver]=useState(false);

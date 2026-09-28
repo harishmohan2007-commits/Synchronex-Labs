@@ -1662,3 +1662,20 @@ button,input,textarea,select{font-family:var(--font-ui)}
 /* Memory overview: intentional breathing room after the evidence table. */
 .memory-overview .section{padding-bottom:72px}
 .memory-overview .memory-table{margin-bottom:8px}
+.trace-actor-grid-only{margin-top:0}
+.trace-actor-card{min-height:190px}
+.trace-actor-open{margin-top:auto;color:#9fc8b7;font-size:13px;font-weight:600}
+.trace-actor-modal{position:fixed;z-index:70;inset:0;background:rgba(7,17,20,.72);display:grid;place-items:center;padding:28px}
+.trace-actor-modal-card{width:min(1120px,94vw);max-height:88vh;overflow:auto;background:#16272c;border:1px solid #526b65;box-shadow:0 28px 90px rgba(0,0,0,.4);padding:24px;color:#eef4f1}
+.trace-actor-modal-head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #344b4c;padding-bottom:18px}
+.trace-actor-modal-head h2{margin:5px 0 4px;font-size:24px;color:#f2f5f3}
+.trace-actor-modal-head p{margin:0;color:#aebcba;font-size:13px;line-height:1.5}
+.trace-actor-modal-head .icon-btn{flex:0 0 auto;color:#dce8e3;border-color:#58706a}
+.trace-actor-modal-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 0 14px;color:#aebcba;font:11px 'IBM Plex Mono';text-transform:uppercase;letter-spacing:.08em}
+.trace-modal-table{border-color:#385052;background:#122126}
+.trace-modal-table th{background:#1d3338;color:#9fb0ad;border-color:#385052}
+.trace-modal-table td{color:#e5ece9;border-color:#31494b}
+.trace-modal-table tbody tr:hover{background:#1b3034!important}
+.trace-modal-table code{color:#9fc5d8}
+.trace-actor-modal-footer{display:flex;justify-content:flex-end;padding-top:18px}
+.trace-actor-modal-footer .outline-btn{background:transparent;color:#d7e3df;border-color:#526b65}
