@@ -372,16 +372,17 @@ export default function App(){
 
   return <div className="app-shell">
     <header className="topbar">
-      <button className="brand" onClick={()=>setScreen('command')} aria-label="Go to command">
+      <button className="brand" onClick={()=>setScreen(role==='company'?'command':'field-home')} aria-label="Go to home">
         <span className="brand-mark">S</span><span><strong>SYNCHRONEX</strong><small>EXECUTION INTELLIGENCE</small></span>
       </button>
-      <div className="top-project"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field Gas Processing / Phase 1</strong><span className="live"><i/> EXECUTION</span><code>NGFPF-P1-2026</code></div>
+      <div className="topbar-spacer" aria-hidden="true" />
       <div className="top-actions">
-        <button className="icon-btn" aria-label="Notifications" onClick={()=>setModal(modal==='notifications'?null:'notifications')}>●<span className={reviewCount?'alert-dot':''}/></button>
-        <button className="icon-btn" aria-label="Help" onClick={()=>setModal('help')}>?</button>
-        <button className="profile-chip" aria-label="Open profile" onClick={()=>setModal('profile')}>{role==='company'?'PC':'FS'}</button>
+        <button className="profile-chip profile-chip-lg" aria-label="Open profile" onClick={()=>setModal(modal==='profile'?null:'profile')}>
+          <span className="profile-chip-avatar">{role==='company'?'PM':'KR'}</span>
+          <span className="profile-chip-copy"><strong>{role==='company'?'Priya Menon':'Karthik R'}</strong><small>{role==='company'?'Company portal':'Field portal'}</small></span>
+          <span className="profile-chip-chevron">⌄</span>
+        </button>
       </div>
-      {modal==='notifications' && <Popover title={role==='company'?'Open decisions':'Latest field updates'}>{role==='company'?<><p><b>{reviewCount}</b> field events require planner validation.</p><p>Baseline Rev 04 synced at 09:42.</p><button className="text-action" onClick={()=>{setModal(null);go('review')}}>Open review queue →</button></>:<><p><b>2</b> submissions are being processed.</p><p>One report needs additional information.</p><button className="text-action" onClick={()=>{setModal(null);go('submissions')}}>Open submissions →</button></>}</Popover>}
     </header>
 
     <aside className="rail">
@@ -390,7 +391,6 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
-      <div className="rail-bottom"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field / Phase 1</strong><small>{role==='company'?'Baseline Rev 04 · Synced 09:42':'Field execution · Today'}</small><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
@@ -440,14 +440,32 @@ export default function App(){
       {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
     </main>
 
-    {modal==='help'&&<Modal title="How the planning-to-execution bridge works" onClose={()=>setModal(null)}><div className="flow-list">{[
-      ['01','Capture','Receive free text, reports, spreadsheets, site diaries, or supervisor statements.'],
-      ['02','Extract','Turn field language into structured execution events: activity, action, date, progress, evidence.'],
-      ['03','Link','Search L5/L6 schedule nodes using terminology and granularity-aware matching.'],
-      ['04','Confidence gate','High-confidence valid events can auto-apply; ambiguous or unmatched events go to a planner.'],
-      ['05','Apply + trace','Write the accepted actual to the schedule and preserve source, actor, confidence, and decision.'],
-    ].map(x=><div className="flow-row" key={x[0]}><b>{x[0]}</b><div><strong>{x[1]}</strong><p>{x[2]}</p></div></div>)}</div></Modal>}
-    {modal==='profile'&&<Modal title={role==='company'?'Project Controls Engineer':'Field Supervisor'} onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">{role==='company'?'PC':'FS'}</div><p><b>{role==='company'?'Planner workspace':'Field execution workspace'}</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null)}}>Switch to {role==='company'?'field':'company'} portal</button><button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
+    {modal==='profile'&&<Modal title="Account" onClose={()=>setModal(null)}>
+      <div className="profile-modal profile-modal-modern">
+        <div className="profile-modal-head">
+          <div className="profile-avatar profile-avatar-modern">{role==='company'?'PM':'KR'}</div>
+          <div className="profile-modal-identity">
+            <span className="eyebrow">LOGGED IN</span>
+            <h3>{role==='company'?'Priya Menon':'Karthik R'}</h3>
+            <p>{role==='company'?'Project Manager':'Field Supervisor'}</p>
+          </div>
+          <span className="profile-status-chip">Active</span>
+        </div>
+        <div className="profile-meta-grid">
+          <div><span>PORTAL</span><b>{role==='company'?'Company portal':'Field portal'}</b></div>
+          <div><span>WORKSPACE</span><b>{role==='company'?'Planning & Control':'Execution & Reporting'}</b></div>
+          <div><span>PROJECT</span><b>North Field / Phase 1</b></div>
+          <div><span>EMAIL</span><b>{role==='company'?'planner@northfield.example':'field.supervisor@northfield.example'}</b></div>
+          <div><span>ACCESS</span><b>{role==='company'?'Plan · Review · Control':'Work · Capture · Submit'}</b></div>
+          <div><span>BASELINE</span><b>{role==='company'?'Rev 04 · Managed':'Rev 04 · Read only'}</b></div>
+        </div>
+        <div className="profile-modal-actions">
+          <button className="outline-btn" onClick={()=>{setModal(null);go(role==='company'?'settings':'profile')}}>{role==='company'?'Open account settings':'Open profile'}</button>
+          <button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal</button>
+          <button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null);setDirty(false)}}>Sign out</button>
+        </div>
+      </div>
+    </Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
     {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
       {detailActivity ? <div className="activity-detail">

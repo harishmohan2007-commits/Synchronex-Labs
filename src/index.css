@@ -1189,3 +1189,34 @@ button,input,textarea,select{font-family:var(--font-ui)}
 :root[data-theme="dark"] .review-validation-panel .check-row:last-of-type>span{
   color:#efc070!important;
 }
+
+/* Profile/header cleanup: company and field context lives in the profile control, not the top bar. */
+.topbar-spacer{flex:1;min-width:0}
+.profile-chip-lg{height:48px;min-width:190px;padding:5px 9px 5px 7px;display:flex;align-items:center;gap:10px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;box-shadow:none}
+.profile-chip-lg:hover{background:var(--surface-3);border-color:var(--border-strong)}
+.profile-chip-avatar{width:32px;height:32px;display:grid;place-items:center;flex:0 0 auto;background:var(--brand);color:#fff;border-radius:50%;font:700 10px var(--font-mono);letter-spacing:.02em}
+.profile-chip-copy{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15;min-width:0}
+.profile-chip-copy strong{font-size:12px;color:var(--text);white-space:nowrap}
+.profile-chip-copy small{font-size:10px;color:var(--text-2);margin-top:3px;white-space:nowrap}
+.profile-chip-chevron{margin-left:auto;color:var(--text-2);font-size:16px;line-height:1}
+.profile-modal-modern{padding-top:18px}
+.profile-modal-head{display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:4px 0 18px;border-bottom:1px solid var(--border)}
+.profile-avatar-modern{width:64px;height:64px;background:var(--brand);color:#fff;border-radius:50%;font:700 16px var(--font-mono)}
+.profile-modal-identity h3{margin:5px 0 3px;font-size:24px;color:var(--text)}
+.profile-modal-identity p{margin:0;color:var(--text-2);font-size:13px}
+.profile-status-chip{padding:6px 9px;background:var(--success-soft);color:var(--success);border:1px solid var(--success-border);font:600 10px var(--font-mono);text-transform:uppercase;letter-spacing:.05em}
+.profile-meta-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin:18px 0}
+.profile-meta-grid>div{background:var(--surface-2);padding:14px 15px;min-height:72px}
+.profile-meta-grid span{display:block;font:600 9px var(--font-mono);letter-spacing:.1em;color:var(--text-3);margin-bottom:7px}
+.profile-meta-grid b{display:block;color:var(--text);font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.profile-modal-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.profile-modal-actions .danger-btn{margin-left:auto}
+.rail-bottom{display:none!important}
+.top-project{display:none!important}
+.top-actions{margin-left:auto}
+:root[data-theme="dark"] .profile-chip-lg{background:#182b2f;border-color:#395258;color:var(--text)}
+:root[data-theme="dark"] .profile-chip-lg:hover{background:#21383d;border-color:#567176}
+:root[data-theme="dark"] .profile-chip-avatar{background:#2f7f68;color:#f4fbf7}
+:root[data-theme="dark"] .profile-status-chip{background:#214338;color:#bfe7d5;border-color:#3d6f5d}
+:root[data-theme="dark"] .profile-meta-grid>div{background:#182b2f}
+@media(max-width:760px){.profile-chip-lg{min-width:48px;width:48px;justify-content:center;padding:6px}.profile-chip-copy,.profile-chip-chevron{display:none}.profile-modal-head{grid-template-columns:auto 1fr}.profile-status-chip{grid-column:2;justify-self:start}.profile-meta-grid{grid-template-columns:1fr}}
