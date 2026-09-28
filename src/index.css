@@ -1631,3 +1631,11 @@ button,input,textarea,select{font-family:var(--font-ui)}
   .analytics-plot svg{height:230px;flex-basis:230px}
   .analytics-gridlines{inset-bottom:24px}
 }
+
+/* Memory readability: replace low-contrast blue metadata with readable neutral/green tones. */
+.memory-table td:first-child code{color:#2f735f!important}
+.memory-table td:first-child div{color:#6f837f!important}
+:root[data-theme="dark"] .memory-table td:first-child code{color:#8fd0b2!important}
+:root[data-theme="dark"] .memory-table td:first-child div{color:#b1c3be!important}
+.memory-occurrence-footer{align-items:center}
+.memory-occurrence-footer .primary-btn{min-width:170px}

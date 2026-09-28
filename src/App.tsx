@@ -687,6 +687,78 @@ function Memory(){
   const [selectedOccurrence,setSelectedOccurrence]=useState<any|null>(null);
   const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
 
+  const downloadTextFile=(content:string,filename:string,mime:string)=>{
+    const blob=new Blob([content],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),0);
+  };
+
+  const exportKnowledge=()=>{
+    const headers=['Activity Type','Baseline Average','Actual Average','Drift','Occurrences','Evidence'];
+    const csv=[headers.join(','),...MEMORY_ACTIVITIES.map(m=>[m.type,m.baselineAvg,m.actualAvg,m.variance,m.occurrences,'Traceable'].map(v=>`\"${String(v??'').replace(/\"/g,'\"\"')}\"`).join(','))].join('\n');
+    downloadTextFile(csv,'synchronex-knowledge-export.csv','text/csv;charset=utf-8');
+  };
+
+  const downloadOccurrencePdf=(selected:any,occurrence:any)=>{
+    const escapePdf=(value:string)=>String(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+    const raw=[
+      'SYNCHRONEX - OCCURRENCE EVIDENCE',
+      `Occurrence: ${occurrence.id}`,
+      `Activity type: ${selected.type}`,
+      `Date: ${occurrence.date}`,
+      `Actual duration: ${occurrence.duration}`,
+      `Discipline: ${occurrence.discipline}`,
+      `Uploaded on: ${occurrence.date} - 18:30 IST`,
+      `Uploaded by: ${occurrence.discipline==='Piping'?'Site Supervisor - Arun Kumar':occurrence.discipline==='Civil'?'Civil Supervisor - Karthik R':'Discipline Supervisor - Priya S'}`,
+      `Source file: Daily_${occurrence.discipline.replace(/\s+/g,'_')}_Report_${occurrence.id}.pdf`,
+      '',
+      'Execution evidence:',
+      occurrence.evidence,
+      '',
+      'Status: Validated',
+      'Institutional memory: Linked',
+    ];
+    const lines:string[]=[];
+    raw.forEach(line=>{
+      const words=String(line).split(' '); let current='';
+      words.forEach(word=>{
+        const next=current?`${current} ${word}`:word;
+        if(next.length>88){lines.push(current); current=word;} else current=next;
+      });
+      lines.push(current);
+    });
+    const pageLines=48, pages=[] as string[][];
+    for(let i=0;i<lines.length;i+=pageLines) pages.push(lines.slice(i,i+pageLines));
+    const objects:string[]=[];
+    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+    const pageIds:number[]=[]; const contentIds:number[]=[];
+    let nextId=3;
+    pages.forEach(()=>{pageIds.push(nextId++);contentIds.push(nextId++);});
+    objects[1]=`<< /Type /Pages /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+    pages.forEach((page,i)=>{
+      const commands=['BT','/F1 11 Tf','50 760 Td','14 TL'];
+      page.forEach((line,j)=>{
+        if(j===0 && i===0) commands.push('/F1 15 Tf');
+        commands.push(`(${escapePdf(line)}) Tj`);
+        if(j===0 && i===0) commands.push('/F1 11 Tf');
+        if(j<page.length-1) commands.push('T*');
+      });
+      commands.push('ET');
+      const stream=commands.join('\n');
+      objects[pageIds[i]-1]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${3+pages.length*2} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`;
+      objects[contentIds[i]-1]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+    });
+    const fontId=3+pages.length*2; objects[fontId-1]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    let pdf='%PDF-1.4\n'; const offsets=[0];
+    objects.forEach((obj,idx)=>{const id=idx+1; offsets[id]=pdf.length; pdf+=`${id} 0 obj\n${obj}\nendobj\n`;});
+    const xref=pdf.length; pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+    for(let i=1;i<=objects.length;i++) pdf+=`${String(offsets[i]).padStart(10,'0')} 00000 n \n`;
+    pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    downloadTextFile(pdf,`synchronex-occurrence-${occurrence.id}.pdf`,'application/pdf');
+  };
+
+
   const occurrenceData: Record<string, Array<{id:string;date:string;duration:string;discipline:string;evidence:string;status:string}>> = {
     'Pipe Erection': [
       {id:'PE-042',date:'23 Sep 2026',duration:'8 days',discipline:'Piping',evidence:'P-101 Spool B erection completed after material release.',status:'Validated'},
@@ -734,17 +806,9 @@ function Memory(){
 
   if(selected){
     const occurrences=occurrenceData[selected.type] || [];
-    return <PageSection label="INSTITUTIONAL MEMORY / OCCURRENCE DETAIL" title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button>}>
+    return <PageSection title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button>}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20,marginBottom:22}}>
-        <div>
-          <p className="lead" style={{marginBottom:6}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
-          <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'#64748B'}}>{selected.occurrences} total occurrences · synthetic demo evidence</span>
-        </div>
-        <div style={{display:'flex',gap:28,flexShrink:0}}>
-          <div><span className="eyebrow">BASELINE AVG</span><strong style={{display:'block',fontSize:20}}>{selected.baselineAvg}</strong></div>
-          <div><span className="eyebrow">ACTUAL AVG</span><strong style={{display:'block',fontSize:20}}>{selected.actualAvg}</strong></div>
-          <div><span className="eyebrow">DRIFT</span><strong style={{display:'block',fontSize:20,color:'#B91C1C'}}>{selected.variance}</strong></div>
-        </div>
+        <p className="lead" style={{margin:0}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
       </div>
       <div className="memory-table">
         <table>
@@ -754,18 +818,12 @@ function Memory(){
           </tr>)}</tbody>
         </table>
       </div>
-      <div className="memory-cards" style={{marginTop:16}}>
-        <div><span className="eyebrow">TRACEABILITY</span><strong>Evidence retained</strong><p>Each occurrence remains linked to validated execution evidence.</p></div>
-        <div><span className="eyebrow">BENCHMARK</span><strong>{selected.actualAvg}</strong><p>Observed average duration across {selected.occurrences} occurrences.</p></div>
-        <div><span className="eyebrow">REUSE</span><strong>Planning reference</strong><p>Available as historical context for future similar activities.</p></div>
-      </div>
       {selectedOccurrence&&<div className="memory-occurrence-overlay" role="dialog" aria-modal="true" aria-labelledby="occurrence-detail-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedOccurrence(null)}}>
         <div className="memory-occurrence-card">
           <div className="memory-occurrence-head">
-            <div><span className="eyebrow">OCCURRENCE DETAIL / VALIDATED EVIDENCE</span><h2 id="occurrence-detail-title">{selectedOccurrence.id}</h2><p>{selected.type} · {selectedOccurrence.discipline}</p></div>
+            <div><h2 id="occurrence-detail-title">{selectedOccurrence.id}</h2><p>{selected.type} · {selectedOccurrence.discipline}</p></div>
             <button className="icon-btn memory-occurrence-close" aria-label="Close occurrence details" onClick={()=>setSelectedOccurrence(null)}>×</button>
           </div>
-          <div className="memory-occurrence-status"><span className="trace-chip">{selectedOccurrence.status}</span><span>Linked to institutional memory</span></div>
           <div className="memory-occurrence-grid">
             <div><span>OCCURRENCE DATE</span><b>{selectedOccurrence.date}</b></div>
             <div><span>ACTUAL DURATION</span><b>{selectedOccurrence.duration}</b></div>
@@ -776,18 +834,17 @@ function Memory(){
             <div className="wide"><span>SOURCE FILE</span><b>Daily_{selectedOccurrence.discipline.replace(/\s+/g,'_')}_Report_{selectedOccurrence.id}.pdf</b></div>
             <div className="wide"><span>EXECUTION EVIDENCE</span><p>{selectedOccurrence.evidence}</p></div>
           </div>
-          <div className="memory-occurrence-footer"><button className="outline-btn" onClick={()=>setSelectedOccurrence(null)}>← Back to occurrences</button><span>Source preserved · audit trace available</span></div>
+          <div className="memory-occurrence-footer"><button className="outline-btn" onClick={()=>setSelectedOccurrence(null)}>← Back to occurrences</button><button className="primary-btn" onClick={()=>downloadOccurrencePdf(selected,selectedOccurrence)}>Download as PDF ↓</button></div>
         </div>
       </div>}
     </PageSection>;
   }
 
-  return <PageSection label="INSTITUTIONAL MEMORY / SYNTHETIC DEMO DATA" title="What execution teaches the next project" action={<button className="outline-btn">Export knowledge ↗</button>}>
+  return <PageSection title="What execution teaches the next project" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
     <p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p>
     <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
       <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
     </tr>)}</tbody></table></div>
-    <div className="memory-cards"><div><span className="eyebrow">DELAY PATTERN</span><strong>Material availability</strong><p>31% of demo delay events</p></div><div><span className="eyebrow">PRODUCTIVITY SIGNAL</span><strong>Piping · 69%</strong><p>Derived from validated synthetic actuals</p></div><div><span className="eyebrow">KNOWLEDGE STATUS</span><strong>Traceable</strong><p>Source evidence retained with every benchmark</p></div></div>
   </PageSection>;
 }
 
