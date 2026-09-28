@@ -28,7 +28,7 @@ const NOTIFICATIONS = [
   { text: 'PIP-245 is behind baseline by 1 day.', time: '09:40', type: 'warn' },
   { text: '3 unmatched field events detected.', time: '09:38', type: 'danger' },
   { text: 'Daily Progress Report processing completed.', time: '09:35', type: 'info' },
-  { text: 'Baseline Rev 04 loaded successfully.', time: '08:00', type: 'info' },
+  { text: 'Approved schedule loaded successfully.', time: '08:00', type: 'info' },
 ];
 
 export default function Header({ screen, onNav, showNotifications, setShowNotifications }: Props) {
@@ -134,7 +134,7 @@ export default function Header({ screen, onNav, showNotifications, setShowNotifi
           <span>·</span>
           <span><span style={{ color: '#94A3B8' }}>Status</span> <span style={{ color: '#15803D', fontWeight: 600 }}>Execution</span></span>
           <span>·</span>
-          <span><span style={{ color: '#94A3B8' }}>Baseline</span> <span style={{ fontWeight: 500, color: '#374151' }}>Rev 04</span></span>
+          <span><span style={{ color: '#94A3B8' }}>Baseline</span> <span style={{ fontWeight: 500, color: '#374151' }}>Approved schedule</span></span>
           <span>·</span>
           <span><span style={{ color: '#94A3B8' }}>Last sync</span> <span style={{ color: '#374151' }}>23 Sep 2026, 09:42</span></span>
         </div>
