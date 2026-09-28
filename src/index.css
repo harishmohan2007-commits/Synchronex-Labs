@@ -1639,3 +1639,5 @@ button,input,textarea,select{font-family:var(--font-ui)}
 :root[data-theme="dark"] .memory-table td:first-child div{color:#b1c3be!important}
 .memory-occurrence-footer{align-items:center}
 .memory-occurrence-footer .primary-btn{min-width:170px}
+.memory-overview{padding-bottom:84px;}
+.memory-overview .memory-table{margin-bottom:0;}

@@ -806,7 +806,12 @@ function Memory(){
 
   if(selected){
     const occurrences=occurrenceData[selected.type] || [];
-    return <PageSection title={selected.type} action={<button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button>}>
+    const exportOccurrences=()=>{
+      const headers=['Occurrence','Date','Duration','Discipline','Execution Evidence','Status'];
+      const csv=[headers.join(','),...occurrences.map(o=>[o.id,o.date,o.duration,o.discipline,o.evidence,o.status].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+      downloadTextFile(csv,`synchronex-${selected.type.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-occurrences.csv`,'text/csv;charset=utf-8');
+    };
+    return <PageSection title={selected.type} action={<div style={{display:'flex',gap:10}}><button className="outline-btn" onClick={exportOccurrences}>Export occurrences ↓</button><button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button></div>}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20,marginBottom:22}}>
         <p className="lead" style={{margin:0}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
       </div>
@@ -840,12 +845,12 @@ function Memory(){
     </PageSection>;
   }
 
-  return <PageSection title="What execution teaches the next project" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
+  return <div className="memory-overview"><PageSection title="What execution teaches the next project" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
     <p className="lead">Only validated actuals become reusable evidence. Every benchmark remains traceable to the execution events that produced it.</p>
     <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
       <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
     </tr>)}</tbody></table></div>
-  </PageSection>;
+  </PageSection></div>;
 }
 
 function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
