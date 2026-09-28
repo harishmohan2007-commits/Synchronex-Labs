@@ -364,7 +364,7 @@ export default function App(){
     window.setTimeout(()=>setImportState('success'),1600);
   };
 
-  if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} role={role} setRole={setRole} onLogin={()=>{setScreen(role==='company'?'command':'field-home');setScheduleDiscipline('All');setSelectedId(ACTIVITIES[0]?.id||'');setDetailId(null);setModal(null);setDirty(false);setAuthenticated(true)}} />;
+  if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} role={role} setRole={setRole} onLogin={()=>{const initialScreen=role==='company'?'command':'field-home';setScreen(initialScreen);setScheduleDiscipline('All');setSelectedId(ACTIVITIES[0]?.id||'');setDetailId(null);setReviewDetailOpen(false);setReviewIndex(0);setModal(null);setDirty(false);setQuery('');setAuthenticated(true)}} />;
 
   const detailActivity=ACTIVITIES.find(a=>a.id===detailId) || null;
   const detailTrail=detailId?AUDIT_TRAIL.filter(t=>t.activity===detailId):[];
@@ -372,16 +372,17 @@ export default function App(){
 
   return <div className="app-shell">
     <header className="topbar">
-      <button className="brand" onClick={()=>setScreen('command')} aria-label="Go to command">
+      <button className="brand" onClick={()=>setScreen(role==='company'?'command':'field-home')} aria-label="Go to home">
         <span className="brand-mark">S</span><span><strong>SYNCHRONEX</strong><small>EXECUTION INTELLIGENCE</small></span>
       </button>
-      <div className="top-project"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field Gas Processing / Phase 1</strong><span className="live"><i/> EXECUTION</span><code>NGFPF-P1-2026</code></div>
+      <div className="topbar-spacer" aria-hidden="true" />
       <div className="top-actions">
-        <button className="icon-btn" aria-label="Notifications" onClick={()=>setModal(modal==='notifications'?null:'notifications')}>●<span className={reviewCount?'alert-dot':''}/></button>
-        <button className="icon-btn" aria-label="Help" onClick={()=>setModal('help')}>?</button>
-        <button className="profile-chip" aria-label="Open profile" onClick={()=>setModal('profile')}>{role==='company'?'PC':'FS'}</button>
+        <button className="profile-chip profile-chip-lg" aria-label="Open profile" onClick={()=>setModal(modal==='profile'?null:'profile')}>
+          <span className="profile-chip-avatar">{role==='company'?'PM':'KR'}</span>
+          <span className="profile-chip-copy"><strong>{role==='company'?'Priya Menon':'Karthik R'}</strong><small>{role==='company'?'Company portal':'Field portal'}</small></span>
+          <span className="profile-chip-chevron">⌄</span>
+        </button>
       </div>
-      {modal==='notifications' && <Popover title={role==='company'?'Open decisions':'Latest field updates'}>{role==='company'?<><p><b>{reviewCount}</b> field events require planner validation.</p><p>Baseline Rev 04 synced at 09:42.</p><button className="text-action" onClick={()=>{setModal(null);go('review')}}>Open review queue →</button></>:<><p><b>2</b> submissions are being processed.</p><p>One report needs additional information.</p><button className="text-action" onClick={()=>{setModal(null);go('submissions')}}>Open submissions →</button></>}</Popover>}
     </header>
 
     <aside className="rail">
@@ -390,12 +391,12 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
-      <div className="rail-bottom"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field / Phase 1</strong><small>{role==='company'?'Baseline Rev 04 · Synced 09:42':'Field execution · Today'}</small><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
+      <div className="rail-footer"><button className="rail-signout" onClick={()=>{setAuthenticated(false);setModal(null);setDirty(false);}}>↪ <span>Sign out</span></button></div>
     </aside>
 
     <main className="workspace">
-      <div className="page-head">
-        <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
+      <div className={`page-head ${screen==='command'?'page-head-command':''}`}>
+        <div>{screen!=='command'&&<div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div>}<h1>{pageMeta[screen].title}</h1>{screen!=='command'&&<p>{pageMeta[screen].subtitle}</p>}</div>
         <div className="head-tools">
           <div className="global-search-wrap" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setSearchOpen(false);}}>
             <label className="global-search">
@@ -419,7 +420,6 @@ export default function App(){
               )})}
             </div>}
           </div>
-          <button className="outline-btn" onClick={()=>notify(role==='company'?'Baseline Rev 04 is active. Changes are tracked against this revision.':'Field execution workspace is connected to the approved company baseline.')}>{role==='company'?<>Baseline <b>04</b></>:'Field mode'}</button>
         </div>
       </div>
 
@@ -429,7 +429,7 @@ export default function App(){
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
-      {role==='company' && screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
+      {role==='company' && screen==='import'&&<Import state={importState} file={importFile} setFile={setImportFile} onProcess={processImport} onRetry={processImport} onOpenSchedule={()=>go('schedule')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
@@ -437,20 +437,36 @@ export default function App(){
       {role==='field' && screen==='my-work'&&<MyWork onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
-      {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
+      {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
     </main>
 
-    {modal==='help'&&<Modal title="How the planning-to-execution bridge works" onClose={()=>setModal(null)}><div className="flow-list">{[
-      ['01','Capture','Receive free text, reports, spreadsheets, site diaries, or supervisor statements.'],
-      ['02','Extract','Turn field language into structured execution events: activity, action, date, progress, evidence.'],
-      ['03','Link','Search L5/L6 schedule nodes using terminology and granularity-aware matching.'],
-      ['04','Confidence gate','High-confidence valid events can auto-apply; ambiguous or unmatched events go to a planner.'],
-      ['05','Apply + trace','Write the accepted actual to the schedule and preserve source, actor, confidence, and decision.'],
-    ].map(x=><div className="flow-row" key={x[0]}><b>{x[0]}</b><div><strong>{x[1]}</strong><p>{x[2]}</p></div></div>)}</div></Modal>}
-    {modal==='profile'&&<Modal title={role==='company'?'Project Controls Engineer':'Field Supervisor'} onClose={()=>setModal(null)}><div className="profile-modal"><div className="profile-avatar">{role==='company'?'PC':'FS'}</div><p><b>{role==='company'?'Planner workspace':'Field execution workspace'}</b><br/>North Field Gas Processing / Phase 1</p><button className="outline-btn" onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null)}}>Switch to {role==='company'?'field':'company'} portal</button><button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div></Modal>}
+    {modal==='profile'&&<Modal title="Account" onClose={()=>setModal(null)}>
+      <div className="profile-modal profile-modal-modern">
+        <div className="profile-modal-head">
+          <div className="profile-avatar profile-avatar-modern">{role==='company'?'PM':'KR'}</div>
+          <div className="profile-modal-identity">
+            <span className="eyebrow">LOGGED IN</span>
+            <h3>{role==='company'?'Priya Menon':'Karthik R'}</h3>
+            <p>{role==='company'?'Project Manager':'Field Supervisor'}</p>
+          </div>
+          <span className="profile-status-chip">Active</span>
+        </div>
+        <div className="profile-meta-grid">
+          <div><span>PORTAL</span><b>{role==='company'?'Company portal':'Field portal'}</b></div>
+          <div><span>WORKSPACE</span><b>{role==='company'?'Planning & Control':'Execution & Reporting'}</b></div>
+          <div><span>PROJECT</span><b>North Field / Phase 1</b></div>
+          <div><span>EMAIL</span><b>{role==='company'?'planner@northfield.example':'field.supervisor@northfield.example'}</b></div>
+          <div><span>ACCESS</span><b>{role==='company'?'Plan · Review · Control':'Work · Capture · Submit'}</b></div>
+        </div>
+        <div className="profile-modal-actions">
+          <button className="outline-btn" onClick={()=>{setModal(null);go(role==='company'?'settings':'profile')}}>{role==='company'?'Open account settings':'Open profile'}</button>
+          <button className="danger-btn" onClick={()=>{setAuthenticated(false);setModal(null);setDirty(false)}}>Sign out</button>
+        </div>
+      </div>
+    </Modal>}
     {modal==='confirm'&&<Modal title="Leave with unsaved work?" onClose={()=>setModal(null)}><p className="modal-copy">Your capture draft has not been submitted. Leaving now discards the unsaved text.</p><div className="modal-actions"><button className="outline-btn" onClick={()=>setModal(null)}>Stay</button><button className="danger-btn" onClick={confirmLeave}>Discard and leave</button></div></Modal>}
     {modal==='activity'&&<Modal title={detailActivity?`${detailActivity.id} · ${detailActivity.desc}`:'Activity detail'} onClose={()=>setModal(null)}>
-      {detailActivity ? <div className="activity-detail">
+      {detailActivity ? <div className="activity-detail activity-detail-modern">
         <div className="activity-detail-meta"><span className="eyebrow">{detailActivity.discipline} · {detailActivity.wbs} executable node</span><span className={`status-badge ${detailActivity.status==='Completed'?'track':detailActivity.status==='Planned'?'':'risk'}`}>{detailActivity.status}</span></div>
         <div className="activity-detail-grid">
           <div><span>PLAN</span><b>{detailActivity.planStart} → {detailActivity.planFinish}</b></div>
@@ -460,7 +476,7 @@ export default function App(){
         </div>
         <div className="activity-detail-evidence"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
         <div className="activity-detail-trace"><span className="eyebrow">TRACE ({detailTrail.length})</span>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
-        <div className="modal-actions"><button className="outline-btn" onClick={()=>{setModal(null);go('trace')}}>Open full trace ledger →</button></div>
+        <div className="activity-detail-actions modal-actions"><button className="back-link-button" onClick={()=>{setModal(null);go('schedule')}}>← Back to schedule</button><span/><button className="outline-btn" onClick={()=>{setModal(null);go('trace')}}>Open full trace ledger →</button></div>
       </div> : <p>Activity not found.</p>}
     </Modal>}
     {modal==='member'&&memberTarget&&<Modal title={`Manage ${memberTarget.name}`} onClose={()=>setModal(null)}>
@@ -496,10 +512,41 @@ function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';s
 
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
-function Command({onGo,onSelect,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id:string)=>void;reviewCount:number}){
- const commandSignals=FIELD_EVENTS.slice(0,5);
- return <div className="command-layout"><div className="command-main"><div className="status-strip"><div><span className="eyebrow">BASELINE REV 04</span><strong>North Field Gas Processing Facility — Phase 1</strong></div><div className="status-good"><i/> EXECUTION MODE</div></div><div className="metric-band"><Metric label="L5/L6 activities" value="246" note="executable nodes"/><Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/><Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/><Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/></div><PageSection label="BASELINE → ACTUAL" title="Project pulse" action={<button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>}><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div><div className="chart"><div className="gridlines"/><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/></svg></div><div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div><div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div></div></div></PageSection><PageSection label="FIELD INTELLIGENCE" title="Recent execution signals" action={<button className="text-action" onClick={()=>onGo('review')}>Open review →</button>}><div className="signal-table">{commandSignals.map(e=><button key={e.time+e.actId} className="signal-row" onClick={()=>onSelect(e.actId)}><time>{e.time}</time><span className={`signal-tag ${e.status==='REVIEW REQUIRED'?'review':'matched'}`}>{e.status}</span><span className="signal-text">{e.text}</span><code>{e.actId}</code><strong>{e.conf?`${e.conf}%`:''}</strong></button>)}</div></PageSection></div><aside className="command-aside"><div className="aside-block decision-card"><span className="eyebrow">DECISION QUEUE</span><div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div><div className="aside-block capture-card"><div className="capture-card-icon">↗</div><span className="eyebrow">NEXT CONTROL</span><h3>Review incoming field evidence</h3><p>Field teams submit text, voice, and files. Your team validates uncertain matches before they become schedule actuals.</p><div className="capture-card-meta"><span>FIELD INTAKE</span><span>HUMAN GATE</span></div><button className="outline-btn" onClick={()=>onGo('review')}>Review incoming evidence <span>→</span></button></div><div className="aside-block health-card"><div className="health-head"><span className="eyebrow">PROJECT HEALTH</span><span className="health-dot">● LIVE</span></div><div className="health-line"><span>Baseline completion</span><b>30 Sep</b></div><div className="health-line"><span>Current forecast</span><b>03 Oct</b></div><div className="health-line"><span>Last sync</span><b>09:42</b></div></div></aside></div>
+function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;onSelect:(id:string)=>void;reviewCount:number}){
+ return <div className="command-layout">
+   <div className="command-main">
+     <div className="status-strip">
+       <div><span className="eyebrow">PROJECT STATUS</span><strong>North Field Gas Processing Facility — Phase 1</strong></div>
+       <span className="status-good"><i/>Execution mode</span>
+     </div>
+     <div className="metric-band">
+       <Metric label="L5/L6 activities" value="246" note="executable nodes"/>
+       <Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/>
+       <Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/>
+       <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
+     </div>
+     <PageSection label="PROJECT PERFORMANCE" title="Project pulse">
+       <div className="pulse-grid pulse-grid-full">
+         <div className="trend">
+           <div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div>
+           <div className="chart command-chart-large command-chart-with-y"><div className="chart-y-axis" aria-hidden="true"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div><div className="gridlines"/><svg viewBox="0 0 1000 300" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points="0,210 140,190 280,152 420,122 560,96 720,70 1000,30" fill="none" stroke="var(--text-3)" strokeWidth="3" strokeDasharray="8 8"/><polyline points="0,224 140,205 280,168 420,138 560,114 720,102 1000,86" fill="none" stroke="var(--brand-2)" strokeWidth="5"/></svg></div>
+           <div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div>
+           <div className="pulse-kpis"><div><span>ACTUAL</span><b>52.3%</b></div><div><span>PLANNED</span><b>57.0%</b></div><div><span>VARIANCE</span><b className="negative">−4.7%</b></div></div>
+         </div>
+       </div>
+     </PageSection>
+   </div>
+   <aside className="command-aside">
+     <div className="aside-block decision-card">
+       <span className="eyebrow">DECISION QUEUE</span>
+       <div className="decision-number-row"><strong className="aside-number">{reviewCount}</strong><span className="queue-status">OPEN</span></div>
+       <p>Ambiguous or unmatched events need a planner before schedule application.</p>
+       <button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button>
+     </div>
+   </aside>
+ </div>
 }
+
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
 function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;selected:any;onImport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
@@ -512,35 +559,66 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
     if(sortBy==='id') return a.id.localeCompare(b.id);
     return a.planStart.localeCompare(b.planStart);
   });
+  const activeMeta=DISCIPLINES.find(d=>d.name===discipline);
   const selectDiscipline=(name:string)=>{
     setDiscipline(name);
     setStatusFilter('All');
     const first=rows.find(a=>a.discipline===name);
     if(first) onSelect(first.id);
   };
-  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
   return <div className="schedule-page">
     <PageSection label="EXECUTABLE PLAN / WORKSTREAMS" title="Schedule by discipline" action={<button className="primary-btn" onClick={onImport}>Import schedule ↑</button>}>
       {discipline==='All' ? <div className="discipline-card-grid">
-        {DISCIPLINES.map(d=>{
-          const evidence=recentEvidence(d.name);
-          return <div key={d.name} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
-            <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
-              <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
-              <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
-              <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
-              <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
-              <div className="discipline-card-milestone"><small>NEXT MILESTONE</small><span>{d.nextMilestone}</span></div>
-            </button>
-            <div className="discipline-card-foot"><span>{d.milestones} milestones tracked</span><span>{evidence.length} recent evidence signals</span></div>
-          </div>;
-        })}
-      </div> : <>
-        <div className="schedule-detail-head"><div><span className="eyebrow">DISCIPLINE SCHEDULE</span><h3>{discipline}</h3><p>Executable activities, dates, progress, and linkage evidence for this workstream.</p></div><button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button></div>
-        <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
-        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
-      </>}
+        {DISCIPLINES.map(d=><div key={d.name} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
+          <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)} aria-label={`Open ${d.name} schedule`}>
+            <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
+            <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
+            <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
+            <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
+            <div className="discipline-card-milestone"><small>NEXT MILESTONE</small><span>{d.nextMilestone}</span></div>
+          </button>
+        </div>)}
+      </div> : <div className="discipline-detail-shell">
+        <div className="discipline-detail-banner">
+          <div>
+            <button type="button" className="back-link" onClick={()=>setDiscipline('All')}>← All disciplines</button>
+            <span className="eyebrow">{discipline.toUpperCase()} / EXECUTABLE PLAN</span>
+            <h3>{discipline}</h3>
+            <p>Focused workstream view for activities, planned dates, actual progress and schedule linkage.</p>
+          </div>
+          <div className="discipline-detail-stats">
+            <div><span>ACTUAL</span><b>{activeMeta?.actual ?? 0}%</b></div>
+            <div><span>PLANNED</span><b>{activeMeta?.planned ?? 0}%</b></div>
+            <div><span>VARIANCE</span><b className={(activeMeta?.variance ?? 0)<0?'negative':'positive'}>{(activeMeta?.variance ?? 0)>0?'+':''}{activeMeta?.variance ?? 0}%</b></div>
+            <div><span>ACTIVITIES</span><b>{activeMeta?.activities ?? disciplineRows.length}</b></div>
+          </div>
+        </div>
+        <div className="schedule-filter-bar schedule-filter-bar-wide">
+          <label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label>
+          <label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label>
+          <span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span>
+        </div>
+        <div className="schedule-activity-list schedule-activity-list-full">
+          {visibleRows.map(a=><button type="button" key={a.id} className={`schedule-activity schedule-activity-modern ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id)}}>
+            <div className="activity-main activity-main-modern">
+              <div className="activity-id-row"><code>{a.id}</code><span className={`status-badge ${a.status==='Completed'?'track':a.status==='Planned'?'planned':'risk'}`}>{a.status}</span></div>
+              <strong>{a.desc}</strong>
+              <small>{a.wbs} executable node · {a.discipline}</small>
+            </div>
+            <div className="activity-dates activity-dates-modern">
+              <span><small>PLAN</small><b>{a.planStart} → {a.planFinish}</b></span>
+              <span><small>ACTUAL</small><b>{a.actStart} → {a.actFinish}</b></span>
+            </div>
+            <div className="activity-progress activity-progress-modern">
+              <div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b>
+            </div>
+            <div className="activity-confidence-modern"><small>AI LINK</small><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}%`:'—'}</span></div>
+            <span className="activity-arrow activity-arrow-modern" aria-hidden="true">→</span>
+          </button>)}
+          {visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}
+        </div>
+      </div>}
     </PageSection>
   </div>
 }
@@ -709,64 +787,127 @@ function Memory(){
   </PageSection>;
 }
 
-function Trace(){return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}><div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">8 demo records</span></div><div className="trace-table"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Object</th><th>Source</th><th>Change</th><th>Confidence</th></tr></thead><tbody>{AUDIT_TRAIL.map((a,i)=><tr key={i}><td>{a.ts}</td><td><span className="actor">{a.actor}</span></td><td>{a.action}</td><td><code>{a.activity}</code></td><td>{a.source}</td><td>{a.prev} → <b>{a.next}</b></td><td>{a.conf?`${a.conf}%`:'—'}</td></tr>)}</tbody></table></div></PageSection>}
+type TraceFile = {
+  id:string; name:string; type:string; uploadedOn:string; uploadedBy:string; size:string;
+  status:string; summary:string; events:number; linkedActivities:string[]; source:string;
+};
 
-function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
-  const inputRef=useRef<HTMLInputElement>(null);
-  const [kind,setKind]=useState<'schedule'|'evidence'>('evidence');
-  const [dragOver,setDragOver]=useState<'schedule'|'evidence'|null>(null);
-  const choose=(nextKind:'schedule'|'evidence')=>{setKind(nextKind);inputRef.current?.click()};
-  const handleFiles=(files:FileList|null,nextKind:typeof kind=kind)=>{
-    const first=files?.[0];
-    if(!first) return;
-    setKind(nextKind);
-    setFile(first.name);
+const TRACE_FILES:Record<string,TraceFile[]> = {
+  AI:[
+    {id:'AI-F-001',name:'Daily_Progress_Report_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:42 IST',uploadedBy:'AI ingestion agent',size:'184 KB',status:'Processed',summary:'Daily progress report containing progress changes for piping and electrical work.',events:18,linkedActivities:['PIP-245','PIP-261','ELE-020'],source:'Company evidence import'},
+    {id:'AI-F-002',name:'Site_Diary_23Sep.pdf',type:'PDF document',uploadedOn:'23 Sep 2026 · 09:50 IST',uploadedBy:'AI ingestion agent',size:'1.8 MB',status:'Processed',summary:'Site diary with field notes used to identify execution events and activity references.',events:9,linkedActivities:['ELE-014','MECH-018'],source:'Evidence import'},
+    {id:'AI-F-003',name:'Piping_Field_Update_23Sep.txt',type:'Text report',uploadedOn:'23 Sep 2026 · 10:22 IST',uploadedBy:'AI ingestion agent',size:'14 KB',status:'Processed',summary:'Unstructured piping update normalized into execution events before matching.',events:6,linkedActivities:['PIP-261'],source:'Field evidence intake'},
+    {id:'AI-F-004',name:'Piping_Voice_Update_23Sep.webm',type:'Voice recording',uploadedOn:'23 Sep 2026 · 10:28 IST',uploadedBy:'AI ingestion agent',size:'3.2 MB',status:'Processed',summary:'Voice evidence converted into structured field events for matching.',events:3,linkedActivities:['PIP-245'],source:'Voice capture'},
+  ],
+  Planner:[
+    {id:'PL-F-001',name:'Review_Decisions_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:45 IST',uploadedBy:'Planner workspace',size:'92 KB',status:'Reviewed',summary:'Planner decisions and approved links from the review queue.',events:7,linkedActivities:['CIV-022','MECH-018'],source:'Review workspace'},
+    {id:'PL-F-002',name:'Manual_Progress_Entry_23Sep.xlsx',type:'Excel workbook',uploadedOn:'23 Sep 2026 · 09:52 IST',uploadedBy:'Planner workspace',size:'48 KB',status:'Reviewed',summary:'Manual progress update applied after planner validation.',events:1,linkedActivities:['MECH-018'],source:'Manual update'},
+  ],
+  System:[
+    {id:'SYS-F-001',name:'Batch_Import_23Sep.csv',type:'CSV dataset',uploadedOn:'23 Sep 2026 · 10:35 IST',uploadedBy:'System processor',size:'276 KB',status:'Processed',summary:'Batch import containing multiple execution records.',events:38,linkedActivities:['PIP-245','PIP-261','ELE-014','ELE-020'],source:'File import'},
+    {id:'SYS-F-002',name:'Matching_Run_23Sep.json',type:'JSON run log',uploadedOn:'23 Sep 2026 · 10:36 IST',uploadedBy:'Matching service',size:'61 KB',status:'Processed',summary:'Deterministic matching and confidence-scoring output for the import run.',events:31,linkedActivities:['PIP-245','ELE-014','ELE-020'],source:'Matching service'},
+  ]
+};
+
+function Trace(){
+  const [selectedActor,setSelectedActor]=useState<string|null>(null);
+  const [selectedFile,setSelectedFile]=useState<TraceFile|null>(null);
+
+  if(selectedFile){
+    return <div className="trace-page"><PageSection label="AUDIT / FILE DETAIL" title={selectedFile.name} action={<button className="outline-btn" onClick={()=>setSelectedFile(null)}>← Back to {selectedActor || 'actor'} files</button>}>
+      <div className="trace-file-detail-card">
+        <div className="trace-file-detail-head"><div><span className="eyebrow">SOURCE FILE / VALIDATED PROVENANCE</span><h3>{selectedFile.name}</h3><p>{selectedFile.type} · {selectedFile.source}</p></div><span className="trace-chip">{selectedFile.status}</span></div>
+        <div className="trace-file-meta-grid">
+          <div><span>UPLOADED ON</span><b>{selectedFile.uploadedOn}</b></div>
+          <div><span>UPLOADED BY</span><b>{selectedFile.uploadedBy}</b></div>
+          <div><span>FILE SIZE</span><b>{selectedFile.size}</b></div>
+          <div><span>EVENTS EXTRACTED</span><b>{selectedFile.events}</b></div>
+          <div className="wide"><span>LINKED ACTIVITIES</span><div className="trace-file-links">{selectedFile.linkedActivities.map(x=><span key={x}><code>{x}</code></span>)}</div></div>
+          <div className="wide"><span>FILE SUMMARY</span><p>{selectedFile.summary}</p></div>
+        </div>
+        <div className="trace-file-consequence"><span className="eyebrow">TRACE CONSEQUENCE</span><strong>Source preserved → extraction → matching → governed schedule update</strong><p>This file remains available as the provenance source for the events it produced.</p></div>
+      </div>
+    </PageSection></div>;
+  }
+
+  if(selectedActor){
+    const files=TRACE_FILES[selectedActor] || [];
+    return <div className="trace-page"><PageSection label={`AUDIT / ${selectedActor.toUpperCase()} ACTOR`} title={`${selectedActor} evidence files`} action={<button className="outline-btn" onClick={()=>setSelectedActor(null)}>← Back to trace ledger</button>}>
+      <div className="trace-actor-summary"><div><span className="eyebrow">ACTOR</span><h3>{selectedActor}</h3><p>Files and evidence produced or processed by this actor.</p></div><span className="trace-chip">{files.length} files</span></div>
+      <div className="trace-file-grid">{files.map(file=><button type="button" key={file.id} className="trace-file-card" onClick={()=>setSelectedFile(file)}>
+        <div className="trace-card-top"><span className="trace-file-icon">↗</span><span className="trace-chip">{file.status}</span></div>
+        <span className="eyebrow">{file.type.toUpperCase()}</span><h3>{file.name}</h3><p>{file.summary}</p>
+        <div className="trace-card-meta"><span>{file.uploadedOn}</span><span>{file.events} events</span></div>
+        <div className="trace-card-footer"><span>Uploaded by {file.uploadedBy}</span><b>Open details →</b></div>
+      </button>)}</div>
+    </PageSection></div>;
+  }
+
+  return <div className="trace-page"><PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn">Export ledger ↗</button>}>
+    <div className="trace-intro"><div><strong>Every field statement can be followed to its schedule consequence.</strong><p>Source → extraction → candidate → planner decision → actual update.</p></div><span className="trace-chip">{AUDIT_TRAIL.length} demo records</span></div>
+    <div className="trace-card-grid">{AUDIT_TRAIL.map((a,i)=><article className="trace-event-card" key={i}>
+      <div className="trace-event-head"><span className="trace-event-time">{a.ts}</span><button type="button" className="trace-actor-btn" onClick={()=>setSelectedActor(a.actor)}>{a.actor} →</button></div>
+      <div className="trace-event-main"><div><span className="eyebrow">ACTION</span><h3>{a.action}</h3><p><code>{a.activity}</code> · {a.source}</p></div><strong>{a.conf?`${a.conf}%`:'—'}</strong></div>
+      <div className="trace-event-change"><span>{a.prev}</span><b>→</b><span>{a.next}</span></div>
+      <div className="trace-event-footer"><span>Actor files available</span><button type="button" className="text-action" onClick={()=>setSelectedActor(a.actor)}>View {a.actor} files →</button></div>
+    </article>)}</div>
+  </PageSection></div>;
+}
+
+function Import({state,file,setFile,onProcess,onRetry,onOpenSchedule}:{state:'idle'|'processing'|'success'|'error';file:string;setFile:(v:string)=>void;onProcess:()=>void;onRetry:()=>void;onOpenSchedule:()=>void}){
+  const scheduleInputRef=useRef<HTMLInputElement>(null);
+  const evidenceInputRef=useRef<HTMLInputElement>(null);
+  const [dragTarget,setDragTarget]=useState<'schedule'|'evidence'|null>(null);
+  const [evidenceFiles,setEvidenceFiles]=useState<File[]>([]);
+  const acceptAny='*/*';
+  const setDroppedFiles=(kind:'schedule'|'evidence',files:FileList|null)=>{
+    if(!files) return;
+    if(kind==='schedule'){
+      const first=files[0];
+      if(first) setFile(first.name);
+    }else{
+      const merged=[...evidenceFiles,...Array.from(files)];
+      setEvidenceFiles(merged.filter((f,i,a)=>a.findIndex(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified)===i));
+    }
   };
-  const onDrop=(e:React.DragEvent<HTMLDivElement>,nextKind:typeof kind)=>{
-    e.preventDefault();
-    setDragOver(null);
-    handleFiles(e.dataTransfer.files,nextKind);
-  };
-  const formats=kind==='schedule'?['Primavera','MS Project','ProjectLibre','Excel','CSV']:['PDF','Word','Excel','CSV','TXT','Images','Any file'];
+  const drop=(e:React.DragEvent<HTMLDivElement>,kind:'schedule'|'evidence')=>{e.preventDefault();setDragTarget(null);setDroppedFiles(kind,e.dataTransfer.files)};
   return <div className="import-page">
     <PageSection label="COMPANY / DATA INTAKE" title="Import center" action={<span className="trace-chip">Company controlled</span>}>
-      <div className="import-purpose"><span className="eyebrow">WHY IMPORT EXISTS</span><h3>Bring existing company data into the Synchronex bridge.</h3><p>Use <b>Schedule Import</b> for the approved baseline. Use <b>Evidence Import</b> for project documents already produced by the organization. Field teams use Capture for live execution updates.</p></div>
-      <div className="import-choice-grid import-choice-grid-clean">
-        <article className={`import-choice ${kind==='schedule'?'selected-source':''}`}>
+      <div className="import-purpose">
+        <span className="eyebrow">COMPANY DATA INTAKE</span>
+        <h3>Bring existing project information into Synchronex.</h3>
+        <p>Use <strong>Schedule Import</strong> for the approved baseline. Use <strong>Evidence Import</strong> for reports already produced by the project. Field teams use Capture for live execution updates.</p>
+      </div>
+      <div className="import-choice-grid-clean">
+        <article className="import-choice">
           <div className="import-choice-top"><span className="import-choice-icon">▤</span><span className="trace-chip">BASELINE</span></div>
-          <span className="eyebrow">01 / SCHEDULE IMPORT</span><h3>Bring in the baseline plan</h3><p>Upload the approved planning file and prepare WBS, activity IDs, dates, dependencies, and levels for a new baseline revision.</p>
-          <div className="import-format-list">{['Primavera','MS Project','ProjectLibre','Excel','CSV'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='schedule'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('schedule')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('schedule')}} onDragOver={e=>{e.preventDefault();setDragOver('schedule')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'schedule')}>
-            <strong>{file&&kind==='schedule'?file:'Drop schedule file here'}</strong><span>Any file can be selected. Validation happens after upload.</span><small>Choose a file or drag it into this area</small>
+          <span className="eyebrow">01 / SCHEDULE IMPORT</span>
+          <h3>Bring in the company schedule</h3>
+          <p>Upload the approved planning file and prepare WBS, activity IDs, planned dates, dependencies, levels and milestones for a new baseline revision.</p>
+          <div className="import-format-list">{['Primavera','MS Project','ProjectLibre','Excel','CSV','Any file'].map(x=><span key={x}>{x}</span>)}</div>
+          <input ref={scheduleInputRef} className="file-input-hidden" type="file" accept={acceptAny} onChange={e=>{setDroppedFiles('schedule',e.target.files);e.currentTarget.value='';}} />
+          <div className={`import-drop-zone ${dragTarget==='schedule'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>scheduleInputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')scheduleInputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragTarget('schedule')}} onDragLeave={()=>setDragTarget(null)} onDrop={e=>drop(e,'schedule')}>
+            <span className="import-drop-icon">↑</span><strong>{file||'Drop the approved schedule here'}</strong><span>Any file type accepted. Synchronex validates the format after upload.</span>
           </div>
-          <button className="primary-btn import-select-btn" onClick={()=>choose('schedule')}>{file&&kind==='schedule'?'Replace schedule file':'Select schedule file'} <span>→</span></button>
-          <small className="import-note">Creates a candidate baseline revision; publishing remains company-controlled.</small>
+          <div className="import-card-actions"><button type="button" className="primary-btn" onClick={()=>scheduleInputRef.current?.click()}>{file?'Replace schedule file':'Browse schedule file'} →</button><button type="button" className="outline-btn" disabled={!file||state==='processing'} onClick={onProcess}>{state==='processing'?'Validating…':'Validate schedule'}</button></div>
+          <small className="import-note">Publishing a new baseline remains company-controlled.</small>
         </article>
 
-        <article className={`import-choice ${kind==='evidence'?'selected-source':''}`}>
+        <article className="import-choice">
           <div className="import-choice-top"><span className="import-choice-icon">↑</span><span className="trace-chip">EVIDENCE</span></div>
-          <span className="eyebrow">02 / EVIDENCE IMPORT</span><h3>Process existing project evidence</h3><p>Upload reports and documents already collected by the project. Synchronex extracts execution events, matches them to the baseline, and routes ambiguity to Review.</p>
+          <span className="eyebrow">02 / EVIDENCE IMPORT</span>
+          <h3>Process existing project evidence</h3>
+          <p>Upload reports and documents already collected by the company. Synchronex extracts execution events, matches them to the baseline and routes ambiguity to Review.</p>
           <div className="import-format-list">{['PDF','Word','Excel','CSV','TXT','Images','Any file'].map(x=><span key={x}>{x}</span>)}</div>
-          <div className={`import-drop-zone ${dragOver==='evidence'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>choose('evidence')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')choose('evidence')}} onDragOver={e=>{e.preventDefault();setDragOver('evidence')}} onDragLeave={()=>setDragOver(null)} onDrop={e=>onDrop(e,'evidence')}>
-            <strong>{file&&kind==='evidence'?file:'Drop any evidence file here'}</strong><span>PDF, Word, Excel, images, archives, text, or any other file type.</span><small>Source is preserved before extraction</small>
+          <input ref={evidenceInputRef} className="file-input-hidden" type="file" multiple accept={acceptAny} onChange={e=>{setDroppedFiles('evidence',e.target.files);e.currentTarget.value='';}} />
+          <div className={`import-drop-zone ${dragTarget==='evidence'?'dragging':''}`} role="button" tabIndex={0} onClick={()=>evidenceInputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')evidenceInputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragTarget('evidence')}} onDragLeave={()=>setDragTarget(null)} onDrop={e=>drop(e,'evidence')}>
+            <span className="import-drop-icon">↑</span><strong>{evidenceFiles.length?`${evidenceFiles.length} evidence file${evidenceFiles.length===1?'':'s'} selected`:'Drop existing evidence here'}</strong><span>Any file type accepted. Source files are preserved before extraction.</span>
           </div>
-          <button className="outline-btn import-select-btn" onClick={()=>choose('evidence')}>{file&&kind==='evidence'?'Replace evidence file':'Select evidence file'} <span>→</span></button>
-          <small className="import-note">Use Capture instead when a field user is reporting live from site.</small>
+          {evidenceFiles.length>0&&<div className="import-file-list">{evidenceFiles.map((f,i)=><div key={`${f.name}-${f.lastModified}`}><span>{f.name}</span><button type="button" aria-label={`Remove ${f.name}`} onClick={()=>setEvidenceFiles(v=>v.filter((_,idx)=>idx!==i))}>×</button></div>)}</div>}
+          <div className="import-card-actions"><button type="button" className="primary-btn" disabled={!evidenceFiles.length} onClick={onProcess}>Process evidence →</button><span className="helper">Use Capture instead for live field reporting.</span></div>
         </article>
       </div>
-      <input ref={inputRef} className="file-input-hidden" type="file" multiple accept="*/*" onChange={e=>{handleFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select import file" />
-      {(state!=='idle'||file) && <div className={`import-status-banner ${state}`} role="status">
-        <div>
-          <span className="eyebrow">IMPORT STATUS</span>
-          <strong>{state==='processing'?'Processing import…':state==='success'?'Import processed successfully':state==='error'?'Import needs attention':'File selected'}</strong>
-          <p>{file ? `${file} · ${kind==='schedule'?'Schedule baseline':'Project evidence'}` : 'Select a schedule or evidence file to begin.'}</p>
-        </div>
-        <div className="import-status-actions">
-          {state==='processing' && <span className="import-status-chip">Processing</span>}
-          {state==='success' && <><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}
-          {state==='error' && <button className="outline-btn" onClick={onRetry}>Retry</button>}
-        </div>
-      </div>}
+      {(state!=='idle'||file)&&<div className={`import-status-banner ${state}`} role="status"><div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Processing project data…':state==='success'?'Import completed':'Source ready for validation'}</strong><p>{file||`${evidenceFiles.length} evidence file${evidenceFiles.length===1?'':'s'} selected.`}</p></div><div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenSchedule}>Open schedule →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div></div>}
     </PageSection>
   </div>
 }
@@ -775,7 +916,7 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
   return <div className="field-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>REV 04</strong><small>Approved company schedule</small></div></div>
+      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">SCHEDULE</span><strong>APPROVED</strong><small>Current company plan</small></div></div>
       <div className="field-home-grid">
         <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
         <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
@@ -806,8 +947,8 @@ function FieldNotifications(){
   return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
 }
 
-function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="outline-btn" onClick={onSwitch}>Switch to company portal</button><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div><div><span>BASELINE</span><b>Rev 04 · Read only</b></div></div></PageSection></div>
+function FieldProfile({onSignOut}:{onSignOut:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div></div></PageSection></div>
 }
 
 function Analytics(){
@@ -826,7 +967,7 @@ function Analytics(){
       </div>
       <div className="analytics-grid-two">
         <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">Rev 04</span></div>
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div></div>
           <div className="analytics-chart">
             <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
             <div className="analytics-plot">
@@ -882,7 +1023,7 @@ function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,de
  return <div className="settings-page"><PageSection label="WORKSPACE / APPEARANCE" title="Make Synchronex work your way"><div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for this workspace. System follows your operating system preference.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div><div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible in tables and lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div></PageSection>
  <PageSection label="TRUST / AUTOMATION" title="Control when AI may apply changes"><div className="settings-card stacked"><div className="setting-row"><div><strong>Auto-apply confidence threshold</strong><p>Events at or above this threshold may be eligible for automatic application if all validation checks pass.</p></div><div className="threshold-control"><input aria-label="Auto apply confidence threshold" type="range" min="80" max="99" value={threshold} onChange={e=>setThreshold(Number(e.target.value))}/><b>{threshold}%</b></div></div><div className="setting-row"><div><strong>Auto-save drafts</strong><p>Preserve unfinished company form changes locally before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div><div className="setting-row"><div><strong>Human review gate</strong><p>Ambiguous, low-confidence, unmatched, and granularity-mismatch events always require planner review.</p></div><span className="locked-setting">Required</span></div></div></PageSection>
  <PageSection label="NOTIFICATIONS" title="Choose how Synchronex keeps you informed"><div className="settings-card stacked"><div className="setting-row"><div><strong>In-app notifications</strong><p>Review decisions, failed validation, new submissions, and schedule changes.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><strong>Email notifications</strong><p>Receive important project and access alerts at your work email.</p></div><button className={`toggle ${emailNotifications?'on':''}`} aria-pressed={emailNotifications} onClick={()=>setEmailNotifications(!emailNotifications)}><span/></button></div></div></PageSection>
- <PageSection label="REGIONAL / DATA" title="Project defaults"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><label>Evidence retention<select value={retention} onChange={e=>setRetention(e.target.value)}><option value="project">Project lifetime</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option></select></label><div className="settings-info"><span className="eyebrow">CURRENT WORKSPACE</span><strong>North Field Gas Processing / Phase 1</strong><span>Baseline Rev 04 · Asia/Kolkata · Human-gated ambiguity</span></div></div><div className="settings-actions"><button className="primary-btn" onClick={onSave}>{saved?'Saved ✓':'Save workspace settings'}</button><span className="helper">Settings are scoped to the active company workspace.</span></div></PageSection></div>
+ <PageSection label="REGIONAL / DATA" title="Project defaults"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><label>Evidence retention<select value={retention} onChange={e=>setRetention(e.target.value)}><option value="project">Project lifetime</option><option value="90">90 days</option><option value="365">1 year</option><option value="730">2 years</option></select></label><div className="settings-info"><span className="eyebrow">CURRENT WORKSPACE</span><strong>North Field Gas Processing / Phase 1</strong><span>Approved schedule · Asia/Kolkata · Human-gated ambiguity</span></div></div><div className="settings-actions"><button className="primary-btn" onClick={onSave}>{saved?'Saved ✓':'Save workspace settings'}</button><span className="helper">Settings are scoped to the active company workspace.</span></div></PageSection></div>
 }
 function Popover({title,children}:{title:string;children:React.ReactNode}){return <div className="popover"><span className="eyebrow">{title}</span>{children}</div>}
 function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){return <div className="modal-backdrop" onMouseDown={e=>e.currentTarget===e.target&&onClose()}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><h2 id="modal-title">{title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}>×</button></div>{children}</div></div>}
