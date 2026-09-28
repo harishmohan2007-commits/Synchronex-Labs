@@ -13,7 +13,7 @@ export default function Settings() {
             { label: 'Project Name', value: 'North Field Gas Processing Facility' },
             { label: 'Project ID', value: 'NFGPF-P1-2026', mono: true },
             { label: 'Phase', value: 'Phase 1 — Execution' },
-            { label: 'Baseline Revision', value: 'Rev 04' },
+            { label: 'Baseline Revision', value: 'Approved schedule' },
           ]
         },
         {
