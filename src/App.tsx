@@ -34,7 +34,7 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  memory:{eyebrow:'KNOWLEDGE / VALIDATED ACTUALS',title:'Institutional memory',subtitle:'Preserve real execution durations, recurring delay causes, and productivity evidence for future planning.'},
  trace:{eyebrow:'GOVERNANCE / PROVENANCE',title:'Trace ledger',subtitle:'Every accepted change carries a source, actor, timestamp, decision, and confidence trail.'},
  import:{eyebrow:'DATA INTAKE / CONTROLLED INGESTION',title:'Import center',subtitle:'Bring company schedules and existing project evidence into the Synchronex bridge.'},
- analytics:{eyebrow:'ANALYTICS / PROJECT PERFORMANCE',title:'Project analytics',subtitle:'Turn validated execution data into schedule variance, productivity, delay, and progress insight.'},
+ analytics:{eyebrow:'ANALYTICS',title:'Project analytics',subtitle:'Turn validated execution data into schedule variance, productivity, delay, and progress insight.'},
  team:{eyebrow:'TEAM / ACCESS CONTROL',title:'Project team',subtitle:'Manage company planners, reviewers, supervisors, and field access.'},
  settings:{eyebrow:'SYSTEM / TRUST CONTROLS',title:'Workspace settings',subtitle:'Define confidence thresholds, project defaults, access, and evidence handling.'},
  'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'See assigned work, recent submissions, and the next action without the planning complexity.'},
@@ -868,11 +868,10 @@ function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void
 function Analytics(){
   const totalActivities=ACTIVITIES.length;
   const avgActual=Math.round(ACTIVITIES.reduce((sum,a)=>sum+a.progress,0)/Math.max(totalActivities,1));
-  const matched=FIELD_EVENTS.filter(e=>e.conf>=90).length;
   const review=REVIEW_QUEUE.filter(r=>r.status==='Review').length;
   const unmatched=REVIEW_QUEUE.filter(r=>r.status==='Unmatched').length;
   return <div className="analytics-page">
-    <PageSection label="ANALYTICS / PROJECT PERFORMANCE" title="Project analytics">
+    <PageSection title="Project analytics">
       <div className="analytics-summary-grid">
         <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{avgActual}%</strong><small>Across {totalActivities} executable demo activities</small></div>
         <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>57%</strong><small>Current planned project progress</small></div>
@@ -900,18 +899,11 @@ function Analytics(){
           <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div>
         </div>
       </div>
-      <div className="analytics-grid-two">
-        <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">ACTIVITY DURATION</span><h3>Variance snapshot</h3></div></div>
-          <table className="analytics-table"><thead><tr><th>Activity</th><th>Baseline</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{[
-            ['PIP-245','5 days','6 days','+1 day'],['CIV-022','8 days','8 days','0'],['MECH-018','4 days','5 days','+1 day'],['ELE-014','5 days','5 days','0'],['INST-045','5 days','6 days','+1 day']
-          ].map(r=><tr key={r[0]}><td><code>{r[0]}</code></td><td>{r[1]}</td><td>{r[2]}</td><td className={r[3].startsWith('+')?'negative':'positive'}>{r[3]}</td></tr>)}</tbody></table>
-        </div>
-        <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">AI LINKING</span><h3>Evidence routing</h3></div></div>
-          <div className="analytics-routing-list"><div><span>High-confidence linked</span><b>{matched?85:0}%</b></div><div><span>Planner review</span><b>{review?12:0}%</b></div><div><span>Unmatched</span><b>{unmatched?3:0}%</b></div></div>
-          <div className="analytics-event-total"><span className="eyebrow">EVENTS PROCESSED</span><strong>247</strong><small>Last 30 days · synthetic demo dataset</small></div>
-        </div>
+      <div className="analytics-panel analytics-variance-panel">
+        <div className="analytics-panel-head"><div><span className="eyebrow">ACTIVITY DURATION</span><h3>Variance snapshot</h3></div><span className="analytics-panel-note">Baseline vs actual duration</span></div>
+        <table className="analytics-table"><thead><tr><th>Activity</th><th>Baseline</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{[
+          ['PIP-245','5 days','6 days','+1 day'],['CIV-022','8 days','8 days','0'],['MECH-018','4 days','5 days','+1 day'],['ELE-014','5 days','5 days','0'],['INST-045','5 days','6 days','+1 day']
+        ].map(r=><tr key={r[0]}><td><code>{r[0]}</code></td><td>{r[1]}</td><td>{r[2]}</td><td className={r[3].startsWith('+')?'negative':'positive'}>{r[3]}</td></tr>)}</tbody></table>
       </div>
     </PageSection>
   </div>

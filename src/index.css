@@ -1601,3 +1601,33 @@ button,input,textarea,select{font-family:var(--font-ui)}
   color:#d5e0dd!important;
   border-color:#526661!important;
 }
+
+/* =====================================================================
+   ANALYTICS POLISH — full-width variance + refined progress trajectory
+   ===================================================================== */
+.analytics-variance-panel{width:100%;margin-top:2px}
+.analytics-panel-note{color:var(--text-3);font:10px var(--font-mono);text-transform:uppercase;letter-spacing:.08em;padding-top:4px}
+.analytics-chart{grid-template-columns:44px minmax(0,1fr);gap:12px;min-height:286px;align-items:stretch}
+.analytics-ylabels{height:246px;padding:0 0 0;justify-content:space-between;box-sizing:border-box}
+.analytics-ylabels span{line-height:1;transform:translateY(-1px)}
+.analytics-plot{height:270px;padding-bottom:0;display:flex;flex-direction:column;min-width:0}
+.analytics-gridlines{inset:0 0 40px;pointer-events:none}
+.analytics-gridlines i{border-top:1px solid color-mix(in srgb,var(--surface-3) 82%, transparent)}
+.analytics-plot svg{width:100%;height:246px;flex:0 0 246px;overflow:visible}
+.analytics-xlabels{position:static;height:24px;flex:0 0 24px;display:flex;align-items:flex-end;justify-content:space-between;padding-top:4px;color:var(--text-3);font:9px var(--font-mono);white-space:nowrap}
+.analytics-legend{margin-top:8px;padding-top:10px;border-top:1px solid var(--border);gap:24px}
+.analytics-legend span{display:inline-flex;align-items:center}
+.legend-dot{width:22px;height:3px;border-radius:2px}
+.planned-dot{height:0;border-top:2px dashed var(--info);background:transparent}
+.analytics-variance-panel .analytics-table{margin-top:2px}
+.analytics-variance-panel .analytics-table th,.analytics-variance-panel .analytics-table td{padding:14px 16px}
+.analytics-variance-panel .analytics-table tbody tr:hover td{background:var(--surface-2)}
+
+@media (max-width: 900px){
+  .analytics-grid-two{grid-template-columns:1fr}
+  .analytics-chart{min-height:270px}
+  .analytics-ylabels{height:230px}
+  .analytics-plot{height:254px}
+  .analytics-plot svg{height:230px;flex-basis:230px}
+  .analytics-gridlines{inset-bottom:24px}
+}
