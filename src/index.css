@@ -1458,3 +1458,20 @@ button,input,textarea,select{font-family:var(--font-ui)}
   max-width:none;
 }
 .import-page .section-head{margin-bottom:24px}
+
+
+/* --- Final schedule card alignment / compact discipline cards --------- */
+.schedule-page .discipline-card-grid{align-items:stretch;grid-auto-rows:1fr;}
+.schedule-page .discipline-card{min-height:320px;height:100%;display:flex;flex-direction:column;}
+.schedule-page .discipline-card-hit{flex:1;display:flex;flex-direction:column;gap:10px;justify-content:flex-start;}
+.schedule-page .discipline-card-top{min-height:32px;align-items:center;}
+.schedule-page .discipline-card-title{align-items:center;margin-top:8px;}
+.schedule-page .discipline-card-title strong{line-height:1.2;}
+.schedule-page .discipline-card-title b{line-height:1.2;}
+.schedule-page .discipline-progress{margin-top:6px;}
+.schedule-page .discipline-card-metrics{margin-top:18px;}
+.schedule-page .schedule-detail-head{display:flex;align-items:flex-start;justify-content:space-between;}
+.schedule-page .schedule-detail-head > div{min-width:0;}
+.schedule-page .schedule-detail-head h3{margin:7px 0 6px;line-height:1.15;}
+.schedule-page .schedule-detail-head p{margin:0;line-height:1.5;}
+.activity-detail-footer{display:flex;justify-content:flex-end;align-items:center;margin-top:4px;}

@@ -461,7 +461,7 @@ export default function App(){
         </div>
         <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
         <div className="activity-detail-trace activity-detail-panel"><div className="activity-detail-panel-head"><span className="eyebrow">RECENT PROGRESS UPDATES</span><span className="trace-chip">{detailTrail.length} recorded</span></div>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action.toLowerCase().includes('progress update')?`Progress update by ${t.actor}`:t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
-        <div className="activity-detail-footer"><span>Source, actor, and timestamp remain attached to every recorded update.</span><button className="outline-btn" onClick={()=>setModal(null)}>Close</button></div>
+        <div className="activity-detail-footer"><button className="outline-btn" onClick={()=>setModal(null)}>Close</button></div>
       </div> : <p>Activity not found.</p>}
     </Modal>}
     {modal==='member'&&memberTarget&&<Modal title={`Manage ${memberTarget.name}`} onClose={()=>setModal(null)}>
@@ -608,9 +608,7 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
               <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
               <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
               <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
-              <div className="discipline-card-milestone"><small>NEXT MILESTONE</small><span>{d.nextMilestone}</span></div>
             </button>
-            <div className="discipline-card-foot"><span>{d.milestones} milestones tracked</span><span>{evidence.length} recent evidence signals</span></div>
           </div>;
         })}
       </div> : <>
