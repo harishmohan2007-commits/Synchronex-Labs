@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF } from './data';
 
 type Role = 'company'|'field';
-type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'notifications'|'profile';
+type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'my-work'|'submissions'|'notifications'|'profile';
 type Modal = 'help'|'notifications'|'activity'|'confirm'|'profile'|'member'|'invite'|null;
 type ThemeMode = 'light'|'dark'|'system';
 
@@ -19,10 +19,11 @@ const companyNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
 ];
 const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
   {id:'field-home',num:'01',label:'Field Home',glyph:'⌂'},
-  {id:'capture',num:'02',label:'Capture',glyph:'↗'},
-  {id:'submissions',num:'03',label:'Submissions',glyph:'↥'},
-  {id:'notifications',num:'04',label:'Notifications',glyph:'!'},
-  {id:'profile',num:'05',label:'Profile',glyph:'●'},  {id:'settings',num:'06',label:'Settings',glyph:'⚙'},
+  {id:'my-work',num:'02',label:'My Work',glyph:'✓'},
+  {id:'capture',num:'03',label:'Capture',glyph:'↗'},
+  {id:'submissions',num:'04',label:'Submissions',glyph:'↥'},
+  {id:'notifications',num:'05',label:'Notifications',glyph:'!'},
+  {id:'profile',num:'06',label:'Profile',glyph:'●'},
 ];
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
@@ -36,7 +37,8 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  analytics:{eyebrow:'ANALYTICS / PROJECT PERFORMANCE',title:'Project analytics',subtitle:'Turn validated execution data into schedule variance, productivity, delay, and progress insight.'},
  team:{eyebrow:'TEAM / ACCESS CONTROL',title:'Project team',subtitle:'Manage company planners, reviewers, supervisors, and field access.'},
  settings:{eyebrow:'SYSTEM / TRUST CONTROLS',title:'Workspace settings',subtitle:'Define confidence thresholds, project defaults, access, and evidence handling.'},
- 'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'Receive the approved project baseline, understand the reporting path, and send execution evidence.'},
+ 'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'See assigned work, recent submissions, and the next action without the planning complexity.'},
+ 'my-work':{eyebrow:'FIELD / ASSIGNED WORK',title:'My work',subtitle:'View the activities assigned to you and report progress against the approved baseline.'},
  submissions:{eyebrow:'FIELD / SUBMISSIONS',title:'My submissions',subtitle:'Track what you have reported and whether Synchronex accepted or needs more information.'},
  notifications:{eyebrow:'FIELD / NOTIFICATIONS',title:'Notifications',subtitle:'See assignment changes, submission decisions, and messages that need your attention.'},
  profile:{eyebrow:'FIELD / ACCOUNT',title:'My profile',subtitle:'Review your field role, project access, and account details.'},
@@ -194,7 +196,6 @@ export default function App(){
   const mediaRecorderRef=useRef<MediaRecorder|null>(null);
   const recordingChunksRef=useRef<Blob[]>([]);
   const recordingTimerRef=useRef<number|null>(null);
-  const recordingResetRef=useRef(false);
   const [importState,setImportState]=useState<'idle'|'processing'|'success'|'error'>('idle');
   const [importFile,setImportFile]=useState('');
   const [saved,setSaved]=useState(false);
@@ -275,7 +276,7 @@ export default function App(){
   const openResult=(r:SearchResult)=>{
     setSearchOpen(false);setQuery('');
     if(role==='field'){
-      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('capture');return;}
+      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('my-work');return;}
       setScreen('submissions');return;
     }
     if(r.action.reviewId){
@@ -302,11 +303,11 @@ export default function App(){
   };
 
   const runCapture=()=>{
-    if(!captureText.trim() && captureFiles.length===0){notify('Add a field statement or evidence file before reporting progress.');return;}
+    if(!captureText.trim()){notify('Nothing to extract. Enter a field statement first.');return;}
     if(captureBusy)return;
     setCaptureBusy(true);setCaptureResult(false);setCaptureStage(1);setDirty(false);
     [2,3,4,5,6].forEach((s,i)=>window.setTimeout(()=>setCaptureStage(s),550*(i+1)));
-    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify(captureFiles.length?`Progress report processed · ${captureFiles.length} evidence file${captureFiles.length===1?'':'s'} included.`:'3 execution events extracted · 2 auto-linkable · 1 requires review.')},3500);
+    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('3 execution events extracted · 2 auto-linkable · 1 requires review.')},3500);
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
@@ -320,20 +321,15 @@ export default function App(){
   const startRecording=async()=>{
     if(recording) return;
     try{
-      recordingResetRef.current=false;
-      if(recordedAudioUrl){URL.revokeObjectURL(recordedAudioUrl);setRecordedAudioUrl('');}
       const stream=await navigator.mediaDevices.getUserMedia({audio:true});
       const recorder=new MediaRecorder(stream);
       recordingChunksRef.current=[];
       recorder.ondataavailable=e=>{if(e.data.size) recordingChunksRef.current.push(e.data);};
       recorder.onstop=()=>{
-        const shouldDiscard=recordingResetRef.current;
-        recordingResetRef.current=false;
-        stream.getTracks().forEach(t=>t.stop());
-        if(shouldDiscard){recordingChunksRef.current=[];return;}
         const blob=new Blob(recordingChunksRef.current,{type:recorder.mimeType||'audio/webm'});
+        if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
         setRecordedAudioUrl(URL.createObjectURL(blob));
-        recordingChunksRef.current=[];
+        stream.getTracks().forEach(t=>t.stop());
       };
       mediaRecorderRef.current=recorder;
       recorder.start();
@@ -348,18 +344,6 @@ export default function App(){
     mediaRecorderRef.current=null;
     setRecording(false);
     if(recordingTimerRef.current!==null){window.clearInterval(recordingTimerRef.current);recordingTimerRef.current=null;}
-  };
-  const resetRecording=()=>{
-    recordingResetRef.current=true;
-    const recorder=mediaRecorderRef.current;
-    if(recorder && recorder.state!=='inactive') recorder.stop();
-    mediaRecorderRef.current=null;
-    if(recordingTimerRef.current!==null){window.clearInterval(recordingTimerRef.current);recordingTimerRef.current=null;}
-    if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
-    recordingChunksRef.current=[];
-    setRecordedAudioUrl('');setRecording(false);setRecordingSeconds(0);
-    setDirty(Boolean(captureText.trim()||captureFiles.length));
-    notify('Voice recording reset.');
   };
   const processVoice=()=>{if(!recordedAudioUrl){notify('Record a voice update first.');return;} setCaptureResult(true); setCaptureStage(1); [2,3,4,5,6].forEach((stage,i)=>window.setTimeout(()=>setCaptureStage(stage),450*(i+1))); window.setTimeout(()=>notify('Voice evidence processed · 3 execution events extracted.'),2800);};
   const formatRecordingTime=(seconds:number)=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
@@ -406,6 +390,7 @@ export default function App(){
       {(role==='company'?companyNav:fieldNav).map(item=><button key={item.id} className={`rail-item ${screen===item.id?'active':''}`} aria-current={screen===item.id?'page':undefined} onClick={()=>go(item.id)}>
         <span className="rail-num">{item.num}</span><span className="rail-glyph">{item.glyph}</span><span>{item.label}</span>{item.id==='review'&&reviewCount>0?<b className="count-badge">{reviewCount}</b>:null}
       </button>)}
+      <div className="rail-bottom"><span className="eyebrow">ACTIVE PROJECT</span><strong>North Field / Phase 1</strong><small>{role==='company'?'Baseline Rev 04 · Synced 09:42':'Field execution · Today'}</small><button onClick={()=>{setRole(role==='company'?'field':'company');setAuthenticated(false);setModal(null);setDirty(false)}}>Switch to {role==='company'?'field':'company'} portal →</button><button onClick={()=>{setAuthenticated(false);setModal(null)}}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
@@ -440,7 +425,7 @@ export default function App(){
 
       {role==='company' && screen==='command'&&<Command onGo={go} onSelect={(id)=>{setSelectedId(id);go('schedule')}} reviewCount={reviewCount}/>}
       {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} selected={selected} onImport={()=>go('import')} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
-      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the file evidence card below to attach a report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} resetRecording={resetRecording} processVoice={processVoice} formatRecordingTime={formatRecordingTime} />}
+      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the file evidence card below to attach a report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} processVoice={processVoice} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onChoose={chooseCandidate} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
@@ -449,10 +434,10 @@ export default function App(){
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
+      {role==='field' && screen==='my-work'&&<MyWork onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
       {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
-      {role==='field' && screen==='settings'&&<FieldSettings themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone}/>}
     </main>
 
     {modal==='help'&&<Modal title="How the planning-to-execution bridge works" onClose={()=>setModal(null)}><div className="flow-list">{[
@@ -560,15 +545,13 @@ function Schedule({rows,selectedId,onSelect,selected,onImport,discipline,setDisc
   </div>
 }
 
-function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,resetRecording,processVoice,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;resetRecording:()=>void;processVoice:()=>void;formatRecordingTime:(seconds:number)=>string}){
+function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,processVoice,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;processVoice:()=>void;formatRecordingTime:(seconds:number)=>string}){
   return <div className="capture-layout">
     <div className="capture-main">
       <PageSection label="FIELD INPUT / 01" title="Speak in the language of the site">
         <p className="lead">Paste a daily report, site diary note, or supervisor statement. Synchronex turns execution language into structured events without forcing field teams into a rigid form.</p>
         <textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')run()}} aria-label="Field report input" placeholder="Example: Line 24 spool erection completed…"/>
-        <div className="capture-actions"><button className="primary-btn" disabled={busy} onClick={run}>{busy?'Processing report…':files.length?'Submit progress report':'Extract execution events'} <span>↗</span></button><button className="outline-btn" type="button" onClick={()=>fileInputRef.current?.click()}>Attach evidence</button><span className="helper">Add text plus images/files to one progress report · Ctrl / ⌘ + Enter to submit</span></div>
-        {files.length>0&&<div className="capture-attachments-inline" aria-label="Attached progress evidence"><span className="eyebrow">ATTACHED TO THIS REPORT</span><div className="capture-inline-file-list">{files.map((file,i)=><div className="capture-inline-file" key={`${file.name}-${file.lastModified}`}><span className="inline-file-icon">{file.type.startsWith('image/')?'IMG':'FILE'}</span><span><b>{file.name}</b><small>{file.type||'File'} · {(file.size/1024/1024).toFixed(2)} MB</small></span><button type="button" onClick={()=>removeFile(i)} aria-label={`Remove ${file.name} from report`}>×</button></div>)}</div></div>
-        }
+        <div className="capture-actions"><button className="primary-btn" disabled={busy} onClick={run}>{busy?'Extracting events…':'Extract execution events'} <span>↗</span></button><button className="outline-btn" onClick={onImport}>Import instead</button><span className="helper">Ctrl / ⌘ + Enter to extract · demo uses synthetic data</span></div>
         {result&&<ExtractionResult/>}
 
         <div className="capture-input-grid">
@@ -579,14 +562,14 @@ function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,remo
               <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>PDF · Word · Excel · CSV · TXT · images · ZIP · and more</small>
             </button>
             {files.length>0&&<div className="capture-file-list">{files.map((file,i)=><div className="capture-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Unknown file type'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
-            <div className="capture-source-actions"><span className="attachment-ready">{files.length?`${files.length} file${files.length===1?' is':'s are'} attached to the progress report.`:'Files added here can be included with your text report.'}</span></div>
+            <div className="capture-source-actions"><button className="primary-btn" disabled={!files.length} onClick={run}>Extract from {files.length||0} file{files.length===1?'':'s'} →</button><span className="helper">Original files remain available as source evidence.</span></div>
           </section>
 
           <section className="capture-source-card voice-card">
             <div className="capture-source-head"><div><span className="eyebrow">VOICE EVIDENCE / 03</span><h3>Record a field update</h3><p>Capture a supervisor or site-team statement directly from the microphone.</p></div><span className="source-icon">◉</span></div>
             <div className={`voice-recorder ${recording?'recording':''}`}><div className="voice-status-dot">{recording?'●':'○'}</div><div><strong>{recording?'Recording field statement':'Ready to record'}</strong><span>{recording?formatRecordingTime(recordingSeconds):'Use your browser microphone'}</span></div></div>
-            <div className="voice-actions">{!recording?<button className="primary-btn" onClick={startRecording}>● Start recording</button>:<button className="danger-btn" onClick={stopRecording}>■ Stop recording</button>}{recording&&<button className="outline-btn voice-reset-btn" onClick={resetRecording}>Reset</button>}</div>
-            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><audio controls src={recordedAudioUrl}/><div className="voice-preview-actions"><button className="primary-btn" onClick={processVoice}>Process voice evidence →</button><button className="outline-btn voice-reset-btn" onClick={resetRecording}>Delete / reset recording</button></div></div>}
+            <div className="voice-actions">{!recording?<button className="primary-btn" onClick={startRecording}>● Start recording</button>:<button className="danger-btn" onClick={stopRecording}>■ Stop recording</button>}</div>
+            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><audio controls src={recordedAudioUrl}/><button className="outline-btn" onClick={processVoice}>Process voice evidence →</button></div>}
             <span className="helper">Microphone access is requested only when recording starts. Audio can later feed the same extraction and matching pipeline.</span>
           </section>
         </div>
@@ -789,15 +772,20 @@ function Import({state,file,setFile,onProcess,onRetry,onOpenReview}:{state:'idle
 }
 
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
+  const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
   return <div className="field-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">RECEIVED BASELINE</span><strong>REV 04</strong><small>Approved company schedule · read only</small></div><div className="field-summary"><span className="eyebrow">REPORTING</span><strong>TEXT · VOICE · FILE</strong><small>Send execution updates with supporting evidence</small></div><div className="field-summary"><span className="eyebrow">SUBMISSIONS</span><strong>2</strong><small>Reports currently processing or under review</small></div></div>
+      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>REV 04</strong><small>Approved company schedule</small></div></div>
       <div className="field-home-grid">
-        <div className="field-panel field-baseline-panel"><div className="panel-heading"><div><span className="eyebrow">COMPANY BASELINE</span><h3>Project schedule received</h3></div><span className="field-live"><i/> READ ONLY</span></div><p>The company has issued <b>North Field Gas Processing / Phase 1</b> baseline Rev 04. Use it as the execution reference; field users do not edit the baseline.</p><div className="field-baseline-meta"><div><span>REVISION</span><b>04</b></div><div><span>SYNCED</span><b>09:42 IST</b></div><div><span>ACCESS</span><b>Read only</b></div></div><button className="outline-btn full" onClick={()=>onGo('capture')}>Report against this baseline →</button></div>
-        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT SUBMISSIONS</span><h3>Your latest reports</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
+        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
       </div>
     </PageSection>
   </div>
+}
+
+function MyWork({onCapture}:{onCapture:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ASSIGNED WORK" title="My work" action={<button className="primary-btn" onClick={onCapture}>Report progress →</button>}><div className="field-work-list">{ACTIVITIES.slice(0,10).map(a=><button className="field-work-card" key={a.id} onClick={onCapture}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.planStart} → {a.planFinish}</small></div><div className="field-progress"><span>Current</span><b>{a.progress}%</b><div className="bar-track"><i style={{width:`${a.progress}%`}}/></div></div><i>→</i></button>)}</div></PageSection></div>
 }
 
 function Submissions({onCapture}:{onCapture:()=>void}){
@@ -811,21 +799,11 @@ function Submissions({onCapture}:{onCapture:()=>void}){
 
 function FieldNotifications(){
   const items=[
-    ['Baseline received','Approved company baseline Rev 04 is available for execution reporting.','10 min ago'],
+    ['Assignment updated','P-101 Spool B remains assigned to your workfront.','10 min ago'],
     ['Submission under review','Line 25 erection started is awaiting planner validation.','35 min ago'],
     ['Schedule notice','MCC-2 panel installation is planned for 25 Sep.','2 hr ago'],
   ];
   return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
-}
-
-function FieldSettings({themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,dateFormat,setDateFormat,timezone,setTimezone}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void}){
-  return <div className="settings-page">
-    <PageSection label="FIELD / APPEARANCE" title="Field settings">
-      <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose Light, Dark, or System appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>
-    </PageSection>
-    <PageSection label="FIELD / LAYOUT" title="Workspace preferences"><div className="settings-card stacked"><div className="setting-row"><div><strong>Density</strong><p>Choose how much information is visible in field lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div><div className="setting-row"><div><strong>In-app notifications</strong><p>Show submission and schedule notices inside Synchronex.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><strong>Email notifications</strong><p>Receive important reporting and account updates by email.</p></div><button className={`toggle ${emailNotifications?'on':''}`} aria-pressed={emailNotifications} onClick={()=>setEmailNotifications(!emailNotifications)}><span/></button></div></div></PageSection>
-    <PageSection label="FIELD / REGIONAL" title="Date and time"><div className="settings-card settings-form-grid"><label>Timezone<select value={timezone} onChange={e=>setTimezone(e.target.value)}><option value="Asia/Kolkata">Asia/Kolkata (IST)</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option><option value="Europe/London">Europe/London</option></select></label><label>Date format<select value={dateFormat} onChange={e=>setDateFormat(e.target.value)}><option>DD MMM YYYY</option><option>MMM DD, YYYY</option><option>YYYY-MM-DD</option></select></label><div className="settings-info"><span className="eyebrow">BASELINE ACCESS</span><strong>Rev 04 · Read only</strong><span>Field users report execution; they do not change the approved company baseline.</span></div></div></PageSection>
-  </div>
 }
 
 function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){
