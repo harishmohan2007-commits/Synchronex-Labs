@@ -1570,3 +1570,34 @@ button,input,textarea,select{font-family:var(--font-ui)}
 @media(max-width:760px){
   .schedule-page .schedule-detail-head{align-items:flex-start;flex-direction:column;min-height:0;gap:14px;}
 }
+
+/* Schedule activity confidence badges: high-contrast on the dark theme. */
+.schedule-activity .confidence{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:26px;
+  padding:4px 9px;
+  border:1px solid #5b786f;
+  background:#e5eee9;
+  color:#16483b;
+  border-radius:2px;
+  font:600 10px 'IBM Plex Mono';
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+:root[data-theme="dark"] .schedule-activity .confidence.high{
+  background:#dff1e8!important;
+  color:#123f33!important;
+  border-color:#86b9a5!important;
+}
+:root[data-theme="dark"] .schedule-activity .confidence.medium{
+  background:#f4e3c5!important;
+  color:#68400e!important;
+  border-color:#c69a52!important;
+}
+:root[data-theme="dark"] .schedule-activity .confidence.none{
+  background:#27373a!important;
+  color:#d5e0dd!important;
+  border-color:#526661!important;
+}
