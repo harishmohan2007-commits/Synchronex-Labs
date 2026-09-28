@@ -16,9 +16,8 @@ The UI is separated into two workspaces while keeping the existing Synchronex pl
 
 ## Field portal
 
-- Field Home — today's assigned work and quick reporting
-- My Work — assigned executable activities
-- Capture — text, voice, and any supporting file evidence
+- Field Home — receive the approved baseline and start reporting
+- Capture — text, voice, and supporting file evidence in one progress report
 - Submissions — status of submitted field updates
 - Notifications — assignment and submission updates
 - Profile — field account and project access
@@ -29,4 +28,4 @@ The demo login explicitly selects either Company portal or Field portal. Switchi
 
 ## Boundary
 
-Company users control the approved baseline and planner decisions. Field users report execution against that baseline and cannot access company baseline administration, Review, Analytics, Memory, Trace, Team, Import, or Settings through the field navigation.
+Company users control the approved baseline and planner decisions. Field users receive the approved baseline as read-only context, perform the work, and report execution evidence through Capture. They cannot access company baseline administration, Review, Analytics, Memory, Trace, Team, Import, or Settings through the field navigation.
