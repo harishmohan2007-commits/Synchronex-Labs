@@ -1258,95 +1258,13 @@ button,input,textarea,select{font-family:var(--font-ui)}
   border:1px solid var(--border)!important;
 }
 
+/* Command page: full-width project pulse with a single intentional decision rail. */
+.command-main .pulse-grid{display:block!important;grid-template-columns:1fr!important;width:100%!important;}
+.command-main .pulse-grid .trend{width:100%!important;border-right:0!important;padding:20px 22px 18px!important;}
+.command-main .pulse-grid .chart{width:100%!important;height:290px!important;}
+.command-aside .capture-card,.command-aside .health-card{display:none!important;}
+.command-aside .decision-card{width:100%!important;}
 
-/* SYNC FINAL CONSOLIDATED FIXES — keep scope limited to requested UX changes. */
-/* Command: only the Decision Queue remains in the side column; the pulse chart has no empty second grid column. */
-.command-aside{align-self:start;min-height:auto;padding-top:30px;background:var(--surface-2);}
-.command-aside .capture-card,.command-aside .health-card{display:none!important}
-.command-aside .decision-card{display:block}
-.pulse-grid{grid-template-columns:1fr!important}
-.trend{border-right:0!important}
-.command-chart-full{width:100%}
-
-/* Schedule: selected discipline uses a slim header, not a large discipline card. */
-.discipline-detail-compact{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;padding:10px 0 18px;border-bottom:1px solid var(--border)}
-.discipline-detail-title-wrap{display:flex;align-items:flex-end;gap:20px;min-width:0}
-.discipline-detail-title-wrap h3{margin:5px 0 0;color:var(--text);font-size:27px;letter-spacing:-.03em}
-.discipline-detail-title-wrap .back-link{white-space:nowrap}
-.discipline-detail-stats{display:grid;grid-template-columns:repeat(4,minmax(78px,1fr));gap:18px;flex:0 0 auto}
-.discipline-detail-stats div{min-width:78px}
-.discipline-detail-stats span{display:block;font:600 9px var(--font-mono);letter-spacing:.1em;color:var(--text-3);margin-bottom:5px}
-.discipline-detail-stats b{font:600 15px var(--font-mono);color:var(--text)}
-
-/* Schedule activity rows: balanced columns, consistent surface, stronger hierarchy. */
-.schedule-page .schedule-activity{grid-template-columns:minmax(270px,1.45fr) minmax(230px,1fr) minmax(200px,.9fr) 100px 24px!important;gap:22px;padding:20px 22px!important;min-height:116px}
-.schedule-page .schedule-activity .activity-main{gap:5px}
-.schedule-page .schedule-activity .activity-main code{font:600 11px var(--font-mono);color:var(--info)}
-.schedule-page .schedule-activity .activity-main strong{font-size:18px;line-height:1.25}
-.schedule-page .schedule-activity .activity-main small{font-size:12px;color:var(--text-2)}
-.schedule-page .schedule-activity .activity-dates{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.schedule-page .schedule-activity .activity-dates span{display:flex;flex-direction:column;gap:5px;font-size:13px}
-.schedule-page .schedule-activity .activity-dates small{font:600 9px var(--font-mono);letter-spacing:.1em;color:var(--text-3)}
-.schedule-page .schedule-activity .activity-progress{display:grid;grid-template-columns:1fr 48px;gap:12px;align-items:center}
-.schedule-page .schedule-activity .activity-progress>div{height:8px;background:var(--surface-3)}
-.schedule-page .schedule-activity .activity-progress i{display:block;height:100%;background:var(--accent)}
-.schedule-page .schedule-activity .confidence{justify-self:start;padding:7px 9px;border:1px solid var(--border);background:var(--surface-2);font:600 10px var(--font-mono)}
-.schedule-page .schedule-activity.selected{box-shadow:inset 3px 0 var(--brand)}
-
-/* Activity detail modal: clear hero, progress, metrics, evidence and trace sections. */
-.activity-detail{display:grid;gap:16px}
-.activity-detail-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;padding:6px 0 18px;border-bottom:1px solid var(--border)}
-.activity-detail-hero code{display:inline-block;margin-top:10px;color:var(--info);font:600 12px var(--font-mono)}
-.activity-detail-hero h3{margin:6px 0 5px;font-size:25px;line-height:1.2;color:var(--text)}
-.activity-detail-hero p{margin:0;color:var(--text-2);font-size:13px}
-.activity-detail-progress{display:grid;grid-template-columns:155px 1fr;gap:18px;align-items:center;padding:16px;border:1px solid var(--border);background:var(--surface-2)}
-.activity-detail-progress>div:first-child{display:flex;flex-direction:column;gap:5px}.activity-detail-progress b{font:600 24px var(--font-mono);color:var(--text)}
-.activity-detail-progress .bar-track{height:9px;background:var(--surface-3)}.activity-detail-progress .bar-track i{display:block;height:100%;background:var(--accent)}
-.activity-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border)}
-.activity-detail-grid>div{background:var(--surface);padding:14px 15px;min-height:72px}.activity-detail-grid span,.activity-detail-evidence>span{display:block;font:600 9px var(--font-mono);letter-spacing:.1em;color:var(--text-3);margin-bottom:6px}.activity-detail-grid b{font-size:13px;color:var(--text)}
-.activity-detail-evidence,.activity-detail-trace{border:1px solid var(--border);background:var(--surface);padding:16px}.activity-detail-evidence strong{display:block;color:var(--text);margin:4px 0 6px;font-size:14px}.activity-detail-evidence p{margin:0;color:var(--text-2);font-size:14px;line-height:1.55}
-.activity-detail-trace-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.trace-mini-row{display:grid;grid-template-columns:145px 90px 1fr 1fr;gap:10px;padding:9px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text-2)}
-
-/* Review dark theme: validation panel must match the dark surface, not the old light panel. */
-:root[data-theme="dark"] .review-validation-panel{background:var(--surface)!important;color:var(--text)!important;border-color:var(--border)!important}
-:root[data-theme="dark"] .review-validation-panel .eyebrow{color:var(--text-3)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row{border-color:var(--border)!important;color:var(--text)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row span{color:var(--brand-2)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row p{color:var(--text)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row small{color:var(--text-2)!important}
-:root[data-theme="dark"] .review-validation-panel .review-rule{background:var(--border)!important}
-:root[data-theme="dark"] .review-validation-panel .aside-copy{color:var(--text-2)!important}
-
-/* Close buttons remain visible in both themes. */
-:root[data-theme="dark"] .icon-btn{color:var(--text)!important;border-color:var(--border-strong)!important;background:#203238!important}
-:root[data-theme="dark"] .icon-btn:hover{background:#284047!important;color:#fff!important}
-
-@media(max-width:900px){.discipline-detail-compact{align-items:flex-start;flex-direction:column}.discipline-detail-stats{width:100%}.activity-detail-grid{grid-template-columns:1fr 1fr}.activity-detail-progress{grid-template-columns:1fr}.schedule-page .schedule-activity{grid-template-columns:1fr!important}}
-@media(max-width:620px){.discipline-detail-stats{grid-template-columns:1fr 1fr}.activity-detail-grid{grid-template-columns:1fr}.trace-mini-row{grid-template-columns:1fr 1fr}.activity-detail-hero{flex-direction:column}}
-
-
-/* FINAL SAME-SURFACE DISCIPLINE CARDS */
-.discipline-card{border-left-color:var(--border-strong)!important}
-.discipline-card:hover{border-left-color:var(--border-strong)!important}
-.discipline-card-foot{display:none!important}
-
-/* FINAL COMMAND LAYOUT: pulse is full-width inside the main content; the side contains only Decision Queue. */
-.command-layout{grid-template-columns:minmax(0,1fr) 310px}
-.command-aside{background:transparent!important;border-left:1px solid var(--border);padding:30px 22px}
-.command-aside .aside-block{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--brand);padding:20px 18px 22px}
-
-/* FINAL REVIEW DARK PANEL */
-:root[data-theme="dark"] .review-validation-panel{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
-:root[data-theme="dark"] .review-validation-panel .eyebrow{color:var(--text-3)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row{border-color:var(--border)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row p{color:var(--text)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row small{color:var(--text-2)!important}
-:root[data-theme="dark"] .review-validation-panel .check-row span{color:var(--brand-2)!important}
-:root[data-theme="dark"] .review-validation-panel .review-rule{background:var(--border)!important}
-:root[data-theme="dark"] .review-validation-panel .aside-copy{color:var(--text-2)!important}
-
-/* FINAL ACTIVITY DETAIL */
-.activity-detail{max-height:72vh;overflow:auto;padding-right:3px}
-:root[data-theme="dark"] .activity-detail-grid>div,.activity-detail-grid>div{background:var(--surface)!important;border-color:var(--border)!important}
-:root[data-theme="dark"] .activity-detail-evidence,:root[data-theme="dark"] .activity-detail-trace{background:var(--surface)!important;border-color:var(--border)!important}
-:root[data-theme="dark"] .activity-detail-hero p{color:var(--text-2)!important}
+/* Command trend lines use the theme tokens instead of hard-coded dark colors. */
+.command-main .pulse-grid .chart svg polyline:first-of-type{stroke:var(--text-3)!important;opacity:.85;}
+.command-main .pulse-grid .chart svg polyline:last-of-type{stroke:var(--brand-2)!important;}
