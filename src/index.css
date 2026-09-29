@@ -1793,3 +1793,26 @@ button,input,textarea,select{font-family:var(--font-ui)}
   .analytics-plot{height:272px;}
   .analytics-plot svg{height:245px;flex-basis:245px;}
 }
+
+/* Field home: polished trajectory dashboard */
+.field-home-page{padding-bottom:72px}
+.field-home-grid-enhanced{grid-template-columns:1.55fr .85fr;align-items:stretch}
+.field-summary{min-height:126px;position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:flex-start}
+.field-summary:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--accent);opacity:.7}
+.field-summary-submissions:after{background:#a45b13}.field-summary-baseline:after{background:#55778a}
+.summary-status{font:600 9px var(--font-mono);letter-spacing:.08em;color:var(--accent);border:1px solid var(--border);background:var(--surface-2);padding:6px 8px}
+.summary-status.amber{color:#9a5c17}
+.field-trajectory-panel{padding:22px 24px 18px;min-height:390px}
+.field-submissions-panel{padding:22px 20px;min-height:390px}
+.panel-subtitle{margin:5px 0 0!important;color:var(--text-2)!important;font-size:12px!important;line-height:1.5!important}
+.trajectory-delta{font:600 11px var(--font-mono);color:var(--accent);white-space:nowrap;padding-top:3px}
+.field-chart-wrap{margin-top:12px;border-top:1px solid var(--border);padding-top:12px}
+.field-trajectory-chart{display:block;width:100%;height:270px;overflow:visible}
+.chart-grid-line{stroke:var(--border);stroke-width:1}.chart-axis-label,.chart-date-label{fill:var(--text-3);font:10px var(--font-mono)}
+.trajectory-line{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.trajectory-line.planned{stroke:var(--info);stroke-dasharray:7 6}.trajectory-line.actual{stroke:var(--accent)}
+.trajectory-dot.actual{fill:var(--surface);stroke:var(--accent);stroke-width:2.5}
+.trajectory-legend{display:flex;align-items:center;gap:18px;padding:4px 4px 0;font-size:11px;color:var(--text-2)}
+.trajectory-legend span{display:flex;align-items:center;gap:7px}.trajectory-legend b{margin-left:auto;font:600 10px var(--font-mono);color:var(--text-3)}
+.legend-line{display:inline-block;width:20px;height:3px;background:var(--accent)}.legend-line.planned{background:var(--info);border-top:3px dashed var(--info);height:0}
+.field-home-footer-space{height:58px}
+@media(max-width:1050px){.field-home-grid-enhanced{grid-template-columns:1fr}.field-trajectory-panel,.field-submissions-panel{min-height:auto}.field-trajectory-chart{height:235px}}

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF } from './data';
 
 type Role = 'company'|'field';
-type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'my-work'|'submissions'|'notifications'|'profile';
+type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'notifications'|'profile';
 type Modal = 'help'|'notifications'|'activity'|'confirm'|'profile'|'member'|'invite'|null;
 type ThemeMode = 'light'|'dark'|'system';
 
@@ -19,7 +19,6 @@ const companyNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
 ];
 const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
   {id:'field-home',num:'01',label:'Field Home',glyph:'⌂'},
-  {id:'my-work',num:'02',label:'My Work',glyph:'✓'},
   {id:'capture',num:'03',label:'Capture',glyph:'↗'},
   {id:'submissions',num:'04',label:'Submissions',glyph:'↥'},
   {id:'notifications',num:'05',label:'Notifications',glyph:'!'},
@@ -38,7 +37,6 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  team:{eyebrow:'TEAM / ACCESS CONTROL',title:'Project team',subtitle:'Manage company planners, reviewers, supervisors, and field access.'},
  settings:{eyebrow:'SYSTEM / TRUST CONTROLS',title:'Workspace settings',subtitle:'Define confidence thresholds, project defaults, access, and evidence handling.'},
  'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'See assigned work, recent submissions, and the next action without the planning complexity.'},
- 'my-work':{eyebrow:'FIELD / ASSIGNED WORK',title:'My work',subtitle:'View the activities assigned to you and report progress against the approved baseline.'},
  submissions:{eyebrow:'FIELD / SUBMISSIONS',title:'My submissions',subtitle:'Track what you have reported and whether Synchronex accepted or needs more information.'},
  notifications:{eyebrow:'FIELD / NOTIFICATIONS',title:'Notifications',subtitle:'See assignment changes, submission decisions, and messages that need your attention.'},
  profile:{eyebrow:'FIELD / ACCOUNT',title:'My profile',subtitle:'Review your field role, project access, and account details.'},
@@ -276,7 +274,7 @@ export default function App(){
   const openResult=(r:SearchResult)=>{
     setSearchOpen(false);setQuery('');
     if(role==='field'){
-      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('my-work');return;}
+      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('field-home');return;}
       setScreen('submissions');return;
     }
     if(r.action.reviewId){
@@ -444,7 +442,6 @@ export default function App(){
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
-      {role==='field' && screen==='my-work'&&<MyWork onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
       {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
@@ -919,20 +916,37 @@ function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'id
   </div>
 }
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
-  const assigned=ACTIVITIES.filter(a=>a.status!=='Completed').slice(0,3);
-  return <div className="field-page">
+  const trend=PROGRESS_TREND;
+  const width=760, height=250, left=42, right=18, top=20, bottom=42;
+  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
+  const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
+  return <div className="field-page field-home-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid"><div className="field-summary"><span className="eyebrow">TODAY'S WORK</span><strong>{assigned.length}</strong><small>Assigned activities in this demo</small></div><div className="field-summary"><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><div className="field-summary"><span className="eyebrow">BASELINE</span><strong>APPROVED</strong><small>Company schedule</small></div></div>
-      <div className="field-home-grid">
-        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">MY WORK</span><h3>Today's assigned activities</h3></div><button className="text-action" onClick={()=>onGo('my-work')}>View all →</button></div>{assigned.map(a=><button className="field-work-card" key={a.id} onClick={()=>onGo('my-work')}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.wbs}</small></div><div><span>Progress</span><b>{a.progress}%</b></div><i>→</i></button>)}</div>
-        <div className="field-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+      <div className="field-summary-grid">
+        <div className="field-summary field-summary-work"><div><span className="eyebrow">TODAY'S WORK</span><strong>3</strong><small>Activities currently assigned</small></div><span className="summary-status">ACTIVE</span></div>
+        <div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><span className="summary-status amber">IN REVIEW</span></div>
+        <div className="field-summary field-summary-baseline"><div><span className="eyebrow">BASELINE</span><strong>APPROVED</strong><small>Current company schedule</small></div><span className="summary-status">SYNCED</span></div>
       </div>
+      <div className="field-home-grid field-home-grid-enhanced">
+        <div className="field-panel field-trajectory-panel">
+          <div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">52% actual</span></div>
+          <div className="field-chart-wrap">
+            <svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">
+              {[0,15,30,45,60].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}
+              <polyline points={plannedPoints} className="trajectory-line planned"/>
+              <polyline points={actualPoints} className="trajectory-line actual"/>
+              {trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}
+            </svg>
+            <div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span><b>−5 pts current gap</b></div>
+          </div>
+        </div>
+        <div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3><p className="panel-subtitle">Latest field reports and their current review state.</p></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+      </div>
+      <div className="field-home-footer-space" aria-hidden="true"/>
     </PageSection>
   </div>
-}
-
-function MyWork({onCapture}:{onCapture:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ASSIGNED WORK" title="My work" action={<button className="primary-btn" onClick={onCapture}>Report progress →</button>}><div className="field-work-list">{ACTIVITIES.slice(0,10).map(a=><button className="field-work-card" key={a.id} onClick={onCapture}><div><code>{a.id}</code><strong>{a.desc}</strong><small>{a.discipline} · {a.planStart} → {a.planFinish}</small></div><div className="field-progress"><span>Current</span><b>{a.progress}%</b><div className="bar-track"><i style={{width:`${a.progress}%`}}/></div></div><i>→</i></button>)}</div></PageSection></div>
 }
 
 function Submissions({onCapture}:{onCapture:()=>void}){
