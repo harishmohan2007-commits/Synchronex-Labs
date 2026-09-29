@@ -126,6 +126,8 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
     name_map = {a['id']: a['name'] for a in acts}
     code_map = {a['id']: a['activity_code'] for a in acts}
     events_out = []
+    auto_approved_count = 0
+    review_count = 0
     for e in _extract_events(source_text):
         choice = process.extractOne(e['evidence'], name_map, scorer=fuzz.token_set_ratio)
         score = float(choice[1]) / 100 if choice else 0.0
@@ -144,19 +146,60 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
         events_out.append(inserted)
 
         reason = f"RapidFuzz activity-name match to {code_map.get(aid)}" if aid else 'No matching schedule activity above threshold.'
+        # Exact/high-confidence matches do not need planner intervention. A 100%
+        # activity-name match is trusted automatically, while all lower-confidence
+        # matches remain in the human review queue.
+        auto_approved = bool(aid and score >= 0.999999)
         match = sb.table('activity_matches').insert({
             'execution_event_id': inserted['id'], 'activity_id': aid,
             'confidence_score': score, 'match_method': 'rapidfuzz_token_set' if aid else 'none',
-            'match_reason': reason, 'status': 'pending',
+            'match_reason': reason, 'status': 'approved' if auto_approved else 'pending',
+            'reviewed_at': datetime.now(timezone.utc).isoformat() if auto_approved else None,
         }).execute().data[0]
-        sb.table('review_queue').insert({
-            'execution_event_id': inserted['id'], 'suggested_activity_id': aid,
-            'confidence_score': score, 'reason': reason, 'status': 'pending',
-        }).execute()
-        sb.table('audit_logs').insert({
-            'project_id': project_id, 'action': 'capture_event', 'entity_type': 'execution_event',
-            'entity_id': inserted['id'], 'old_value': None,
-            'new_value': {'match_id': match['id'], 'activity_id': aid, 'confidence': score, 'update_name': update_name},
-            'source': 'field_capture',
-        }).execute()
-    return {'status': 'captured', 'events': events_out, 'files': file_names}
+
+        if auto_approved:
+            auto_approved_count += 1
+            activity = sb.table('activities').select('*').eq('id', aid).single().execute().data
+            update = {}
+            event_date = inserted.get('event_date')
+            progress = float(inserted.get('quantity')) if inserted.get('unit') == '%' and inserted.get('quantity') is not None else None
+            if progress is not None:
+                update['actual_progress'] = progress
+                update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
+                if progress > 0 and not activity.get('actual_start') and event_date:
+                    update['actual_start'] = event_date
+            if inserted.get('extracted_action') == 'start' and event_date:
+                update['actual_start'] = activity.get('actual_start') or event_date
+            if inserted.get('extracted_action') == 'finish' or progress == 100:
+                update['actual_finish'] = activity.get('actual_finish') or event_date
+                update['actual_progress'] = 100.0
+                update['status'] = 'completed'
+            if update:
+                sb.table('activities').update(update).eq('id', aid).execute()
+                if progress is not None or inserted.get('extracted_action') in {'start', 'finish'}:
+                    sb.table('progress_updates').insert({
+                        'activity_id': aid, 'execution_event_id': inserted['id'],
+                        'previous_progress': activity.get('actual_progress') or 0,
+                        'new_progress': update.get('actual_progress', activity.get('actual_progress') or 0),
+                        'quantity_completed': progress, 'quantity_unit': '%' if progress is not None else None,
+                        'update_source': 'auto_approved_match',
+                    }).execute()
+            sb.table('audit_logs').insert({
+                'project_id': project_id, 'action': 'capture_auto_approved', 'entity_type': 'activity',
+                'entity_id': aid, 'old_value': {'actual_progress': activity.get('actual_progress')},
+                'new_value': {'update': update, 'match_id': match['id'], 'confidence': score, 'execution_event_id': inserted['id']},
+                'source': 'field_capture_auto_approval',
+            }).execute()
+        else:
+            review_count += 1
+            sb.table('review_queue').insert({
+                'execution_event_id': inserted['id'], 'suggested_activity_id': aid,
+                'confidence_score': score, 'reason': reason, 'status': 'pending',
+            }).execute()
+            sb.table('audit_logs').insert({
+                'project_id': project_id, 'action': 'capture_event', 'entity_type': 'execution_event',
+                'entity_id': inserted['id'], 'old_value': None,
+                'new_value': {'match_id': match['id'], 'activity_id': aid, 'confidence': score, 'update_name': update_name},
+                'source': 'field_capture',
+            }).execute()
+    return {'status': 'captured', 'events': events_out, 'files': file_names, 'auto_approved': auto_approved_count, 'review_required': review_count}
