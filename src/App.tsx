@@ -52,7 +52,7 @@ function statusAccent(status:string):string{
 export default function App(){
   const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings,loading:dataLoading,error:dataError}=useRuntimeData();
   useEffect(()=>{refreshRuntimeData().catch(()=>{});},[]);
-  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
+  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);setResolvedReviewIds([]);setReviewIndex(0);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
   useEffect(()=>{if(!backendSettings)return;setThreshold(Math.round((backendSettings.confidence_threshold??0.9)*100));setDateFormat(backendSettings.date_format||'DD MMM YYYY');setTimezone(backendSettings.timezone||'Asia/Kolkata');setRetention(backendSettings.retention||'project');setAutoSave(backendSettings.auto_save??true);setEmailNotifications(backendSettings.email_notifications??true);setInAppNotifications(backendSettings.in_app_notifications??true);},[backendSettings]);
   const [authenticated,setAuthenticated]=useState(false);
   const [role,setRole]=useState<Role>('company');
@@ -101,7 +101,7 @@ export default function App(){
   const [detailId,setDetailId]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
+  const openReviewQueue=REVIEW_QUEUE;
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
 
@@ -144,7 +144,7 @@ export default function App(){
       if(recordedAudioUrl){ try{ const audioResponse=await fetch(recordedAudioUrl); const audioBlob=await audioResponse.blob(); body.append('files',audioBlob,'field-progress-voice.webm'); }catch{ /* voice preview remains local if the blob cannot be attached */ } }
       const response=await fetch(`${apiBase}/api/capture`,{method:'POST',body}); const payload=await response.json().catch(()=>({detail:'Capture failed.'}));
       if(!response.ok) throw new Error(payload?.detail||'Capture failed.');
-      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify('Progress update submitted and sent through matching/review.');
+      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify(payload?.auto_approved ? `Progress update submitted. ${payload.auto_approved} exact match${payload.auto_approved===1?'':'es'} auto-approved and actual progress updated.` : payload?.review_required ? `Progress update submitted. ${payload.review_required} item${payload.review_required===1?'':'s'} sent to planner review.` : 'Progress update submitted.');
     }catch(error){setCaptureBusy(false);notify(error instanceof Error?error.message:'Capture failed.');}
   };
   const handleCaptureFiles=(files:FileList|null)=>{
@@ -282,7 +282,7 @@ export default function App(){
       </div>
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
-      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
+      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} onExport={exportSchedule} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
@@ -376,8 +376,11 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function Schedule({rows,onExport}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
-  const dated=rows.filter(a=>a.planStart && a.planFinish && a.planStart!=='—' && a.planFinish!=='—');
+function Schedule({rows,onExport}:{rows:any[];onExport:()=>void}){
+  const [discipline,setDiscipline]=useState('All');
+  const disciplines=Array.from(new Set(rows.map(a=>String(a.discipline||'Other')).filter(Boolean))).sort();
+  const visibleRows=discipline==='All'?rows:rows.filter(a=>String(a.discipline||'Other')===discipline);
+  const dated=visibleRows.filter(a=>a.planStart && a.planFinish && a.planStart!=='—' && a.planFinish!=='—');
   const minDate=dated.length?new Date(Math.min(...dated.map(a=>new Date(a.planStart).getTime()))):new Date();
   const maxDate=dated.length?new Date(Math.max(...dated.map(a=>new Date(a.planFinish).getTime()))):new Date();
   minDate.setHours(0,0,0,0); maxDate.setHours(0,0,0,0);
@@ -388,21 +391,20 @@ function Schedule({rows,onExport}:{rows:any[];selectedId:string;onSelect:(id:str
   const widthPct=(start:string,finish:string)=>Math.max(1.2,pct(finish)-pct(start));
   const labelDate=(offset:number)=>{const d=new Date(minDate);d.setDate(d.getDate()+offset);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});};
   return <div className="schedule-page">
-    <PageSection title="Project schedule" action={<button className="primary-btn" onClick={onExport}>Export schedule ↓</button>}>
+    <PageSection title="Project schedule" action={<div className="schedule-gantt-actions"><label className="discipline-select-label" htmlFor="schedule-discipline">DISCIPLINE</label><select id="schedule-discipline" className="discipline-select" value={discipline} onChange={e=>setDiscipline(e.target.value)}><option value="All">All disciplines</option>{disciplines.map(d=><option key={d} value={d}>{d}</option>)}</select><button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
       <div className="gantt-shell">
-        <div className="gantt-toolbar"><div><span className="eyebrow">GANTT SCHEDULE</span><h3>Full project timeline</h3><p>Planned dates and verified actual progress across the imported schedule.</p></div><span className="schedule-detail-count">{rows.length} schedule rows</span></div>
-        <div className="gantt-header"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ticks.map(t=><span key={t} style={{left:`${(t/span)*100}%`}}>{labelDate(t)}</span>)}</div><div className="gantt-progress-header">PROGRESS</div></div>
+        <div className="gantt-toolbar"><div><span className="eyebrow">GANTT SCHEDULE</span><h3>Full project timeline</h3><p>Planned dates across the imported schedule. Use All disciplines to view the complete baseline or filter by discipline.</p></div><span className="schedule-detail-count">{visibleRows.length} schedule rows</span></div>
+        <div className="gantt-header gantt-header-planned"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ticks.map(t=><span key={t} style={{left:`${(t/span)*100}%`}}>{labelDate(t)}</span>)}</div></div>
         <div className="gantt-body">
-          {rows.map((a,i)=>{
+          {visibleRows.map((a,i)=>{
             const summary=!!a.isSummary;
             const hasDates=a.planStart!=='—'&&a.planFinish!=='—';
-            return <div className={`gantt-row ${summary?'gantt-summary':''}`} key={a.dbId||a.id||i}>
+            return <div className={`gantt-row gantt-row-planned ${summary?'gantt-summary':''}`} key={a.dbId||a.id||i}>
               <div className="gantt-task-cell"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.planStart} → {a.planFinish}</small></div>
-              <div className="gantt-track">{ticks.map(t=><i key={t} style={{left:`${(t/span)*100}%`}}/>)}{hasDates&&<div className="gantt-bar" style={{left:`${pct(a.planStart)}%`,width:`${widthPct(a.planStart,a.planFinish)}%`}}><span style={{width:`${Math.max(0,Math.min(100,Number(a.progress)||0))}%`}}/></div>}</div>
-              <div className="gantt-progress-cell"><b>{Number(a.progress||0).toFixed(0)}%</b><small>{Number(a.progress||0)>0?'Actual':'Planned'}</small></div>
+              <div className="gantt-track">{ticks.map(t=><i key={t} style={{left:`${(t/span)*100}%`}}/>)}{hasDates&&<div className="gantt-bar" style={{left:`${pct(a.planStart)}%`,width:`${widthPct(a.planStart,a.planFinish)}%`}}/>}</div>
             </div>;
           })}
-          {!rows.length&&<div className="empty-state">No schedule has been imported yet.</div>}
+          {!visibleRows.length&&<div className="empty-state">No planned schedule rows are available for this discipline.</div>}
         </div>
       </div>
     </PageSection>
