@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
 from .routes.import_schedule import router as import_router
 from .routes.schedule import router as schedule_router
 from .routes.capture import router as capture_router
@@ -9,21 +8,7 @@ from .routes.settings import router as settings_router
 from .services.supabase_service import get_supabase
 
 app=FastAPI(title='Synchronex Execution Bridge API',version='2.0.0')
-
-# Direct Render access is supported for the deployed frontend. Vercel can also proxy /api.
-_allowed_origins = [x.strip() for x in os.environ.get('ALLOWED_ORIGINS', '').split(',') if x.strip()]
-if not _allowed_origins:
-    _allowed_origins = ['*']
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=False,
-    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allow_headers=['*'],
-    expose_headers=['*'],
-    max_age=600,
-)
+app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_credentials=False,allow_methods=['*'],allow_headers=['*'])
 app.include_router(import_router)
 app.include_router(schedule_router)
 app.include_router(capture_router)
@@ -36,11 +21,13 @@ def root():
 
 @app.get('/health')
 def health():
-    configured=bool(os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'))
+    import os
+    configured = bool(os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'))
     if not configured:
         return {'status':'degraded','supabase_configured':False,'supabase_reachable':False}
     try:
-        get_supabase().table('projects').select('id').limit(1).execute()
+        sb = get_supabase()
+        sb.table('projects').select('id').limit(1).execute()
         return {'status':'ok','supabase_configured':True,'supabase_reachable':True}
     except Exception as exc:
         return {'status':'degraded','supabase_configured':True,'supabase_reachable':False,'error':str(exc)}
