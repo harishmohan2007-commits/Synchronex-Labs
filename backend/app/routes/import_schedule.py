@@ -117,7 +117,7 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
                 'actual_start': None, 'actual_finish': None,
                 'planned_progress': pct, 'actual_progress': 0,
                 'status': 'not_started' if pct <= 0 else ('completed' if pct >= 100 else 'in_progress'),
-                'quantity': None, 'quantity_unit': None,
+                'quantity': None, 'unit': None,
                 'source_uid': t['uid'], 'outline_number': t.get('outline_number'),
                 'outline_level': t.get('outline_level'), 'duration_hours': t.get('duration_hours'),
                 'is_summary': bool(t.get('is_summary')), 'is_milestone': bool(t.get('is_milestone')),
