@@ -6,11 +6,11 @@ from .routes.schedule import router as schedule_router
 from .routes.capture import router as capture_router
 from .routes.review import router as review_router
 from .routes.settings import router as settings_router
+from .services.supabase_service import get_supabase
 
 app=FastAPI(title='Synchronex Execution Bridge API',version='2.0.0')
 
-# Direct Render access is still supported. Vercel production normally uses the
-# same-origin /api proxy, but explicit origins can be supplied for direct calls.
+# Direct Render access is supported for the deployed frontend. Vercel can also proxy /api.
 _allowed_origins = [x.strip() for x in os.environ.get('ALLOWED_ORIGINS', '').split(',') if x.strip()]
 if not _allowed_origins:
     _allowed_origins = ['*']
@@ -37,4 +37,10 @@ def root():
 @app.get('/health')
 def health():
     configured=bool(os.environ.get('SUPABASE_URL') and os.environ.get('SUPABASE_SERVICE_ROLE_KEY'))
-    return {'status':'ok','supabase_configured':configured}
+    if not configured:
+        return {'status':'degraded','supabase_configured':False,'supabase_reachable':False}
+    try:
+        get_supabase().table('projects').select('id').limit(1).execute()
+        return {'status':'ok','supabase_configured':True,'supabase_reachable':True}
+    except Exception as exc:
+        return {'status':'degraded','supabase_configured':True,'supabase_reachable':False,'error':str(exc)}
