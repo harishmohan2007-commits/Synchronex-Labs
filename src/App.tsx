@@ -62,7 +62,7 @@ export default function App(){
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
   const [dirty,setDirty]=useState(false);
-  const [captureText,setCaptureText]=useState('Piping team completed erection of Line 24 spool section A today. Line 25 erection started at 09:30. Foundation Block A concrete work reached approximately 70%.');
+  const [captureText,setCaptureText]=useState('');
   const [captureName,setCaptureName]=useState('');
   const [captureStage,setCaptureStage]=useState(0);
   const [captureBusy,setCaptureBusy]=useState(false);
@@ -257,7 +257,7 @@ export default function App(){
 
     <main className="workspace">
       <div className="page-head">
-        <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
+        <div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
       </div>
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
