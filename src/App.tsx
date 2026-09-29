@@ -52,17 +52,16 @@ function statusAccent(status:string):string{
 export default function App(){
   const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings,loading:dataLoading,error:dataError}=useRuntimeData();
   useEffect(()=>{refreshRuntimeData().catch(()=>{});},[]);
-  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
+  useEffect(()=>{if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[ACTIVITIES.length]);
+  const reviewCount=REVIEW_QUEUE.length;
   useEffect(()=>{if(!backendSettings)return;setThreshold(Math.round((backendSettings.confidence_threshold??0.9)*100));setDateFormat(backendSettings.date_format||'DD MMM YYYY');setTimezone(backendSettings.timezone||'Asia/Kolkata');setRetention(backendSettings.retention||'project');setAutoSave(backendSettings.auto_save??true);setEmailNotifications(backendSettings.email_notifications??true);setInAppNotifications(backendSettings.in_app_notifications??true);},[backendSettings]);
   const [authenticated,setAuthenticated]=useState(false);
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
   const [selectedId,setSelectedId]=useState('PIP-245');
-  const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
   const [reviewDetailOpen,setReviewDetailOpen]=useState(false);
-  const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
   const [dirty,setDirty]=useState(false);
@@ -101,7 +100,7 @@ export default function App(){
   const [detailId,setDetailId]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
+  const openReviewQueue=REVIEW_QUEUE;
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
 
@@ -139,11 +138,11 @@ export default function App(){
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
     const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
     try{
-      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',captureText);
+      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',`REPORT NAME: ${captureName.trim()}\n${captureText}`.trim());
       captureFiles.forEach(f=>body.append('files',f,f.name));
       const response=await fetch(`${apiBase}/api/capture`,{method:'POST',body}); const payload=await response.json().catch(()=>({detail:'Capture failed.'}));
       if(!response.ok) throw new Error(payload?.detail||'Capture failed.');
-      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify('Progress update submitted and sent through matching/review.');
+      setCaptureBusy(false);setCaptureResult(false);setCaptureText('');setCaptureName('');setCaptureFiles([]);if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);setRecordedAudioUrl('');setRecordingSeconds(0);setDirty(false);await refreshRuntimeData(project?.id);notify('Progress update submitted successfully. The field form has been reset.');
     }catch(error){setCaptureBusy(false);notify(error instanceof Error?error.message:'Capture failed.');}
   };
   const handleCaptureFiles=(files:FileList|null)=>{
@@ -236,7 +235,9 @@ export default function App(){
       setDirty(false);
       await refreshRuntimeData(projectId);
       const counts=payload?.counts||{};
-      notify(`${payload?.source||'Schedule'} imported directly into Supabase: ${counts.activities??0} activities, ${counts.dependencies??0} dependencies.`);
+      setImportFiles([]);
+      setImportState('idle');
+      notify(`${payload?.source||'Schedule'} imported successfully. Import form reset: ${counts.activities??0} activities, ${counts.dependencies??0} dependencies loaded.`);
     }catch(error){
       setImportState('error');
       notify(error instanceof Error?error.message:'POD import failed.');
@@ -366,7 +367,7 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
    </section>
    <div className="command-pulse-heading command-pulse-heading-full"><div><span className="eyebrow">BASELINE → ACTUAL</span><h2>Project pulse</h2></div><button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button></div>
    <section className="command-pulse-graph"><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div>
-     {PROGRESS_TREND.length? <div className="chart"><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points={PROGRESS_TREND.map((d,i)=>`${i/(PROGRESS_TREND.length-1)*720},${210-d.planned*1.8}`).join(' ')} fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points={PROGRESS_TREND.map((d,i)=>`${i/(PROGRESS_TREND.length-1)*720},${210-d.actual*1.8}`).join(' ')} fill="none" stroke="#173f35" strokeWidth="4"/></svg></div> : <div className="empty-state">No validated execution history is available yet. Progress trajectory will appear after actual field events are accepted.</div>}
+     {PROGRESS_TREND.length? <div className="chart"><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points={PROGRESS_TREND.map((d,i)=>`${i/Math.max(1,PROGRESS_TREND.length-1)*720},${210-d.planned*1.8}`).join(' ')} fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points={PROGRESS_TREND.map((d,i)=>`${i/Math.max(1,PROGRESS_TREND.length-1)*720},${210-d.actual*1.8}`).join(' ')} fill="none" stroke="#173f35" strokeWidth="4"/></svg></div> : <div className="empty-state">No validated execution history is available yet. Progress trajectory will appear after actual field events are accepted.</div>}
      {PROGRESS_TREND.length>0&&<div className="chart-axis">{PROGRESS_TREND.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>}
      <div className="pulse-kpis"><div><span>ACTUAL</span><b>{actual}%</b></div><div><span>PLANNED</span><b>{planned}%</b></div><div><span>VARIANCE</span><b className={variance<0?'negative':''}>{fmt(variance)}</b></div></div>
    </div></div></section>
@@ -382,18 +383,20 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   const minDate=dates.length?new Date(Math.min(...dates)):new Date();
   const maxDate=dates.length?new Date(Math.max(...dates)):new Date(minDate.getTime()+86400000);
   const span=Math.max(1,maxDate.getTime()-minDate.getTime());
-  const days=Math.max(1,Math.ceil(span/86400000));
-  const marks=Array.from({length:Math.min(8,Math.max(2,Math.ceil(days/7)+1))},(_,i)=>new Date(minDate.getTime()+span*i/(Math.min(8,Math.max(2,Math.ceil(days/7)+1))-1)));
+  const marksCount=8;
+  const marks=Array.from({length:marksCount},(_,i)=>new Date(minDate.getTime()+span*i/(marksCount-1)));
   const pct=(date:string)=>Math.max(0,Math.min(100,(new Date(date).getTime()-minDate.getTime())/span*100));
   const formatDate=(d:Date)=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
   const disciplines=Array.from(new Set(rows.map(a=>a.discipline).filter((d:any)=>d&&d!=='—')));
+  const executable=plannedRows.filter(a=>!a.isSummary);
   return <div className="schedule-page">
-    <PageSection title="Schedule" action={<div className="schedule-head-actions"><label className="gantt-filter-label">Discipline<select value={discipline} onChange={e=>setDiscipline(e.target.value)} aria-label="Filter schedule by discipline"><option value="All">All disciplines</option>{disciplines.map(d=><option key={d} value={d}>{d}</option>)}</select></label><button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
-      <div className="gantt-shell">
-        <div className="gantt-head"><div>Activity</div><div className="gantt-timeline-head">{marks.map((d,i)=><span key={i}>{formatDate(d)}</span>)}</div></div>
-        {plannedRows.length?plannedRows.map(a=>{const left=pct(a.planStart);const right=pct(a.planFinish);return <button key={a.id} className={`gantt-row ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="gantt-activity"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.discipline}</small></div><div className="gantt-track"><div className="gantt-grid">{marks.map((_,i)=><i key={i}/>)}</div><span className="gantt-bar" style={{left:`${left}%`,width:`${Math.max(1.5,right-left)}%`}}/></div></button>}) : <div className="screen-empty-state"><strong>No scheduled activities so far</strong><span>Import a valid project schedule to populate the planned Gantt view.</span></div>}
+    <PageSection label="SCHEDULE / PLANNED VS ACTUAL" title="Schedule" action={<div className="schedule-head-actions"><label className="gantt-filter-label">Discipline<select value={discipline} onChange={e=>setDiscipline(e.target.value)} aria-label="Filter schedule by discipline"><option value="All">All disciplines</option>{disciplines.map(d=><option key={d} value={d}>{d}</option>)}</select></label><button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
+      <div className="schedule-progress-note"><span><b>Planned</b> = baseline trajectory at the latest validated progress date</span><span><b>Actual</b> = verified field progress only</span></div>
+      <div className="gantt-shell gantt-shell-progress">
+        <div className="gantt-head gantt-head-progress"><div>Activity</div><div className="gantt-progress-head"><span>Planned</span><span>Actual</span><span className="gantt-timeline-head">{marks.map((d,i)=><em key={i}>{formatDate(d)}</em>)}</span></div></div>
+        {plannedRows.length?plannedRows.map(a=>{const left=pct(a.planStart);const right=pct(a.planFinish);return <button key={a.id} className={`gantt-row gantt-row-progress ${a.id===selectedId?'selected':''} ${a.isSummary?'summary-row':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="gantt-activity"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.discipline}</small></div><div className="gantt-progress-cell"><b>{a.plannedProgress==null?'—':`${Math.round(a.plannedProgress)}%`}</b><b className={a.progress>0?'actual-value':''}>{Math.round(a.progress||0)}%</b><div className="gantt-track"><div className="gantt-grid">{marks.map((_,i)=><i key={i}/>)}</div><span className="gantt-bar" style={{left:`${left}%`,width:`${Math.max(1.5,right-left)}%`}}/></div></div></button>}) : <div className="screen-empty-state"><strong>No scheduled activities so far</strong><span>Import a valid project schedule to populate the planned Gantt view.</span></div>}
       </div>
-      <div className="gantt-legend"><span><i/> Planned schedule duration</span><span>{visibleRows.length} activities</span></div>
+      <div className="gantt-legend"><span><i/> Planned schedule duration</span><span>{executable.length} executable activities · {discipline==='All'?'all disciplines':discipline}</span></div>
     </PageSection>
   </div>
 }
@@ -438,7 +441,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
           <button className="outline-btn" type="button" onClick={resetCapture}>Reset update</button>
           <span className="helper"><strong>Required:</strong> progress update name. <strong>Optional:</strong> text, files, or voice — add at least one.</span>
         </div>
-        {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your progress note and selected evidence are ready for the project record and review workflow.</p></div></div>}
+        {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted successfully</strong><p>Your field evidence has been sent through extraction, matching, and validation.</p></div></div>}
       </PageSection>
     </div>
   </div>
@@ -446,24 +449,24 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
   const {ACTIVITIES}=useRuntimeData();
-  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
+  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id.slice(0,8)}</code></td><td><strong>{q.reportName||'Field progress report'}</strong><small>{q.date||'Date not extracted'} · {q.discipline||'Discipline not extracted'}</small></td><td><strong>{q.candidate||'No matching activity'}</strong><small>{q.action||'Observation'} · {q.progress!=null?`${q.progress}% reported`:'Progress not extracted'}</small></td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
-    return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
-      <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</p></div>
-      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
+    return <div className="review-queue-page"><PageSection label="REVIEW / FIELD EVIDENCE" title="Review queue" action={<span className="queue-count">{count} open</span>}>
+      <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>The queue shows the same report details captured by the field portal before a planner decision is applied.</p></div>
+      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field report</th><th>Candidate / progress</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>No open review items</strong><span>100% unique matches are applied automatically; ambiguous or low-confidence events appear here.</span></div></td></tr>}</tbody></table></div>
     </PageSection></div>
   }
-  return <div className="review-detail-page"><PageSection label="" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
+  return <div className="review-detail-page"><PageSection label="REVIEW / FIELD EVIDENCE" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
     <div className="review-detail-grid">
       <main className="review-detail-main">
-        <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
-        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+        <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD REPORT</span><h3 className="review-report-name">{item?.reportName||'Field progress report'}</h3><blockquote>{item?.text}</blockquote><div className="review-evidence-meta"><span><b>Date</b>{item?.date||'—'}</span><span><b>Discipline</b>{item?.discipline||'—'}</span><span><b>Action</b>{item?.action||'Observation'}</span><span><b>Progress</b>{item?.progress!=null?`${item.progress}%`:'—'}</span></div><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
+        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and activity granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
+        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match &amp; apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes the verified actual progress and creates an append-only trace record.</p>
       </main>
-      
     </div>
   </PageSection></div>
 }
+
 function Memory(){
   const {MEMORY_ACTIVITIES}=useRuntimeData();
   const [selectedType,setSelectedType]=useState<string|null>(null);
@@ -671,13 +674,13 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const trend=PROGRESS_TREND;
   const width=760,height=250,left=42,right=18,top=20,bottom=42;
   const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
   const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' '); const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   const accepted=FIELD_EVENTS.filter(e=>e.status==='AI MATCHED').length; const pending=REVIEW_QUEUE.length;
   return <div className="field-page field-home-page"><PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
     <div className="field-summary-grid"><div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES AVAILABLE</span><strong>{FIELD_EVENTS.length}</strong><small>Persisted execution events</small></div><span className="summary-status">{accepted?'MATCHED':'NO DATA'}</span></div><div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>{pending}</strong><small>Events requiring planner review</small></div><span className="summary-status amber">{pending?'IN REVIEW':'CLEAR'}</span></div></div>
     <div className="field-home-grid field-home-grid-enhanced"><div className="field-panel field-trajectory-panel"><div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">{trend.length?`${trend[trend.length-1].actual}% actual`:'No validated actuals'}</span></div><div className="field-chart-wrap">
-      {trend.length?<><svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">{[0,15,30,45,60].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}<polyline points={plannedPoints} className="trajectory-line planned"/><polyline points={actualPoints} className="trajectory-line actual"/>{trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}</svg><div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span></div></>:<div className="empty-state">No validated execution history is available yet. Capture and approve field evidence to build the trajectory.</div>}
+      {trend.length?<><svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">{[0,25,50,75,100].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}<polyline points={plannedPoints} className="trajectory-line planned"/><polyline points={actualPoints} className="trajectory-line actual"/>{trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}</svg><div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span></div></>:<div className="empty-state">No validated execution history is available yet. Capture and approve field evidence to build the trajectory.</div>}
     </div></div><div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Execution submissions</h3><p className="panel-subtitle">Latest persisted field evidence and its current review state.</p></div></div>{FIELD_EVENTS.slice(0,3).map((e:any,i:number)=><div className="submission-mini" key={`${e.time}-${i}`}><span className={`submission-state ${e.status==='AI MATCHED'?'accepted':'review'}`}>{e.status==='AI MATCHED'?'Matched':'Under review'}</span><strong>{e.actDesc}</strong><small>{e.time} · {e.conf}% match confidence</small></div>)}{!FIELD_EVENTS.length&&<div className="empty-state">No field submissions have been persisted yet.</div>}<button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div></div><div className="field-home-footer-space" aria-hidden="true"/></PageSection></div>
 }
 
@@ -695,7 +698,7 @@ function Analytics(){
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
   const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="analytics-page">
@@ -710,7 +713,7 @@ function Analytics(){
         <article className="analytics-panel analytics-trajectory-panel">
           <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{trend.length?`${trend[trend.length-1].actual}% actual`:'No validated actuals'}</span></div>
           {trend.length ? <><div className="analytics-chart">
-            <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
+            <div className="analytics-ylabels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
             <div className="analytics-plot">
               <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
               <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d,i)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg>

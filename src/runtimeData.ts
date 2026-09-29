@@ -1,57 +1,44 @@
 import { useSyncExternalStore } from 'react';
 
-type RuntimeData={
-  project:any|null;
-  ACTIVITIES:any[];
-  DISCIPLINES:any[];
-  FIELD_EVENTS:any[];
-  REVIEW_QUEUE:any[];
-  AUDIT_TRAIL:any[];
-  MEMORY_ACTIVITIES:any[];
-  PROGRESS_TREND:any[];
-  DELAY_CAUSES:any[];
-  DISCIPLINE_PERF:any[];
-  MEMORY_OCCURRENCES:any[];
-  settings:any|null;
-  loading:boolean;
-  error:string;
-};
+type RuntimeData={project:any|null;ACTIVITIES:any[];DISCIPLINES:any[];FIELD_EVENTS:any[];REVIEW_QUEUE:any[];AUDIT_TRAIL:any[];MEMORY_ACTIVITIES:any[];PROGRESS_TREND:any[];DELAY_CAUSES:any[];DISCIPLINE_PERF:any[];MEMORY_OCCURRENCES:any[];settings:any|null;loading:boolean;error:string};
 const empty:RuntimeData={project:null,ACTIVITIES:[],DISCIPLINES:[],FIELD_EVENTS:[],REVIEW_QUEUE:[],AUDIT_TRAIL:[],MEMORY_ACTIVITIES:[],PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],MEMORY_OCCURRENCES:[],settings:null,loading:true,error:''};
-let snapshot=empty;
-const listeners=new Set<()=>void>();
-const emit=()=>listeners.forEach(l=>l());
+let snapshot=empty; const listeners=new Set<()=>void>(); const emit=()=>listeners.forEach(l=>l());
 export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
 const apiBase=()=> (import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
-
-function mapActivities(rows:any[]){return rows.map(a=>({
-  id:a.activity_code, dbId:a.id, wbs:a.outline_number||'—', desc:a.name, discipline:a.discipline||'—',
+const dayMs=86400000;
+function asDate(v:any){if(!v||v==='—')return null;const d=new Date(v);return Number.isFinite(d.getTime())?d:null;}
+function plannedAt(start:any,finish:any,at:any){const s=asDate(start),f=asDate(finish),d=asDate(at);if(!s||!f||!d)return 0;if(d.getTime()<=s.getTime())return 0;if(d.getTime()>=f.getTime())return 100;const span=Math.max(dayMs,f.getTime()-s.getTime());return Math.max(0,Math.min(100,((d.getTime()-s.getTime())/span)*100));}
+function inferDiscipline(name:string){const low=(name||'').toLowerCase();if(/spool|pipe|piping|weld|ndt|pipeline|erection/.test(low))return 'Piping';if(/pump|mechanical|commissioning|equipment|alignment/.test(low))return 'Mechanical';if(/civil|foundation|concrete|excavat|backfill/.test(low))return 'Civil';if(/electrical|cable|termination/.test(low))return 'Electrical';if(/instrument|calibrat|tubing/.test(low))return 'Instrumentation';if(/safety|hse|inspection/.test(low))return 'HSE';return 'Unassigned';}
+function mapActivities(rows:any[],progressDate:any){return rows.map(a=>({
+  id:a.activity_code, dbId:a.id, wbs:a.outline_number||'—', desc:a.name, discipline:a.discipline||inferDiscipline(a.name)||'—',
   planStart:a.planned_start||'—', planFinish:a.planned_finish||'—', actStart:a.actual_start||'—', actFinish:a.actual_finish||'—',
-  progress:a.actual_progress ?? 0, plannedProgress:a.planned_progress ?? null,
-  status:a.status==='completed'?'Completed':a.status==='in_progress'?'In Progress':'Planned',
+  progress:Number(a.actual_progress ?? 0), plannedProgress:a.is_summary?plannedAt(a.planned_start,a.planned_finish,progressDate):plannedAt(a.planned_start,a.planned_finish,progressDate),
+  status:a.status==='completed'?'Completed':a.status==='in_progress'?'In Progress':a.status==='delayed'?'Delayed':'Planned',
   aiConf:0, isSummary:!!a.is_summary, isMilestone:!!a.is_milestone
 }));}
-function buildDisciplines(activities:any[],events:any[]){
-  const names=Array.from(new Set(activities.map(a=>a.discipline).filter((x:any)=>x&&x!=='—')));
-  return names.map(name=>{const rows=activities.filter(a=>a.discipline===name);const planned=rows.length?Math.round(rows.reduce((s,a)=>s+(a.plannedProgress??0),0)/rows.length):0;const actual=rows.length?Math.round(rows.reduce((s,a)=>s+(a.progress??0),0)/rows.length):0;return {name,activities:rows.length,planned,actual,variance:actual-planned,status:actual<planned?'At Risk':'On Track',milestones:rows.filter(a=>a.isMilestone).length,nextMilestone:'—',varianceNote:events.length?'Derived from persisted execution evidence.':'No execution evidence available.'};});
-}
-export async function refreshRuntimeData(projectId?:string){
-  snapshot={...snapshot,loading:true,error:''}; emit();
-  try{
-    const p=await fetch(`${apiBase()}/api/projects/current${projectId?`?project_id=${encodeURIComponent(projectId)}`:''}`);
-    const project=await p.json(); if(!p.ok) throw new Error(project?.detail||'Unable to load the current project.');
-    const b=await fetch(`${apiBase()}/api/projects/${project.id}/bootstrap`); const payload=await b.json(); if(!b.ok) throw new Error(payload?.detail||'Unable to load project data.');
-    const activities=mapActivities(payload.activities||[]); const events=payload.events||[]; const reviews=payload.reviews||[]; const trace=payload.trace||[];
-    const activityByDb=new Map((payload.activities||[]).map((a:any)=>[a.id,a]));
-    const byEvent=new Map(events.map((e:any)=>[e.id,e]));
-    const matches=payload.matches||[];
-    const matchByEvent=new Map<string,any>();
-    matches.forEach((m:any)=>{const current=matchByEvent.get(m.execution_event_id); if(!current || Number(m.confidence_score||0)>Number(current.confidence_score||0)) matchByEvent.set(m.execution_event_id,m);});
-    const fieldEvents=events.map((e:any)=>{const match=matchByEvent.get(e.id); const aid=match?.activity_id?activityByDb.get(match.activity_id):null; return {time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),status:match?.status==='approved'?'AI MATCHED':'REVIEW REQUIRED',text:`"${e.raw_text||''}"`,actId:aid?.activity_code||'—',actDesc:aid?.name||'No matching activity',conf:Math.round(Number(match?.confidence_score||e.extraction_confidence||0)*100)};});
-    const reviewQueue=reviews.filter((r:any)=>r.status==='pending').map((r:any)=>{const e=byEvent.get(r.execution_event_id);const a=r.suggested_activity_id?activityByDb.get(r.suggested_activity_id):null;return {id:r.id,text:`"${e?.raw_text||'Execution event'}"`,candidate:a?.activity_code||'—',conf:Math.round(Number(r.confidence_score||0)*100),issue:r.reason||'Review required',status:r.suggested_activity_id?'Review':'Unmatched'};});
-    const audit=trace.map((t:any)=>{const entityId=t.entity_id; const a=entityId?activityByDb.get(entityId):null; return {ts:new Date(t.created_at).toLocaleString(),actor:t.source==='human_review'?'Planner':t.source==='field_capture'?'AI':'System',action:t.action,activity:a?.activity_code||'—',source:t.source||'—',prev:t.old_value?JSON.stringify(t.old_value):'—',next:t.new_value?JSON.stringify(t.new_value):'—',conf:Math.round(Number(t.new_value?.confidence||0)*100)};});
-    const memoryOccurrences=activities.filter(a=>a.actStart!=='—'&&a.actFinish!=='—').map(a=>({id:a.id,date:a.actFinish,duration:a.actStart&&a.actFinish?`${Math.max(0,Math.round((new Date(a.actFinish).getTime()-new Date(a.actStart).getTime())/86400000))} days`:'—',discipline:a.discipline,evidence:`Validated actual dates for ${a.desc}.`,status:'Validated'}));
-    const memory=memoryOccurrences.length?Array.from(new Map(memoryOccurrences.map(o=>[o.discipline||'Unassigned',o])).entries()).map(([type,o])=>({type,baselineAvg:'—',actualAvg:o.duration,variance:'—',occurrences:memoryOccurrences.filter(x=>x.discipline===type).length})):[];
-    snapshot={project,settings:payload.settings||null,ACTIVITIES:activities,DISCIPLINES:buildDisciplines(activities,events),FIELD_EVENTS:fieldEvents,REVIEW_QUEUE:reviewQueue,AUDIT_TRAIL:audit,MEMORY_ACTIVITIES:memory,MEMORY_OCCURRENCES:memoryOccurrences,PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],loading:false,error:''}; emit();
-    return project.id;
-  }catch(err){snapshot={...snapshot,loading:false,error:err instanceof Error?err.message:'Unable to load backend data.'};emit();throw err;}
-}
+function weightedProgress(rows:any[],field:string){let total=0,weight=0;rows.filter(a=>!a.isSummary).forEach(a=>{const s=asDate(a.planStart),f=asDate(a.planFinish);const w=s&&f?Math.max(1,(f.getTime()-s.getTime())/dayMs):1;total+=Number(a[field]||0)*w;weight+=w;});return weight?Math.round(total/weight*10)/10:0;}
+function buildDisciplines(activities:any[]){const names=Array.from(new Set(activities.filter(a=>!a.isSummary).map(a=>a.discipline).filter((x:any)=>x&&x!=='—')));return names.map(name=>{const rows=activities.filter(a=>!a.isSummary&&a.discipline===name);const planned=weightedProgress(rows,'plannedProgress');const actual=weightedProgress(rows,'progress');return {name,activities:rows.length,planned,actual,variance:Math.round((actual-planned)*10)/10,status:actual<planned?'At Risk':'On Track',milestones:rows.filter(a=>a.isMilestone).length,nextMilestone:'—',varianceNote:'Planned progress is date-based; actual progress is sourced from validated field evidence.'};});}
+function progressFromText(text:string){const m=text.match(/(?:current\s+(?:physical\s+)?progress|physical\s+progress|progress)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%/i);return m?Number(m[1]):null;}
+function reportName(text:string){const m=text.match(/^REPORT NAME:\s*(.+)$/im);if(m)return m[1].trim();const first=text.split(/\r?\n/).map(x=>x.trim()).find(Boolean);return first&&first.length<100?first:'Field progress report';}
+export async function refreshRuntimeData(projectId?:string){snapshot={...snapshot,loading:true,error:''};emit();try{
+ const p=await fetch(`${apiBase()}/api/projects/current${projectId?`?project_id=${encodeURIComponent(projectId)}`:''}`);const project=await p.json();if(!p.ok)throw new Error(project?.detail||'Unable to load the current project.');
+ const b=await fetch(`${apiBase()}/api/projects/${project.id}/bootstrap`);const payload=await b.json();if(!b.ok)throw new Error(payload?.detail||'Unable to load project data.');
+ const rawActivities=payload.activities||[]; const events=payload.events||[]; const reviews=payload.reviews||[]; const trace=payload.trace||[]; const progressUpdates=payload.progress_updates||[];
+ const approvedEvents=events.filter((e:any)=>{const m=(payload.matches||[]).find((x:any)=>x.execution_event_id===e.id&&x.status==='approved');return !!m;});
+ const progressDates=events.map((e:any)=>asDate(e.event_date)||asDate(e.created_at)).filter(Boolean) as Date[];
+ const progressDate=progressDates.length?new Date(Math.max(...progressDates.map(d=>d.getTime()))):new Date();
+ const activities=mapActivities(rawActivities,progressDate); const activityByDb=new Map(rawActivities.map((a:any)=>[a.id,a])); const byEvent=new Map(events.map((e:any)=>[e.id,e]));
+ const matches=payload.matches||[]; const matchByEvent=new Map<string,any>(); matches.forEach((m:any)=>{const current=matchByEvent.get(m.execution_event_id);if(!current||Number(m.confidence_score||0)>Number(current.confidence_score||0))matchByEvent.set(m.execution_event_id,m);});
+ const fieldEvents=events.map((e:any)=>{const match=matchByEvent.get(e.id);const aid=match?.activity_id?activityByDb.get(match.activity_id):null;const progress=progressFromText(e.raw_text||'');return {time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),date:e.event_date||'—',status:match?.status==='approved'?'AI MATCHED':'REVIEW REQUIRED',text:`${e.raw_text||''}`,reportName:reportName(e.raw_text||''),discipline:e.discipline||aid?.discipline||inferDiscipline(e.raw_text||''),action:e.extracted_action||'observation',progress,actId:aid?.activity_code||'—',actDesc:aid?.name||'No matching activity',conf:Math.round(Number(match?.confidence_score??e.extraction_confidence??0)*100)};});
+ const reviewQueue=reviews.filter((r:any)=>r.status==='pending').map((r:any)=>{const e=byEvent.get(r.execution_event_id);const a=r.suggested_activity_id?activityByDb.get(r.suggested_activity_id):null;const text=e?.raw_text||'';return {id:r.id,text,reportName:reportName(text),date:e?.event_date||'—',discipline:e?.discipline||a?.discipline||inferDiscipline(text),action:e?.extracted_action||'observation',progress:progressFromText(text),candidate:a?.activity_code||'—',conf:Math.round(Number(r.confidence_score||0)*100),issue:r.reason||'Review required',status:r.suggested_activity_id?'Review':'Unmatched'};});
+ const audit=trace.map((t:any)=>{const entityId=t.entity_id;const a=entityId?activityByDb.get(entityId):null;return {ts:new Date(t.created_at).toLocaleString(),actor:t.source==='human_review'?'Planner':t.source==='field_capture'||t.source==='auto_threshold'?'AI':'System',action:t.action,activity:a?.activity_code||'—',source:t.source||'—',prev:t.old_value?JSON.stringify(t.old_value):'—',next:t.new_value?JSON.stringify(t.new_value):'—',conf:Math.round(Number(t.new_value?.confidence||0)*100)};});
+ const memoryOccurrences=activities.filter(a=>a.actStart!=='—'&&a.actFinish!=='—').map(a=>({id:a.id,date:a.actFinish,duration:a.actStart&&a.actFinish?`${Math.max(0,Math.round((new Date(a.actFinish).getTime()-new Date(a.actStart).getTime())/dayMs))} days`:'—',discipline:a.discipline,evidence:`Validated actual dates for ${a.desc}.`,status:'Validated'}));
+ const memory=memoryOccurrences.length?Array.from(new Map(memoryOccurrences.map(o=>[o.discipline||'Unassigned',o])).entries()).map(([type,o])=>({type,baselineAvg:'—',actualAvg:o.duration,variance:'—',occurrences:memoryOccurrences.filter(x=>x.discipline===type).length})):[];
+ // Reconstruct real project progress history from persisted progress_updates; no synthetic baseline points are created.
+ const trend:any[]=[]; const state=new Map<string,number>(); const sortedUpdates=[...progressUpdates].sort((a:any,b:any)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime());
+ const baseRows=activities.filter(a=>!a.isSummary); const plannedFor=(date:any)=>weightedProgress(baseRows.map(a=>({...a,plannedProgress:plannedAt(a.planStart,a.planFinish,date)})),'plannedProgress');
+ for(const u of sortedUpdates){state.set(u.activity_id,Math.max(state.get(u.activity_id)||0,Number(u.new_progress||0)));const d=asDate(u.created_at)||progressDate;const actualRows=baseRows.map(a=>({...a,progress:state.get(a.dbId)||0}));trend.push({date:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),planned:plannedFor(d),actual:weightedProgress(actualRows,'progress')});}
+ if(!trend.length && baseRows.some(a=>a.progress>0)){trend.push({date:progressDate.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),planned:weightedProgress(baseRows,'plannedProgress'),actual:weightedProgress(baseRows,'progress')});}
+ const disciplinePerf=buildDisciplines(activities);
+ snapshot={project,settings:payload.settings||null,ACTIVITIES:activities,DISCIPLINES:buildDisciplines(activities),FIELD_EVENTS:fieldEvents,REVIEW_QUEUE:reviewQueue,AUDIT_TRAIL:audit,MEMORY_ACTIVITIES:memory,MEMORY_OCCURRENCES:memoryOccurrences,PROGRESS_TREND:trend,DELAY_CAUSES:[],DISCIPLINE_PERF:disciplinePerf,loading:false,error:''};emit();return project.id;
+ }catch(err){snapshot={...snapshot,loading:false,error:err instanceof Error?err.message:'Unable to load backend data.'};emit();throw err;}}
