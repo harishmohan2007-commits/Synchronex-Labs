@@ -33,24 +33,46 @@ def bootstrap(project_id: str):
     project = sb.table('projects').select('*').eq('id', project_id).single().execute().data
     if not project:
         raise HTTPException(404, 'Project not found.')
+
     def q(table):
         return sb.table(table).select('*').eq('project_id', project_id).execute().data or []
+
     activities_rows = q('activities')
     events = q('execution_events')
     matches = [m for m in sb.table('activity_matches').select('*').in_('execution_event_id', [e['id'] for e in events]).execute().data or []] if events else []
     reviews = [r for r in sb.table('review_queue').select('*').in_('execution_event_id', [e['id'] for e in events]).execute().data or []] if events else []
     trace = q('audit_logs')
+
+    # progress_updates is intentionally activity-scoped and has no project_id column.
+    # Resolve it through the activities belonging to this project.
+    activity_ids = [a['id'] for a in activities_rows if a.get('id')]
+    progress_updates = (
+        sb.table('progress_updates').select('*').in_('activity_id', activity_ids).execute().data or []
+        if activity_ids else []
+    )
+
     settings_rows = q('workspace_settings')
-    validated_actuals = [a for a in activities_rows if a.get('actual_start') or a.get('actual_finish') or (a.get('actual_progress') or 0) > 0]
+    validated_actuals = [
+        a for a in activities_rows
+        if a.get('actual_start') or a.get('actual_finish') or (a.get('actual_progress') or 0) > 0
+    ]
+
     return {
-        'project': project, 'activities': activities_rows, 'events': events, 'matches': matches,
-        'reviews': reviews, 'trace': trace,
-        'calendars': q('schedule_calendars'), 'resources': q('schedule_resources'),
-        'dependencies': q('schedule_dependencies'), 'assignments': q('schedule_assignments'),
+        'project': project,
+        'activities': activities_rows,
+        'events': events,
+        'matches': matches,
+        'reviews': reviews,
+        'trace': trace,
+        'calendars': q('schedule_calendars'),
+        'resources': q('schedule_resources'),
+        'dependencies': q('schedule_dependencies'),
+        'assignments': q('schedule_assignments'),
         'wbs': q('wbs_nodes'),
-        'progress_updates': q('progress_updates'),
+        'progress_updates': progress_updates,
         'analytics': {
-            'activity_count': len(activities_rows), 'execution_event_count': len(events),
+            'activity_count': len(activities_rows),
+            'execution_event_count': len(events),
             'review_count': len([r for r in reviews if r.get('status') == 'pending']),
             'validated_actual_count': len(validated_actuals),
         },
