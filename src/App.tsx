@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF } from './data';
 
 type Role = 'company'|'field';
-type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'notifications'|'profile';
-type Modal = 'help'|'notifications'|'activity'|'confirm'|'profile'|'member'|'invite'|null;
+type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'profile';
+type Modal = 'help'|'activity'|'confirm'|'profile'|'member'|'invite'|null;
 type ThemeMode = 'light'|'dark'|'system';
 
 const companyNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
@@ -21,9 +21,8 @@ const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
   {id:'field-home',num:'01',label:'Field Home',glyph:'⌂'},
   {id:'capture',num:'03',label:'Capture',glyph:'↗'},
   {id:'submissions',num:'04',label:'Submissions',glyph:'↥'},
-  {id:'notifications',num:'05',label:'Notifications',glyph:'!'},
-  {id:'profile',num:'06',label:'Profile',glyph:'●'},
-  {id:'settings',num:'07',label:'Settings',glyph:'⚙'},
+  {id:'profile',num:'05',label:'Profile',glyph:'●'},
+  {id:'settings',num:'06',label:'Settings',glyph:'⚙'},
 ];
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
@@ -39,8 +38,7 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  settings:{eyebrow:'SYSTEM / TRUST CONTROLS',title:'Workspace settings',subtitle:'Define confidence thresholds, project defaults, access, and evidence handling.'},
  'field-home':{eyebrow:'FIELD / TODAY',title:'Field home',subtitle:'See assigned work, recent submissions, and the next action without the planning complexity.'},
  submissions:{eyebrow:'FIELD / SUBMISSIONS',title:'My submissions',subtitle:'Track what you have reported and whether Synchronex accepted or needs more information.'},
- notifications:{eyebrow:'FIELD / NOTIFICATIONS',title:'Notifications',subtitle:'See assignment changes, submission decisions, and messages that need your attention.'},
- profile:{eyebrow:'FIELD / ACCOUNT',title:'My profile',subtitle:'Review your field role, project access, and account details.'},
+  profile:{eyebrow:'FIELD / ACCOUNT',title:'My profile',subtitle:'Review your field role, project access, and account details.'},
 };
 
 const stages = ['Input received','Discipline identified','Events extracted','Activities searched','Confidence calculated','Ready for review'];
@@ -304,8 +302,8 @@ export default function App(){
 
   const runCapture=()=>{
     if(captureBusy)return;
-    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add text, at least one evidence file, or a voice update before submitting.');return;}
-    if(!captureName.trim()){notify('Give this progress update a name before submitting.');return;}
+    if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
+    if(!captureFiles.length){notify('Upload at least one file before submitting.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
     window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the selected evidence.');},1200);
   };
@@ -471,9 +469,8 @@ export default function App(){
       {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
-      {role==='field' && screen==='notifications'&&<FieldNotifications />}
-      {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
-      {role==='field' && screen==='settings'&&<FieldSettings themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave}/>}
+      {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
+      {role==='field' && screen==='settings'&&<FieldSettings themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} autoSave={autoSave} setAutoSave={setAutoSave}/>}
     </main>
 
     {modal==='profile'&&<Modal title="Profile" onClose={()=>setModal(null)}><div className="profile-modal profile-modal-enhanced"><div className="profile-hero"><div className="profile-avatar profile-avatar-enhanced">{role==='company'?'PC':'FS'}</div><div><span className="eyebrow">{role==='company'?'COMPANY WORKSPACE':'FIELD WORKSPACE'}</span><h3>{role==='company'?'Project Controls Engineer':'Field Supervisor'}</h3><p>Synchronex Labs workspace</p></div></div><div className="profile-summary"><div><span>ACCESS</span><strong>{role==='company'?'Planning & control':'Execution & reporting'}</strong></div><div><span>SESSION</span><strong>Authenticated</strong></div></div><div className="profile-modal-actions"><button className="danger-btn profile-signout" onClick={()=>{setAuthenticated(false);setModal(null)}}><span>↪</span> Sign out</button></div></div></Modal>}
@@ -646,14 +643,16 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
 }
 
 function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;name:string;setName:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
+  const textareaRef=useRef<HTMLTextAreaElement|null>(null);
+  useEffect(()=>{const el=textareaRef.current;if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,360)+'px';},[text]);
   return <div className="capture-layout capture-layout-full">
     <div className="capture-main">
       <PageSection label="FIELD PROGRESS / 01" title="Submit work progress">
         <p className="lead">Share what was completed on site using text, files, images, or a voice update. Use any one of these inputs or combine them.</p>
-        <textarea value={text} onChange={e=>setText(e.target.value)} aria-label="Optional field progress note" placeholder="Optional: add a short progress note, site update, or supervisor comment…"/>
+        <div className="capture-text-meta"><span className="optional-chip">OPTIONAL</span><span>Text note</span></div><textarea ref={textareaRef} className="capture-progress-textarea" value={text} onChange={e=>setText(e.target.value)} aria-label="Optional field progress note" placeholder="Optional: add a short progress note, site update, or supervisor comment…" />
         <div className="capture-input-grid capture-input-grid-three">
           <section className="capture-source-card">
-            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / 01</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / REQUIRED</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
             <input ref={fileInputRef} type="file" multiple accept="*/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value='';}} />
             <button className="capture-dropzone" type="button" onClick={()=>fileInputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFiles(e.dataTransfer.files);}}>
               <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>Images · PDF · Word · Excel · CSV · TXT · ZIP · video · and more</small>
@@ -663,7 +662,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
           </section>
 
           <section className="capture-source-card voice-card">
-            <div className="capture-source-head"><div><span className="eyebrow">VOICE UPDATE / 02</span><h3>Record progress</h3><p>Use your microphone when speaking is easier than typing. The recording can be submitted as progress evidence.</p></div><span className="source-icon">◉</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">VOICE UPDATE / OPTIONAL</span><h3>Record progress</h3><p>Use your microphone when speaking is easier than typing. The recording can be submitted as progress evidence.</p></div><span className="source-icon">◉</span></div>
             <div className={`voice-recorder ${recording?'recording':''}`}><div className="voice-status-dot">{recording?'●':'○'}</div><div><strong>{recording?'Recording progress update':'Ready to record'}</strong><span>{recording?formatRecordingTime(recordingSeconds):'Use your browser microphone'}</span></div></div>
             <div className="voice-actions">{!recording?<button className="primary-btn" onClick={startRecording}>● Start recording</button>:<button className="danger-btn" onClick={stopRecording}>■ Stop recording</button>}</div>
             {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><strong>Voice progress recording</strong><audio controls src={recordedAudioUrl}/><div className="recording-actions"><button className="danger-btn" onClick={deleteRecording}>Delete recording</button></div></div>}
@@ -672,8 +671,8 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
         </div>
         <div className="capture-report-name">
           <div>
-            <span className="eyebrow">PROGRESS REPORT / NAME</span>
-            <h3>Name this progress update</h3>
+            <span className="eyebrow">PROGRESS REPORT / REQUIRED</span>
+            <h3>Name this progress update <span className="required-inline">Required</span></h3>
             <p>Give the complete submission a clear name so the project team can identify it later. The worker chooses this name.</p>
           </div>
           <input value={name} onChange={e=>{setName(e.target.value);setDirty(true)}} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
@@ -681,7 +680,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
           <button className="outline-btn" type="button" onClick={resetCapture}>Reset update</button>
-          <span className="helper">Text is optional. Submit text, files, voice, or any combination.</span>
+          <span className="helper"><strong>Required:</strong> progress name + at least one file. <strong>Optional:</strong> text or voice.</span>
         </div>
         {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your progress note and selected evidence are ready for the project record and review workflow.</p></div></div>}
       </PageSection>
@@ -997,65 +996,9 @@ function Submissions({onCapture}:{onCapture:()=>void}){
   return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}><div className="field-submissions-list">{submissions.map(s=><div className="submission-card" key={s.title}><div><span className={`submission-state ${s.cls}`}>{s.status}</span><strong>{s.title}</strong><small>{s.meta}</small></div><span className="submission-arrow">→</span></div>)}</div></PageSection></div>
 }
 
-function FieldNotifications(){
-  const items=[
-    ['Assignment updated','P-101 Spool B remains assigned to your workfront.','10 min ago'],
-    ['Submission under review','Line 25 erection started is awaiting planner validation.','35 min ago'],
-    ['Schedule notice','MCC-2 panel installation is planned for 25 Sep.','2 hr ago'],
-  ];
-  return <div className="field-page"><PageSection label="FIELD / NOTIFICATIONS" title="Notifications"><div className="field-notification-list">{items.map(([title,body,time])=><div className="notification-card" key={title}><div><span className="eyebrow">{time}</span><strong>{title}</strong><p>{body}</p></div><span>•</span></div>)}</div></PageSection></div>
+function FieldProfile({onSignOut}:{onSignOut:()=>void}){
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div><div><span>BASELINE</span><b>Read only</b></div></div></PageSection></div>
 }
-
-function FieldProfile({onSwitch,onSignOut}:{onSwitch:()=>void;onSignOut:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="outline-btn" onClick={onSwitch}>Switch to company portal</button><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div><div className="profile-details-grid"><div><span>DISCIPLINE</span><b>Piping</b></div><div><span>WORKSPACE</span><b>Field execution</b></div><div><span>ACCESS</span><b>Report · Capture · Submit</b></div><div><span>BASELINE</span><b>Read only</b></div></div></PageSection></div>
-}
-
-function Analytics(){
-  const totalActivities=ACTIVITIES.length;
-  const avgActual=Math.round(ACTIVITIES.reduce((sum,a)=>sum+a.progress,0)/Math.max(totalActivities,1));
-  const review=REVIEW_QUEUE.filter(r=>r.status==='Review').length;
-  const unmatched=REVIEW_QUEUE.filter(r=>r.status==='Unmatched').length;
-  return <div className="analytics-page">
-    <PageSection title="Project analytics">
-      <div className="analytics-summary-grid">
-        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{avgActual}%</strong><small>Across {totalActivities} executable demo activities</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>57%</strong><small>Current planned project progress</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{review}</strong><small>Ambiguous events awaiting planner action</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{unmatched}</strong><small>Explicit new-activity proposals</small></div>
-      </div>
-      <div className="analytics-grid-two">
-        <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div></div>
-          <div className="analytics-chart">
-            <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
-            <div className="analytics-plot">
-              <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
-              <svg viewBox="0 0 640 280" preserveAspectRatio="none" aria-label="Planned and actual progress chart">
-                <polyline points="0,175 106,152 213,122 320,97 427,75 533,50 640,25" fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="9 8" strokeLinecap="round"/>
-                <polyline points="0,194 106,170 213,140 320,108 427,86 533,73 640,57" fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="640" cy="57" r="5" fill="var(--accent)"/>
-                <circle cx="640" cy="25" r="4" fill="var(--info)"/>
-              </svg>
-              <div className="analytics-xlabels"><span>01 Sep</span><span>05 Sep</span><span>10 Sep</span><span>15 Sep</span><span>18 Sep</span><span>20 Sep</span><span>23 Sep</span></div>
-            </div>
-          </div>
-          <div className="analytics-legend"><span><i className="legend-dot actual-dot"/>Actual</span><span><i className="legend-dot planned-dot"/>Planned</span></div>
-        </div>
-        <div className="analytics-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div>
-          <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div>
-        </div>
-      </div>
-      <div className="analytics-panel analytics-variance-panel">
-        <div className="analytics-panel-head"><div><span className="eyebrow">ACTIVITY DURATION</span><h3>Variance snapshot</h3></div><span className="analytics-panel-note">Baseline vs actual duration</span></div>
-        <table className="analytics-table"><thead><tr><th>Activity</th><th>Baseline</th><th>Actual</th><th>Variance</th></tr></thead><tbody>{[
-          ['PIP-245','5 days','6 days','+1 day'],['CIV-022','8 days','8 days','0'],['MECH-018','4 days','5 days','+1 day'],['ELE-014','5 days','5 days','0'],['INST-045','5 days','6 days','+1 day']
-        ].map(r=><tr key={r[0]}><td><code>{r[0]}</code></td><td>{r[1]}</td><td>{r[2]}</td><td className={r[3].startsWith('+')?'negative':'positive'}>{r[3]}</td></tr>)}</tbody></table>
-      </div>
-    </PageSection>
-  </div>
-}
-
 function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:string;name:string;role:string;workspace:string;status:string})=>void}){
   const members=[
     {initials:'PC',name:'Priya Menon',role:'Project Manager',workspace:'Company',status:'Active'},
@@ -1069,11 +1012,11 @@ function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:
     </PageSection>
   </div>
 }
-function FieldSettings({themeMode,setThemeMode,density,setDensity,inAppNotifications,setInAppNotifications,autoSave,setAutoSave}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void}){
+function FieldSettings({themeMode,setThemeMode,density,setDensity,autoSave,setAutoSave}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void}){
  return <div className="settings-page field-settings-page"><PageSection title="Field settings">
    <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>
    <div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible across the field workspace.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div>
-   <div className="settings-card stacked"><div className="setting-row"><div><span className="eyebrow">NOTIFICATIONS</span><strong>In-app notifications</strong><p>Show submission, review, and field-workflow updates inside the portal.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><span className="eyebrow">DRAFTS</span><strong>Auto-save progress drafts</strong><p>Keep unfinished field progress entries locally so they can be resumed before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div></div>
+   <div className="settings-card field-draft-setting"><div className="setting-row"><div><span className="eyebrow">DRAFTS</span><strong>Auto-save progress drafts</strong><p>Keep unfinished field progress entries locally so they can be resumed before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div></div>
  </PageSection></div>
 }
 function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,autoSave,setAutoSave,dateFormat,setDateFormat,timezone,setTimezone,retention,setRetention}:{threshold:number;setThreshold:(n:number)=>void;saved:boolean;onSave:()=>void;themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void;retention:string;setRetention:(v:string)=>void}){
