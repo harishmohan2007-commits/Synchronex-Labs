@@ -145,7 +145,7 @@ def _extract_events(text: str):
 
 
 @router.post('')
-async def capture(project_id: str = Form(...), submitted_by: str = Form('field'), text: str = Form(''), files: list[UploadFile] = File(default=[])):
+async def capture(project_id: str = Form(...), submitted_by: str = Form('field'), submission_name: str = Form('Field progress update'), text: str = Form(''), files: list[UploadFile] = File(default=[])):
     sb = get_supabase()
     # Only executable baseline activities are candidates for field matching.
     # Summary/WBS rows are context, not executable work and must never become
@@ -184,6 +184,7 @@ async def capture(project_id: str = Form(...), submitted_by: str = Form('field')
             'project_id': project_id,
             'source_type': 'field_capture',
             'source_file': ', '.join(file_names) if file_names else None,
+            'submission_name': submission_name.strip() or 'Field progress update',
             'raw_text': e['evidence'],
             'discipline': _discipline(e['evidence']),
             'event_date': e['event_date'],
