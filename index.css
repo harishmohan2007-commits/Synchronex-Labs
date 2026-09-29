@@ -1151,3 +1151,11 @@ button,input,textarea,select{font-family:var(--font-ui)}
 :root[data-theme="dark"] .team-table th{background:var(--surface-2)!important;color:var(--text-3)!important}
 :root[data-theme="dark"] .analytics-table tr:hover td,
 :root[data-theme="dark"] .team-table tr:hover td{background:var(--surface-2)!important}
+
+.pending-field-progress {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: .02em;
+  color: #d8b36a;
+}
