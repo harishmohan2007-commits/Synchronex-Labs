@@ -69,25 +69,48 @@ export async function refreshRuntimeData(projectId?:string){
       const match=matchByEvent.get(e.id);
       const aid=match?.activity_id?activityByDb.get(match.activity_id):null;
       const conf=match?.confidence_score ?? e.extraction_confidence ?? 0;
+      const raw=String(e.raw_text||'').trim();
+      const lines=raw.split(/\r?\n/);
+      const reportName=(lines.shift()||'Field progress update').trim();
+      const reportText=lines.join('\n').trim()||raw;
       return {
+        id:e.id,
         time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+        date:e.event_date||e.created_at,
         status:match?.status==='approved'?'AI MATCHED':match?.status==='rejected'?'REJECTED':'REVIEW REQUIRED',
-        text:`\"${e.raw_text||''}\"`,
+        reportName,
+        text:reportText,
         actId:aid?.activity_code||'—',
         actDesc:aid?.name||'No matching activity',
-        conf:Math.round(Number(conf)*100)
+        conf:Math.round(Number(conf)*100),
+        progress:e.unit==='%' && e.quantity!=null?Number(e.quantity):null,
+        action:e.extracted_action||'observation',
+        discipline:e.discipline||'—',
+        sourceFile:e.source_file||null
       };
     });
     const reviewQueue=reviews.filter((r:any)=>r.status==='pending').map((r:any)=>{
       const e=byEvent.get(r.execution_event_id);
       const a=r.suggested_activity_id?activityByDb.get(r.suggested_activity_id):null;
+      const raw=String(e?.raw_text||'Execution event').trim();
+      const lines=raw.split(/\r?\n/);
+      const reportName=(lines.shift()||'Field progress update').trim();
+      const reportText=lines.join('\n').trim()||raw;
       return {
         id:r.id,
-        text:`\"${e?.raw_text||'Execution event'}\"`,
+        eventId:r.execution_event_id,
+        reportName,
+        text:reportText,
         candidate:a?.activity_code||'—',
+        candidateName:a?.name||'No matching activity',
         conf:Math.round(Number(r.confidence_score||0)*100),
         issue:r.reason||'Review required',
-        status:a?'Review':'Unmatched'
+        status:a?'Review':'Unmatched',
+        eventDate:e?.event_date||e?.created_at||null,
+        progress:e?.unit==='%' && e?.quantity!=null?Number(e.quantity):null,
+        action:e?.extracted_action||'observation',
+        discipline:e?.discipline||'—',
+        sourceFile:e?.source_file||null
       };
     });
     const audit=trace.map((t:any)=>{

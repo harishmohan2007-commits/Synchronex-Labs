@@ -27,7 +27,7 @@ const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  command:{eyebrow:'COMMAND / PROJECT CONTROL',title:'Execution command',subtitle:'A decision surface connecting baseline intent, field evidence, and verified actuals.'},
- schedule:{eyebrow:'SCHEDULE / L5–L6',title:'Schedule lattice',subtitle:'Inspect executable work, planned dates, actual dates, progress, and linkage evidence in one view.'},
+ schedule:{eyebrow:'SCHEDULE / L5–L6',title:'Schedule lattice',subtitle:'Inspect the imported planned baseline and filter it by discipline.'},
  capture:{eyebrow:'FIELD INTELLIGENCE / INPUT',title:'Field capture',subtitle:'Report what happened on site using text, voice, or any supporting evidence.'},
  review:{eyebrow:'FIELD INTELLIGENCE / HUMAN GATE',title:'Planner review',subtitle:'Resolve ambiguity before an AI suggestion becomes a trusted schedule actual.'},
  memory:{eyebrow:'KNOWLEDGE / VALIDATED ACTUALS',title:'Institutional memory',subtitle:'Preserve real execution durations, recurring delay causes, and productivity evidence for future planning.'},
@@ -50,19 +50,18 @@ function statusAccent(status:string):string{
 }
 
 export default function App(){
-  const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings,loading:dataLoading,error:dataError}=useRuntimeData();
+  const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings}=useRuntimeData();
   useEffect(()=>{refreshRuntimeData().catch(()=>{});},[]);
-  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);setResolvedReviewIds([]);setReviewIndex(0);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
+  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);setReviewIndex(0);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
   useEffect(()=>{if(!backendSettings)return;setThreshold(Math.round((backendSettings.confidence_threshold??0.9)*100));setDateFormat(backendSettings.date_format||'DD MMM YYYY');setTimezone(backendSettings.timezone||'Asia/Kolkata');setRetention(backendSettings.retention||'project');setAutoSave(backendSettings.auto_save??true);setEmailNotifications(backendSettings.email_notifications??true);setInAppNotifications(backendSettings.in_app_notifications??true);},[backendSettings]);
   const [authenticated,setAuthenticated]=useState(false);
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
-  const [selectedId,setSelectedId]=useState('PIP-245');
+  const [selectedId,setSelectedId]=useState('');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
   const [reviewDetailOpen,setReviewDetailOpen]=useState(false);
-  const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
   const [dirty,setDirty]=useState(false);
@@ -334,10 +333,10 @@ export default function App(){
 }
 
 function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';setMode:(v:'login'|'forgot')=>void;role:Role;setRole:(v:Role)=>void;onLogin:()=>void}){
- const [email,setEmail]=useState(role==='company'?'planner@northfield.example':'field.supervisor@northfield.example');
+ const [email,setEmail]=useState('');
  const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false); const [forgotOpen,setForgotOpen]=useState(false); const [forgotEmail,setForgotEmail]=useState(''); const [forgotBusy,setForgotBusy]=useState(false); const [forgotSent,setForgotSent]=useState(false);
- const chooseRole=(next:Role)=>{setRole(next);setEmail(next==='company'?'planner@northfield.example':'field.supervisor@northfield.example');setError('');setPassword('')};
- const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');if(!email.includes('@')){setError('Enter a valid work email.');return}if(!password){setError('Enter your password.');return}setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},700)};
+ const chooseRole=(next:Role)=>{setRole(next);setEmail('');setError('');setPassword('')};
+ const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},250)};
  const openForgot=()=>{setForgotEmail(email.includes('@')?email:'');setForgotSent(false);setError('');setForgotOpen(true)};
  const sendReset=(e:React.FormEvent)=>{e.preventDefault();if(!forgotEmail.includes('@')){setError('Enter the registered email address.');return}setForgotBusy(true);setError('');window.setTimeout(()=>{setForgotBusy(false);setForgotSent(true)},900)};
  return <div className="auth-shell"><div className="auth-left"><div className="auth-brand"><span className="brand-mark">S</span><div><strong>SYNCHRONEX LABS</strong></div></div><div className="auth-hero"><h1>{role==='company'?'Connect planning with execution intelligence.':'Turn field updates into trusted schedule actuals.'}</h1><p>{role==='company'?'Manage the baseline, review field evidence, validate actuals, and preserve project intelligence.':'Report site progress with text, voice, or evidence files without exposing company planning controls.'}</p><div className="auth-path">{role==='company'?<><span>01 Plan</span><i>→</i><span>02 Review</span><i>→</i><span>03 Apply</span><i>→</i><span>04 Learn</span></>:<><span>01 Work</span><i>→</i><span>02 Capture</span><i>→</i><span>03 Submit</span><i>→</i><span>04 Track</span></>}</div></div></div><div className="auth-right"><div className="auth-card"><span className="eyebrow">SECURE WORKSPACE</span><h2>Choose your workspace</h2><div className="role-switch" role="tablist" aria-label="Workspace type"><button type="button" className={role==='company'?'selected':''} onClick={()=>chooseRole('company')}><strong>Company portal</strong><span>Planning, review & control</span></button><button type="button" className={role==='field'?'selected':''} onClick={()=>chooseRole('field')}><strong>Field portal</strong><span>Work, capture & submissions</span></button></div><p>{role==='company'?'Use your project-controls account to manage the project workspace.':'Use your field account to report execution and track submissions.'}</p><form onSubmit={submit}><label>Work email<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<button className="primary-btn" disabled={busy}>{busy?'Working…':`Enter ${role==='company'?'company':'field'} portal`} <span>→</span></button></form><button className="link-btn" type="button" onClick={openForgot}>Forgot password?</button></div></div>{forgotOpen&&<div className="modal-backdrop auth-recovery-backdrop" role="dialog" aria-modal="true" aria-labelledby="recovery-title" onMouseDown={e=>e.currentTarget===e.target&&setForgotOpen(false)}><div className="modal auth-recovery-modal"><div className="modal-head"><h2 id="recovery-title">Reset your password</h2><button className="icon-btn" aria-label="Close password recovery" onClick={()=>setForgotOpen(false)}>×</button></div>{forgotSent?<div className="recovery-success"><span className="success-chip">REQUEST RECEIVED</span><h3>Check your registered email</h3><p>If the address is registered, a password-reset email will be sent to <strong>{forgotEmail}</strong>.</p><button className="primary-btn" onClick={()=>setForgotOpen(false)}>Back to sign in →</button></div>:<form onSubmit={sendReset} className="recovery-form"><p className="modal-copy">Enter the email address registered to your Synchronex account. We'll use it for the password-reset request.</p><label>Registered email<input autoFocus value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} type="email" placeholder="name@company.com" autoComplete="email"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setForgotOpen(false)}>Cancel</button><button type="submit" className="primary-btn" disabled={forgotBusy}>{forgotBusy?'Sending…':'Send reset email →'}</button></div></form>}</div></div>}</div>
@@ -459,21 +458,28 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
   const {ACTIVITIES}=useRuntimeData();
-  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
+  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><strong>{q.reportName||'Field progress update'}</strong><small className="review-report-meta">{q.eventDate?new Date(q.eventDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'Date unavailable'}</small></td><td><strong>{q.text||'No field statement'}</strong><small className="review-report-meta">{q.progress!=null?`Extracted progress: ${q.progress}%`:'No explicit progress extracted'}</small></td><td><code>{q.candidate||'—'}</code><small className="review-report-meta">{q.candidateName||'No candidate'}</small></td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
     return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
       <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</p></div>
-      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
+      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Report</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
     </PageSection></div>
   }
-  return <div className="review-detail-page"><PageSection label="" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
+  const candidate= item?.candidate && item.candidate!=='—' ? (ACTIVITIES.find(a=>a.id===item.candidate)||null) : null;
+  return <div className="review-detail-page"><PageSection label="" title="Field progress review" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
     <div className="review-detail-grid">
       <main className="review-detail-main">
-        <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
-        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
+        <section className="field-report-card" aria-labelledby="field-report-title">
+          <div className="field-report-head"><div><span className="eyebrow">FIELD PROGRESS REPORT</span><h2 id="field-report-title">{item?.reportName||'Field progress update'}</h2><p>Submitted evidence is shown below exactly as received, with extracted facts separated for quick planner validation.</p></div><span className={`review-status ${item?.status==='Unmatched'?'unmatched':''}`}>{item?.status||'Review'}</span></div>
+          <div className="field-report-meta"><div><span>REPORT DATE</span><b>{item?.eventDate?new Date(item.eventDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—'}</b></div><div><span>DISCIPLINE</span><b>{item?.discipline||'—'}</b></div><div><span>EXTRACTED PROGRESS</span><b>{item?.progress!=null?`${item.progress}%`:'Not stated'}</b></div><div><span>ACTION</span><b>{String(item?.action||'observation').replace(/^./,c=>c.toUpperCase())}</b></div></div>
+          <div className="field-report-evidence"><span className="eyebrow">SOURCE STATEMENT</span><pre>{item?.text||'No field statement was captured.'}</pre>{item?.sourceFile&&<small>Evidence file: {item.sourceFile}</small>}</div>
+        </section>
+        <section className="match-validation-card" aria-labelledby="match-validation-title">
+          <div className="match-validation-head"><div><span className="eyebrow">MATCH VALIDATION</span><h2 id="match-validation-title">Does this field report belong to this activity?</h2></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
+          <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">SUGGESTED BASELINE ACTIVITY</span><code>{item?.candidate || 'No activity'}</code><strong>{candidate?.desc || item?.candidateName || 'No matching baseline node'}</strong><div className="candidate-facts"><span><small>PLANNED</small>{candidate?`${candidate.planStart} → ${candidate.planFinish}`:'—'}</span><span><small>ACTUAL</small>{candidate?`${candidate.progress}%`:'—'}</span><span><small>WBS</small>{candidate?.wbs||'—'}</span></div><p>Match evidence combines activity terminology, discipline, schedule context, and granularity.</p></div><div className="candidate"><span className="eyebrow">PLANNER CHECK</span><strong>{item?.candidate&&item.candidate!=='—'?'Confirm the suggested activity':'No baseline candidate found'}</strong><p>{item?.candidate&&item.candidate!=='—'?'Verify that the source statement refers to this L5/L6 activity. If it does not, reject the match. If no suitable baseline activity exists, flag the event as a new-activity proposal.':'Do not silently apply an unmatched event. Flag it for baseline control instead.'}</p><div className="confidence-explanation"><span>AI MATCH CONFIDENCE</span><b>{item?.conf||0}%</b></div></div></div>
+        </section>
+        <div className="review-actions"><button className="primary-btn" onClick={onApprove} disabled={!item?.candidate||item.candidate==='—'}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="outline-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying a match writes verified actual progress and a trace record. It does not change the planned baseline.</p>
       </main>
-      
     </div>
   </PageSection></div>
 }
@@ -707,7 +713,7 @@ function Analytics(){
   const {PROGRESS_TREND,DISCIPLINE_PERF,DELAY_CAUSES,REVIEW_QUEUE}=useRuntimeData();
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
-  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
   const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
