@@ -1,363 +1,55 @@
-const configuredBase = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
-// In production Netlify proxies /api/* to the Render backend, so the browser stays same-origin.
-// Set VITE_API_BASE_URL to /api for the deployed Netlify build. For local development,
-// use the full backend URL (for example http://localhost:8000).
-const API_BASE = configuredBase === '/api' ? '' : configuredBase || 'http://localhost:8000';
+import { useSyncExternalStore } from 'react';
 
-export type Activity = {
-  id: string;
-  dbId: string;
-  wbs: string;
-  desc: string;
-  discipline: string;
-  planStart: string;
-  planFinish: string;
-  actStart: string;
-  actFinish: string;
-  progress: number;
-  plannedProgress: number;
-  status: string;
-  aiConf: number;
-  isSummary: boolean;
-  pendingFieldProgress: number | null;
+type RuntimeData={
+  project:any|null;
+  ACTIVITIES:any[];
+  DISCIPLINES:any[];
+  FIELD_EVENTS:any[];
+  REVIEW_QUEUE:any[];
+  AUDIT_TRAIL:any[];
+  MEMORY_ACTIVITIES:any[];
+  PROGRESS_TREND:any[];
+  DELAY_CAUSES:any[];
+  DISCIPLINE_PERF:any[];
+  MEMORY_OCCURRENCES:any[];
+  settings:any|null;
+  loading:boolean;
+  error:string;
 };
+const empty:RuntimeData={project:null,ACTIVITIES:[],DISCIPLINES:[],FIELD_EVENTS:[],REVIEW_QUEUE:[],AUDIT_TRAIL:[],MEMORY_ACTIVITIES:[],PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],MEMORY_OCCURRENCES:[],settings:null,loading:true,error:''};
+let snapshot=empty;
+const listeners=new Set<()=>void>();
+const emit=()=>listeners.forEach(l=>l());
+export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
+const apiBase=()=> (import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
 
-export let ACTIVITIES: Activity[] = [];
-export let DISCIPLINES: any[] = [];
-export let FIELD_EVENTS: any[] = [];
-export let REVIEW_QUEUE: any[] = [];
-export let AUDIT_TRAIL: any[] = [];
-export let MEMORY_ACTIVITIES: any[] = [];
-export let PROGRESS_TREND: any[] = [];
-export let DELAY_CAUSES: any[] = [];
-export let DISCIPLINE_PERF: any[] = [];
-
-export let CURRENT_PROJECT: any = null;
-export let PROJECT_METRICS = {
-  activityCount: 0,
-  executableCount: 0,
-  plannedProgress: 0,
-  actualProgress: 0,
-  variance: 0,
-  reviewCount: 0,
-  unmatchedCount: 0,
-  eventCount: 0,
-};
-
-export function apiUrl(path: string) {
-  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+function mapActivities(rows:any[]){return rows.map(a=>({
+  id:a.activity_code, dbId:a.id, wbs:a.outline_number||'—', desc:a.name, discipline:a.discipline||'—',
+  planStart:a.planned_start||'—', planFinish:a.planned_finish||'—', actStart:a.actual_start||'—', actFinish:a.actual_finish||'—',
+  progress:a.actual_progress ?? 0, plannedProgress:a.planned_progress ?? null,
+  status:a.status==='completed'?'Completed':a.status==='in_progress'?'In Progress':'Planned',
+  aiConf:0, isSummary:!!a.is_summary, isMilestone:!!a.is_milestone
+}));}
+function buildDisciplines(activities:any[],events:any[]){
+  const names=Array.from(new Set(activities.map(a=>a.discipline).filter((x:any)=>x&&x!=='—')));
+  return names.map(name=>{const rows=activities.filter(a=>a.discipline===name);const planned=rows.length?Math.round(rows.reduce((s,a)=>s+(a.plannedProgress??0),0)/rows.length):0;const actual=rows.length?Math.round(rows.reduce((s,a)=>s+(a.progress??0),0)/rows.length):0;return {name,activities:rows.length,planned,actual,variance:actual-planned,status:actual<planned?'At Risk':'On Track',milestones:rows.filter(a=>a.isMilestone).length,nextMilestone:'—',varianceNote:events.length?'Derived from persisted execution evidence.':'No execution evidence available.'};});
 }
-
-async function request(path: string, init?: RequestInit) {
-  const url = apiUrl(path);
-  let response: Response;
-  try {
-    response = await fetch(url, init);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'Network request failed';
-    throw new Error(`Cannot reach the Synchronex backend at ${API_BASE}. Check that the backend is live and VITE_API_BASE_URL is configured correctly. (${reason})`);
-  }
-
-  const text = await response.text();
-  let body: any = null;
-  try { body = text ? JSON.parse(text) : null; } catch { body = text; }
-  if (!response.ok) {
-    const message = body?.detail || body?.message || `API request failed (${response.status})`;
-    throw new Error(`${message} [${response.status} ${response.statusText}]`);
-  }
-  return body;
+export async function refreshRuntimeData(projectId?:string){
+  snapshot={...snapshot,loading:true,error:''}; emit();
+  try{
+    const p=await fetch(`${apiBase()}/api/projects/current${projectId?`?project_id=${encodeURIComponent(projectId)}`:''}`);
+    const project=await p.json(); if(!p.ok) throw new Error(project?.detail||'Unable to load the current project.');
+    const b=await fetch(`${apiBase()}/api/projects/${project.id}/bootstrap`); const payload=await b.json(); if(!b.ok) throw new Error(payload?.detail||'Unable to load project data.');
+    const activities=mapActivities(payload.activities||[]); const events=payload.events||[]; const reviews=payload.reviews||[]; const trace=payload.trace||[];
+    const activityByDb=new Map((payload.activities||[]).map((a:any)=>[a.id,a]));
+    const byEvent=new Map(events.map((e:any)=>[e.id,e]));
+    const idByDb=new Map(activities.map((a:any)=>[a.dbId,a.id]));
+    const fieldEvents=events.map((e:any)=>{const aid=e.activity_id?activityByDb.get(e.activity_id):null;return {time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),status:e.status==='matched'?'AI MATCHED':'REVIEW REQUIRED',text:`"${e.evidence_text||''}"`,actId:aid?.activity_code||'—',actDesc:aid?.name||'No matching activity',conf:Math.round((e.confidence||0)*100)};});
+    const reviewQueue=reviews.filter((r:any)=>r.status==='open').map((r:any)=>{const e=byEvent.get(r.execution_event_id);const a=r.activity_id?activityByDb.get(r.activity_id):null;return {id:r.id,text:`"${e?.evidence_text||'Execution event'}"`,candidate:a?.activity_code||'—',conf:Math.round((r.confidence||0)*100),issue:r.reason||'Review required',status:r.activity_id?'Review':'Unmatched'};});
+    const audit=trace.map((t:any)=>{const a=t.activity_id?activityByDb.get(t.activity_id):null;return {ts:new Date(t.created_at).toLocaleString(),actor:t.actor||'System',action:t.action,activity:a?.activity_code||'—',source:t.source||'—',prev:t.previous_value?JSON.stringify(t.previous_value):'—',next:t.next_value?JSON.stringify(t.next_value):'—',conf:Math.round((t.confidence||0)*100)};});
+    const memoryOccurrences=activities.filter(a=>a.actStart!=='—'&&a.actFinish!=='—').map(a=>({id:a.id,date:a.actFinish,duration:a.actStart&&a.actFinish?`${Math.max(0,Math.round((new Date(a.actFinish).getTime()-new Date(a.actStart).getTime())/86400000))} days`:'—',discipline:a.discipline,evidence:`Validated actual dates for ${a.desc}.`,status:'Validated'}));
+    const memory=memoryOccurrences.length?Array.from(new Map(memoryOccurrences.map(o=>[o.discipline||'Unassigned',o])).entries()).map(([type,o])=>({type,baselineAvg:'—',actualAvg:o.duration,variance:'—',occurrences:memoryOccurrences.filter(x=>x.discipline===type).length})):[];
+    snapshot={project,settings:payload.settings||null,ACTIVITIES:activities,DISCIPLINES:buildDisciplines(activities,events),FIELD_EVENTS:fieldEvents,REVIEW_QUEUE:reviewQueue,AUDIT_TRAIL:audit,MEMORY_ACTIVITIES:memory,MEMORY_OCCURRENCES:memoryOccurrences,PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],loading:false,error:''}; emit();
+    return project.id;
+  }catch(err){snapshot={...snapshot,loading:false,error:err instanceof Error?err.message:'Unable to load backend data.'};emit();throw err;}
 }
-
-export async function apiGet(path: string) {
-  return request(path);
-}
-
-function formatDate(value: any) {
-  if (!value) return '—';
-  const s = String(value).slice(0, 10);
-  const d = new Date(`${s}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return s;
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function activityStatus(row: any) {
-  const status = String(row?.status || 'not_started');
-  if (status === 'completed') return 'Completed';
-  if (status === 'delayed') return 'Delayed';
-  if (status === 'on_hold') return 'On Hold';
-  if (status === 'in_progress') return 'In Progress';
-  return 'Planned';
-}
-
-function inferDiscipline(name: string, existing?: string | null) {
-  if (existing) return existing;
-  const low = String(name || '').toLowerCase();
-  if (/spool|piping|pipeline|pipe|weld|ndt|erection/.test(low)) return 'Piping';
-  if (/pump|mechanical|equipment|commissioning|alignment/.test(low)) return 'Mechanical';
-  if (/cable|electrical|termination|continuity/.test(low)) return 'Electrical';
-  if (/instrument|calibration|tubing/.test(low)) return 'Instrumentation';
-  if (/civil|excavat|concrete|foundation|backfill/.test(low)) return 'Civil';
-  return 'Other';
-}
-
-function parseDateOnly(value: any) {
-  if (!value) return null;
-  const s = String(value).slice(0, 10);
-  const d = new Date(`${s}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function inferAsOfDate(project: any, events: any[]) {
-  const candidates: Date[] = [];
-  for (const event of events) {
-    for (const value of [event?.execution_date, event?.event_date, event?.reported_date]) {
-      const d = parseDateOnly(value);
-      if (d) candidates.push(d);
-    }
-    const raw = String(event?.raw_text || '');
-    const iso = raw.match(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/);
-    if (iso) {
-      const d = parseDateOnly(`${iso[1]}-${String(iso[2]).padStart(2,'0')}-${String(iso[3]).padStart(2,'0')}`);
-      if (d) candidates.push(d);
-    }
-    const longDate = raw.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i);
-    if (longDate) {
-      const d = new Date(`${longDate[1]} ${longDate[2]} ${longDate[3]} 00:00:00`);
-      if (!Number.isNaN(d.getTime())) candidates.push(d);
-    }
-  }
-  if (candidates.length) return new Date(Math.max(...candidates.map(d => d.getTime())));
-  const projectFinish = parseDateOnly(project?.planned_finish);
-  const projectStart = parseDateOnly(project?.planned_start);
-  const now = new Date(); now.setHours(0,0,0,0);
-  if (projectStart && now < projectStart) return projectStart;
-  if (projectFinish && now > projectFinish) return projectFinish;
-  return now;
-}
-
-function schedulePlannedProgress(row: any, asOf: Date) {
-  const stored = Number(row?.planned_progress);
-  if (Number.isFinite(stored) && stored > 0) return Math.max(0, Math.min(100, stored));
-  const start = parseDateOnly(row?.planned_start);
-  const finish = parseDateOnly(row?.planned_finish);
-  if (!start || !finish) return 0;
-  if (asOf <= start) return 0;
-  if (asOf >= finish) return 100;
-  const total = finish.getTime() - start.getTime();
-  if (total <= 0) return 0;
-  return Math.max(0, Math.min(100, ((asOf.getTime() - start.getTime()) / total) * 100));
-}
-
-function disciplineRows(rows: any[], asOf: Date) {
-  const grouped = new Map<string, any[]>();
-  rows.filter(a => !a.is_summary).forEach(a => {
-    const d = inferDiscipline(a.name, a.discipline);
-    if (!grouped.has(d)) grouped.set(d, []);
-    grouped.get(d)!.push(a);
-  });
-  return Array.from(grouped.entries()).map(([name, items]) => {
-    const planned = items.length ? items.reduce((s, a) => s + schedulePlannedProgress(a, asOf), 0) / items.length : 0;
-    const actual = items.length ? items.reduce((s, a) => s + Number(a.actual_progress || 0), 0) / items.length : 0;
-    const variance = actual - planned;
-    return {
-      name,
-      activities: items.length,
-      planned: Math.round(planned),
-      actual: Math.round(actual),
-      variance: Math.round(variance),
-      status: variance < -5 ? 'Delayed' : variance < 0 ? 'At Risk' : 'On Track',
-      milestones: items.filter(a => a.is_milestone).length,
-      nextMilestone: items.find(a => a.is_milestone && Number(a.actual_progress || 0) < 100)?.name || '—',
-      varianceNote: 'Derived from the current persisted schedule snapshot.',
-    };
-  });
-}
-
-function mapActivity(row: any, matches: any[], events: any[], asOf: Date): Activity {
-  const related = matches.filter(m => m.activity_id === row.id);
-  const conf = related.length ? Math.max(...related.map(m => Number(m.confidence_score || 0))) : 0;
-  const pendingEvent = related
-    .filter(m => m.status === 'pending')
-    .map(m => events.find(e => e.id === m.execution_event_id))
-    .find(e => e?.unit === '%' && e?.quantity != null);
-  return {
-    id: row.activity_code || row.source_uid || row.id,
-    dbId: row.id,
-    wbs: row.outline_level ? `L${row.outline_level}` : '—',
-    desc: row.name || 'Unnamed activity',
-    discipline: inferDiscipline(row.name, row.discipline),
-    planStart: formatDate(row.planned_start),
-    planFinish: formatDate(row.planned_finish),
-    actStart: formatDate(row.actual_start),
-    actFinish: formatDate(row.actual_finish),
-    progress: Number(row.actual_progress || 0),
-    plannedProgress: schedulePlannedProgress(row, asOf),
-    status: activityStatus(row),
-    aiConf: Math.round(conf * 100),
-    isSummary: Boolean(row.is_summary),
-    pendingFieldProgress: pendingEvent ? Number(pendingEvent.quantity) : null,
-  };
-}
-
-export function applyBootstrap(data: any) {
-  CURRENT_PROJECT = data?.project || null;
-  const rawActivities = Array.isArray(data?.activities) ? data.activities : [];
-  const events = Array.isArray(data?.events) ? data.events : [];
-  const matches = Array.isArray(data?.matches) ? data.matches : [];
-  const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
-  const trace = Array.isArray(data?.trace) ? data.trace : [];
-  const asOf = inferAsOfDate(CURRENT_PROJECT, events);
-
-  ACTIVITIES = rawActivities.map((a: any) => mapActivity(a, matches, events, asOf));
-  const byCode = new Map(ACTIVITIES.map(a => [a.dbId, a]));
-
-  FIELD_EVENTS = events.map((e: any) => {
-    const match = matches.find((m: any) => m.execution_event_id === e.id);
-    const act = match?.activity_id ? byCode.get(match.activity_id) : undefined;
-    return {
-      id: e.id,
-      time: e.created_at ? new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
-      status: match?.status === 'approved' ? 'AI MATCHED' : match?.activity_id ? 'REVIEW REQUIRED' : 'UNMATCHED',
-      text: `"${e.raw_text || ''}"`,
-      submissionName: e.submission_name || act?.desc || 'Field progress update',
-      actId: act?.id || match?.activity_id || '—',
-      actDesc: act?.desc || 'No matching activity',
-      progress: e.unit === '%' && e.quantity != null ? Number(e.quantity) : null,
-      conf: Math.round(Number(match?.confidence_score || e.extraction_confidence || 0) * 100),
-    };
-  });
-
-  REVIEW_QUEUE = reviews.map((r: any) => {
-    const event = events.find((e: any) => e.id === r.execution_event_id);
-    const act = r.suggested_activity_id ? byCode.get(r.suggested_activity_id) : undefined;
-    return {
-      id: r.id,
-      text: `"${event?.raw_text || 'Execution event'}"`,
-      submissionName: event?.submission_name || act?.desc || 'Field progress update',
-      candidate: act?.id || '—',
-      conf: Math.round(Number(r.confidence_score || 0) * 100),
-      issue: r.reason || (act ? 'Review required' : 'No matching activity'),
-      progress: event?.unit === '%' && event?.quantity != null ? Number(event.quantity) : null,
-      status: r.status === 'pending' ? 'Review' : r.status,
-    };
-  }).filter((r: any) => r.status === 'Review' || r.status === 'pending');
-
-  AUDIT_TRAIL = trace.map((a: any) => {
-    const oldValue = a.old_value || {};
-    const newValue = a.new_value || {};
-    const oldProgress = oldValue.actual_progress;
-    const newProgress = newValue?.update?.actual_progress ?? newValue.actual_progress;
-    return {
-      ts: a.created_at ? new Date(a.created_at).toLocaleString('en-GB') : '—',
-      actor: a.user_id ? 'Planner' : (a.source === 'field_capture' ? 'Field' : 'System'),
-      action: String(a.action || '').replace(/_/g, ' '),
-      activity: byCode.get(a.entity_id)?.id || a.entity_id || '—',
-      source: a.source || 'System',
-      prev: oldProgress == null ? '—' : `${oldProgress}%`,
-      next: newProgress == null ? '—' : `${newProgress}%`,
-      conf: newValue?.confidence ? Math.round(Number(newValue.confidence) * 100) : 0,
-    };
-  });
-
-  const executable = rawActivities.filter((a: any) => !a.is_summary);
-  const plannedValues = executable.map((a: any) => schedulePlannedProgress(a, asOf));
-  const planned = plannedValues.length ? plannedValues.reduce((s: number, value: number) => s + value, 0) / plannedValues.length : 0;
-  const actual = executable.length ? executable.reduce((s: number, a: any) => s + Number(a.actual_progress || 0), 0) / executable.length : 0;
-  const unmatchedCount = reviews.filter((r: any) => !r.suggested_activity_id && r.status === 'pending').length;
-  PROJECT_METRICS = {
-    activityCount: rawActivities.length,
-    executableCount: executable.length,
-    plannedProgress: planned,
-    actualProgress: actual,
-    variance: actual - planned,
-    reviewCount: reviews.filter((r: any) => r.status === 'pending').length,
-    unmatchedCount,
-    eventCount: events.length,
-  };
-
-  DISCIPLINES = disciplineRows(rawActivities, asOf);
-  DISCIPLINE_PERF = DISCIPLINES.map(d => ({ disc: d.name, planned: d.planned, actual: d.actual }));
-  // The imported schedule may contain 0% planned_progress even though planned dates
-  // define a usable schedule-time trajectory. Use the latest field-report date when
-  // available; otherwise use the current project date. This is a schedule-time
-  // estimate, not a fabricated historical baseline.
-  const projectStart = parseDateOnly(CURRENT_PROJECT?.planned_start) || asOf;
-  const plannedAtStart = 0;
-  const plannedAtAsOf = planned;
-  const actualAtStart = 0;
-  const actualAtAsOf = actual;
-  const points: any[] = [
-    { date: formatDate(projectStart), planned: plannedAtStart, actual: actualAtStart },
-  ];
-  if (asOf.getTime() !== projectStart.getTime()) {
-    points.push({ date: formatDate(asOf), planned: plannedAtAsOf, actual: actualAtAsOf });
-  } else {
-    points[0] = { date: formatDate(asOf), planned: plannedAtAsOf, actual: actualAtAsOf };
-  }
-  PROGRESS_TREND = points;
-  // Memory/delay history is not exposed by the current bootstrap endpoint yet.
-  MEMORY_ACTIVITIES = [];
-  DELAY_CAUSES = [];
-  return data;
-}
-
-export async function loadCurrentProject(projectId?: string) {
-  const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
-  const project = await apiGet(`/api/projects/current${query}`);
-  const bootstrap = await apiGet(`/api/projects/${project.id}/bootstrap`);
-  applyBootstrap(bootstrap);
-  return bootstrap;
-}
-
-export async function refreshCurrentProject() {
-  if (!CURRENT_PROJECT?.id) return null;
-  const bootstrap = await apiGet(`/api/projects/${CURRENT_PROJECT.id}/bootstrap`);
-  applyBootstrap(bootstrap);
-  return bootstrap;
-}
-
-export async function submitCapture(projectId: string, submittedBy: string, text: string, files: File[]) {
-  const form = new FormData();
-  form.append('project_id', projectId);
-  form.append('submitted_by', 'field');
-  form.append('submission_name', submittedBy || 'Field progress update');
-  form.append('text', text || '');
-  files.forEach(file => form.append('files', file, file.name));
-  const result = await request('/api/capture', { method: 'POST', body: form });
-  await refreshCurrentProject();
-  return result;
-}
-
-export async function decideReview(reviewId: string, decision: 'approve'|'reject'|'flag', newProgress?: number) {
-  const result = await request(`/api/review/${reviewId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reviewer: 'planner', decision, new_progress: newProgress }),
-  });
-  await refreshCurrentProject();
-  return result;
-}
-
-export async function importSchedule(file: File, projectId?: string) {
-  const form = new FormData();
-  form.append('file', file, file.name);
-  if (projectId) form.append('project_id', projectId);
-  const result = await request('/api/import/schedule', { method: 'POST', body: form });
-  const bootstrap = await apiGet(`/api/projects/${result.project_id}/bootstrap`);
-  applyBootstrap(bootstrap);
-  return result;
-}
-
-export async function getSettings(projectId: string) {
-  return apiGet(`/api/settings/${projectId}`);
-}
-
-export async function saveSettings(projectId: string, settings: Record<string, any>) {
-  return request(`/api/settings/${projectId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(settings),
-  });
-}
-
-export { API_BASE };

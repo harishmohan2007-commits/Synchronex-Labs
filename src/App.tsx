@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF, CURRENT_PROJECT, PROJECT_METRICS, loadCurrentProject, submitCapture, decideReview, importSchedule, getSettings, saveSettings } from './runtimeData';
+import { useRuntimeData, refreshRuntimeData } from './runtimeData';
 
 type Role = 'company'|'field';
 type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'profile';
@@ -50,14 +50,16 @@ function statusAccent(status:string):string{
 }
 
 export default function App(){
+  const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings,loading:dataLoading,error:dataError}=useRuntimeData();
+  useEffect(()=>{refreshRuntimeData().catch(()=>{});},[]);
+  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
+  useEffect(()=>{if(!backendSettings)return;setThreshold(Math.round((backendSettings.confidence_threshold??0.9)*100));setDateFormat(backendSettings.date_format||'DD MMM YYYY');setTimezone(backendSettings.timezone||'Asia/Kolkata');setRetention(backendSettings.retention||'project');setAutoSave(backendSettings.auto_save??true);setEmailNotifications(backendSettings.email_notifications??true);setInAppNotifications(backendSettings.in_app_notifications??true);},[backendSettings]);
   const [authenticated,setAuthenticated]=useState(false);
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
-  const [selectedId,setSelectedId]=useState('');
-  const [dataVersion,setDataVersion]=useState(0);
-  const [dataLoading,setDataLoading]=useState(true);
-  const [reviewCount,setReviewCount]=useState(0);
+  const [selectedId,setSelectedId]=useState('PIP-245');
+  const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
   const [reviewDetailOpen,setReviewDetailOpen]=useState(false);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
@@ -92,33 +94,6 @@ export default function App(){
   const [memberTarget,setMemberTarget]=useState<{initials:string;name:string;role:string;workspace:string;status:string}|null>(null);
   const [memberDraft,setMemberDraft]=useState({role:'',workspace:'',status:'Active',canReview:true,canImport:true,canEditBaseline:false});
 
-  useEffect(()=>{
-    let cancelled=false;
-    loadCurrentProject().then(()=>{
-      if(cancelled)return;
-      setSelectedId(ACTIVITIES[0]?.id||'');
-      setReviewCount(REVIEW_QUEUE.length);
-      setDataVersion(v=>v+1);
-    }).catch(err=>{
-      if(!cancelled) notify(err instanceof Error ? err.message : 'Unable to load Synchronex data.');
-    }).finally(()=>{if(!cancelled)setDataLoading(false);});
-    return ()=>{cancelled=true};
-  },[]);
-
-  useEffect(()=>{
-    if(CURRENT_PROJECT?.id){
-      getSettings(CURRENT_PROJECT.id).then((settings:any)=>{
-        if(settings?.confidence_threshold!=null)setThreshold(Math.round(Number(settings.confidence_threshold)*100));
-        if(settings?.date_format)setDateFormat(settings.date_format);
-        if(settings?.timezone)setTimezone(settings.timezone);
-        if(settings?.retention)setRetention(settings.retention);
-        if(typeof settings?.auto_save==='boolean')setAutoSave(settings.auto_save);
-        if(typeof settings?.email_notifications==='boolean')setEmailNotifications(settings.email_notifications);
-        if(typeof settings?.in_app_notifications==='boolean')setInAppNotifications(settings.in_app_notifications);
-      }).catch(()=>{});
-    }
-  },[CURRENT_PROJECT?.id]);
-
   // Schedule discipline selection
   const [scheduleDiscipline,setScheduleDiscipline]=useState('All');
 
@@ -126,7 +101,7 @@ export default function App(){
   const [detailId,setDetailId]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds,dataVersion]);
+  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
 
@@ -159,22 +134,17 @@ export default function App(){
 
   const runCapture=async()=>{
     if(captureBusy)return;
-    if(!CURRENT_PROJECT?.id){notify('Import a schedule before submitting field evidence.');return;}
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
-    if(!captureText.trim() && !captureFiles.length){
-      notify(recordedAudioUrl ? 'Voice recording is captured locally, but the current backend accepts text/PDF/Excel evidence. Add text or a supported file before submitting.' : 'Add at least one information source: text or a supported evidence file.');
-      return;
-    }
-    setCaptureBusy(true);setCaptureResult(false);
+    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
+    setCaptureBusy(true);setCaptureResult(false);setDirty(false);
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
     try{
-      await submitCapture(CURRENT_PROJECT.id,captureName.trim(),captureText,captureFiles);
-      setCaptureBusy(false);setCaptureResult(true);setDirty(false);
-      setReviewCount(REVIEW_QUEUE.length);setDataVersion(v=>v+1);
-      notify('Execution evidence captured and added to the review workflow.');
-    }catch(err){
-      setCaptureBusy(false);
-      notify(err instanceof Error ? err.message : 'Capture failed.');
-    }
+      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',captureText);
+      captureFiles.forEach(f=>body.append('files',f,f.name));
+      const response=await fetch(`${apiBase}/api/capture`,{method:'POST',body}); const payload=await response.json().catch(()=>({detail:'Capture failed.'}));
+      if(!response.ok) throw new Error(payload?.detail||'Capture failed.');
+      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify('Progress update submitted and sent through matching/review.');
+    }catch(error){setCaptureBusy(false);notify(error instanceof Error?error.message:'Capture failed.');}
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
@@ -241,34 +211,35 @@ export default function App(){
   };
   const formatRecordingTime=(seconds:number)=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
 
-  const finishReviewDecision=async(decision:'approve'|'reject'|'flag')=>{
-    if(!activeReview)return;
-    try{
-      await decideReview(activeReview.id,decision);
-      setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
-      setReviewCount(REVIEW_QUEUE.length);
-      setDataVersion(v=>v+1);
-      setReviewDetailOpen(false);
-      setReviewIndex(i=>Math.min(i,Math.max(0,REVIEW_QUEUE.length-1)));
-      notify(decision==='approve' ? `Match ${activeReview.candidate || 'activity'} approved and actuals updated.` : decision==='reject' ? 'Suggested activity rejected.' : 'Event flagged for manual/new-activity handling.');
-    }catch(err){
-      notify(err instanceof Error ? err.message : 'Review decision failed.');
-    }
+  const decideReview=async(decision:'approve'|'reject'|'flag')=>{
+    if(!activeReview) return;
+    try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
   };
-  const approveReview=()=>finishReviewDecision('approve');
-  const rejectReview=()=>finishReviewDecision('reject');
-  const flagNew=()=>finishReviewDecision('flag');
+  const approveReview=()=>decideReview('approve');
+  const rejectReview=()=>decideReview('reject');
+  const flagNew=()=>decideReview('flag');
   const processImport=async()=>{
-    if(!importFiles.length){notify('Choose a schedule file first.');return;}
-    if(importFiles.length>1){notify('Submit one planning schedule at a time. Importing another schedule replaces only the schedule layer for the selected project.');return;}
+    if(!importFiles.length){notify('Choose a ProjectLibre, Microsoft Project, or Primavera schedule file first.');return;}
+    const file=importFiles[0];
+    if(!/\.(pod|mpp|xml|xer|mspdi)$/i.test(file.name)){setImportState('error');notify('Supported schedules: ProjectLibre .pod, Microsoft Project .mpp/.xml, Primavera P6 .xer.');return;}
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+    const projectId=project?.id;
     setImportState('processing');
     try{
-      const result=await importSchedule(importFiles[0],CURRENT_PROJECT?.id);
-      setImportState('success');setDirty(false);setReviewCount(REVIEW_QUEUE.length);setSelectedId(ACTIVITIES[0]?.id||'');setDataVersion(v=>v+1);
-      notify(`Schedule imported: ${result?.counts?.tasks ?? 0} tasks, ${result?.counts?.dependencies ?? 0} dependencies.`);
-    }catch(err){
+      const body=new FormData();
+      body.append('file',file,file.name);
+      if(projectId) body.append('project_id',projectId);
+      const response=await fetch(`${apiBase}/api/import/schedule`,{method:'POST',body});
+      const payload=await response.json().catch(()=>({detail:'The backend returned an invalid response.'}));
+      if(!response.ok) throw new Error(payload?.detail||`Import failed (${response.status}).`);
+      setImportState('success');
+      setDirty(false);
+      await refreshRuntimeData(projectId);
+      const counts=payload?.counts||{};
+      notify(`${payload?.source||'Schedule'} imported directly into Supabase: ${counts.activities??0} activities, ${counts.dependencies??0} dependencies.`);
+    }catch(error){
       setImportState('error');
-      notify(err instanceof Error ? err.message : 'Schedule import failed.');
+      notify(error instanceof Error?error.message:'POD import failed.');
     }
   };
   const exportSchedule=()=>{
@@ -308,10 +279,9 @@ export default function App(){
       <div className="page-head">
         <div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
       </div>
-      {dataLoading && <div className="helper" style={{marginBottom:16}}>Loading persisted Synchronex data…</div>}
 
-      {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount} metrics={PROJECT_METRICS}/>}
-      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} onGo={go} />}
+      {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
+      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
@@ -319,7 +289,7 @@ export default function App(){
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
-      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{if(!CURRENT_PROJECT?.id){notify('Import a schedule before saving workspace settings.');return;}try{await saveSettings(CURRENT_PROJECT.id,{confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications});setSaved(true);notify('Workspace controls saved.');}catch(err){notify(err instanceof Error ? err.message : 'Unable to save settings.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
+      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/settings/${project?.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
@@ -340,7 +310,7 @@ export default function App(){
           <div><span>PROGRESS</span><b>{detailActivity.progress}%</b><i className="activity-detail-progress"><em style={{width:`${detailActivity.progress}%`}}/></i></div>
           <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'No link'}</b></div>
         </div>
-        <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST FIELD EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p>{detailEvidence?.progress!=null&&<span className="evidence-score">Reported field progress · {detailEvidence.progress}% · {detailEvidence.status==='REVIEW REQUIRED'?'Pending planner validation':'Validated'}</span>}</div>
+        <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
         <div className="activity-detail-trace activity-detail-panel"><div className="activity-detail-panel-head"><span className="eyebrow">RECENT PROGRESS UPDATES</span><span className="trace-chip">{detailTrail.length} recorded</span></div>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action.toLowerCase().includes('progress update')?`Progress update by ${t.actor}`:t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
         <div className="activity-detail-footer"><button className="outline-btn" onClick={()=>setModal(null)}>Close</button></div>
       </div> : <p>Activity not found.</p>}
@@ -374,176 +344,70 @@ function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';s
 
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
-function Command({onGo,reviewCount,metrics}:{onGo:(s:Screen)=>void;reviewCount:number;metrics:typeof PROJECT_METRICS}){
- return <div className="command-page">
-   <div className="command-top">
-     <div className="metric-band command-metrics">
-       <Metric label="L5/L6 activities" value={String(metrics.executableCount)} note="executable nodes"/>
-       <Metric label="Actual progress" value={`${metrics.actualProgress.toFixed(1)}%`} note={`vs ${metrics.plannedProgress.toFixed(1)}% planned`} tone="blue"/>
-       <Metric label="Schedule variance" value={`${metrics.variance >= 0 ? ' +' : '−'}${Math.abs(metrics.variance).toFixed(1)}%`} note="current actual vs planned" tone={metrics.variance < 0 ? "red" : ""}/>
-       <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
-     </div>
-   </div>
-
+function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
+  const {DISCIPLINES,FIELD_EVENTS,ACTIVITIES,PROGRESS_TREND}=useRuntimeData();
+  const executable=ACTIVITIES.filter(a=>!a.isSummary);
+  const planned=executable.length?Math.round(executable.reduce((s,a)=>s+(a.plannedProgress??0),0)/executable.length*10)/10:0;
+  const actual=executable.length?Math.round(executable.reduce((s,a)=>s+(a.progress??0),0)/executable.length*10)/10:0;
+  const variance=Math.round((actual-planned)*10)/10;
+  const fmt=(n:number)=>`${n>0?'+':''}${n}%`;
+  return <div className="command-page">
+   <div className="command-top"><div className="metric-band command-metrics">
+     <Metric label="L5/L6 activities" value={String(executable.length)} note="executable nodes"/>
+     <Metric label="Actual progress" value={`${actual}%`} note={`vs ${planned}% planned`} tone="blue"/>
+     <Metric label="Schedule variance" value={fmt(variance)} note={variance<0?'behind baseline':variance>0?'ahead of baseline':'no validated variance'} tone={variance<0?'red':''}/>
+     <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
+   </div></div>
    <section className="command-summary-row">
-     <div className="command-summary-card decision-summary-card">
-       <div>
-         <span className="eyebrow">DECISION QUEUE</span>
-         <div className="summary-number-row">
-           <strong>{reviewCount}</strong>
-           <span className="queue-status">OPEN</span>
-         </div>
-         <p>Ambiguous or unmatched events need a planner before schedule application.</p>
-       </div>
-       <button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button>
-     </div>
-
-     <div className="command-summary-card progress-summary-card">
-       <div className="summary-card-head">
-         <div>
-           <span className="eyebrow">PROJECT PROGRESS</span>
-           <h3>Planned trajectory &amp; actual progress</h3>
-         </div>
-         <span className="summary-delta">{`${metrics.variance >= 0 ? ' +' : '−'}${Math.abs(metrics.variance).toFixed(1)}%`}</span>
-       </div>
-       <div className="summary-progress-grid">
-         <div>
-           <span>PLANNED</span>
-           <strong>{metrics.plannedProgress.toFixed(1)}%</strong>
-           <div className="summary-bar"><i style={{width:`${Math.max(0,Math.min(100,metrics.plannedProgress))}%`}}/></div>
-         </div>
-         <div>
-           <span>ACTUAL</span>
-           <strong>{metrics.actualProgress.toFixed(1)}%</strong>
-           <div className="summary-bar actual"><i style={{width:`${Math.max(0,Math.min(100,metrics.actualProgress))}%`}}/></div>
-         </div>
-       </div>
+     <div className="command-summary-card decision-summary-card"><div><span className="eyebrow">DECISION QUEUE</span><div className="summary-number-row"><strong>{reviewCount}</strong><span className="queue-status">OPEN</span></div><p>Ambiguous or unmatched events need a planner before schedule application.</p></div><button className="primary-btn" onClick={()=>onGo('review')}>Review decisions →</button></div>
+     <div className="command-summary-card progress-summary-card"><div className="summary-card-head"><div><span className="eyebrow">PROJECT PROGRESS</span><h3>Planned trajectory &amp; actual progress</h3></div><span className="summary-delta">{fmt(variance)}</span></div>
+       <div className="summary-progress-grid"><div><span>PLANNED</span><strong>{planned}%</strong><div className="summary-bar"><i style={{width:`${Math.min(100,Math.max(0,planned))}%`}}/></div></div><div><span>ACTUAL</span><strong>{actual}%</strong><div className="summary-bar actual"><i style={{width:`${Math.min(100,Math.max(0,actual))}%`}}/></div></div></div>
      </div>
    </section>
-
-   <div className="command-pulse-heading command-pulse-heading-full">
-     <div>
-       <span className="eyebrow">BASELINE → ACTUAL</span>
-       <h2>Project pulse</h2>
-     </div>
-     <button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button>
-   </div>
-
-   <section className="command-pulse-graph">
-     <div className="pulse-grid">
-       <div className="trend">
-         <div className="trend-head">
-           <span>Progress trajectory</span>
-           <span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span>
-         </div>
-         <div className="chart">
-           {PROGRESS_TREND.length ? <div className="gridlines"/> : <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
-           {PROGRESS_TREND.length > 0 && <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
-             {PROGRESS_TREND.length > 1 && <><polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.planned||0)/100)*180}`).join(' ')} fill="none" stroke="var(--info)" strokeWidth="2" strokeDasharray="5 5"/>
-             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.actual||0)/100)*180}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="4"/></>}
-             {PROGRESS_TREND.map((d:any,i:number)=><circle key={i} cx={(i/Math.max(1,PROGRESS_TREND.length-1))*720} cy={220-(Number(d.actual||0)/100)*180} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}
-           </svg>}
-         </div>
-         <div className="chart-axis">{PROGRESS_TREND.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>
-         <div className="pulse-kpis">
-           <div><span>ACTUAL</span><b>{metrics.actualProgress.toFixed(1)}%</b></div>
-           <div><span>PLANNED</span><b>{metrics.plannedProgress.toFixed(1)}%</b></div>
-           <div><span>VARIANCE</span><b className={metrics.variance<0?"negative":"positive"}>{metrics.variance >= 0 ? ' +' : '−'}{Math.abs(metrics.variance).toFixed(1)}%</b></div>
-         </div>
-       </div>
-     </div>
-   </section>
+   <div className="command-pulse-heading command-pulse-heading-full"><div><span className="eyebrow">BASELINE → ACTUAL</span><h2>Project pulse</h2></div><button className="outline-btn" onClick={()=>onGo('schedule')}>Open schedule →</button></div>
+   <section className="command-pulse-graph"><div className="pulse-grid"><div className="trend"><div className="trend-head"><span>Progress trajectory</span><span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span></div>
+     {PROGRESS_TREND.length? <div className="chart"><svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend"><polyline points={PROGRESS_TREND.map((d,i)=>`${i/(PROGRESS_TREND.length-1)*720},${210-d.planned*1.8}`).join(' ')} fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/><polyline points={PROGRESS_TREND.map((d,i)=>`${i/(PROGRESS_TREND.length-1)*720},${210-d.actual*1.8}`).join(' ')} fill="none" stroke="#173f35" strokeWidth="4"/></svg></div> : <div className="empty-state">No validated execution history is available yet. Progress trajectory will appear after actual field events are accepted.</div>}
+     {PROGRESS_TREND.length>0&&<div className="chart-axis">{PROGRESS_TREND.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>}
+     <div className="pulse-kpis"><div><span>ACTUAL</span><b>{actual}%</b></div><div><span>PLANNED</span><b>{planned}%</b></div><div><span>VARIANCE</span><b className={variance<0?'negative':''}>{fmt(variance)}</b></div></div>
+   </div></div></section>
  </div>
 }
+
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail,onGo}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void;onGo:(s:Screen)=>void}){
-  const [statusFilter,setStatusFilter]=useState('All');
-  const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
-  const [scheduleView,setScheduleView]=useState<'gantt'|'discipline'>('gantt');
-  const executableRows=rows.filter(a=>!a.isSummary);
-  const disciplineRows=discipline==='All'?executableRows:executableRows.filter(a=>a.discipline===discipline);
-  const visibleRows=[...disciplineRows].filter(a=>statusFilter==='All'||a.status===statusFilter).sort((a,b)=>{
-    if(sortBy==='progress') return b.progress-a.progress;
-    if(sortBy==='status') return a.status.localeCompare(b.status);
-    if(sortBy==='id') return a.id.localeCompare(b.id);
-    return a.planStart.localeCompare(b.planStart);
-  });
-  const selectDiscipline=(name:string)=>{
-    setDiscipline(name);
-    setStatusFilter('All');
-    const first=executableRows.find(a=>a.discipline===name);
-    if(first) onSelect(first.id);
-  };
-  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
-
-  if(!rows.length){
-    return <div className="schedule-page"><PageSection title="Project schedule" action={<button className="primary-btn" onClick={()=>onGo('import')}>Import schedule →</button>}><div className="schedule-empty-card"><div className="schedule-empty-icon">▤</div><div className="schedule-empty-copy"><span className="eyebrow">BASELINE NOT LOADED</span><h3>No schedule imported yet</h3><p>Upload a ProjectLibre, Microsoft Project, or Primavera schedule from Import. Once submitted, the normalized schedule will appear here.</p></div><button className="outline-btn" onClick={()=>onGo('import')}>Open Import center →</button></div></PageSection></div>;
-  }
-
-  const parseScheduleDate=(value:string)=>{ 
-    const d=new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d;
-  };
-  const ganttRows=rows.filter(a=>a.planStart&&a.planFinish).sort((a,b)=>{
-    const ad=parseScheduleDate(a.planStart)?.getTime()||0;
-    const bd=parseScheduleDate(b.planStart)?.getTime()||0;
-    return ad-bd || Number(a.outlineNumber||999)-Number(b.outlineNumber||999);
-  });
-  const ganttDates=ganttRows.flatMap(a=>[parseScheduleDate(a.planStart),parseScheduleDate(a.planFinish)]).filter(Boolean) as Date[];
-  const ganttStart=ganttDates.length?new Date(Math.min(...ganttDates.map(d=>d.getTime()))):new Date();
-  const ganttEnd=ganttDates.length?new Date(Math.max(...ganttDates.map(d=>d.getTime()))):new Date(ganttStart.getTime()+86400000);
-  const totalDays=Math.max(1,Math.round((ganttEnd.getTime()-ganttStart.getTime())/86400000)+1);
-  const dayOffset=(value:string)=>{const d=parseScheduleDate(value);return d?Math.max(0,Math.min(100,((d.getTime()-ganttStart.getTime())/86400000)/Math.max(1,totalDays-1)*100)):0};
-  const barWidth=(startValue:string,endValue:string)=>Math.max(1.5,dayOffset(endValue)-dayOffset(startValue));
-  const ganttMonthLabels=Array.from({length:Math.min(6,Math.max(1,Math.ceil(totalDays/7)))},(_,i)=>{
-    const d=new Date(ganttStart.getTime()+i*7*86400000);
-    return {label:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),left:Math.min(96,(i*7/Math.max(1,totalDays-1))*100)};
-  });
-
+function Schedule({rows,onExport}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
+  const dated=rows.filter(a=>a.planStart && a.planFinish && a.planStart!=='—' && a.planFinish!=='—');
+  const minDate=dated.length?new Date(Math.min(...dated.map(a=>new Date(a.planStart).getTime()))):new Date();
+  const maxDate=dated.length?new Date(Math.max(...dated.map(a=>new Date(a.planFinish).getTime()))):new Date();
+  minDate.setHours(0,0,0,0); maxDate.setHours(0,0,0,0);
+  const span=Math.max(1,Math.ceil((maxDate.getTime()-minDate.getTime())/86400000)+1);
+  const step=Math.max(1,Math.ceil(span/8));
+  const ticks=Array.from({length:Math.ceil(span/step)+1},(_,i)=>Math.min(span-1,i*step));
+  const pct=(date:string)=>Math.max(0,Math.min(100,((new Date(date).getTime()-minDate.getTime())/86400000/span)*100));
+  const widthPct=(start:string,finish:string)=>Math.max(1.2,pct(finish)-pct(start));
+  const labelDate=(offset:number)=>{const d=new Date(minDate);d.setDate(d.getDate()+offset);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});};
   return <div className="schedule-page">
-    <PageSection title={scheduleView==='gantt' ? 'Project schedule' : 'Schedule by discipline'} action={<div className="schedule-head-actions">
-      {scheduleView==='gantt'
-        ? <button className="filter-btn" onClick={()=>{setScheduleView('discipline');setDiscipline('All');}}>Sort by discipline →</button>
-        : <button className="filter-btn" onClick={()=>{setScheduleView('gantt');setDiscipline('All');}}>← Full schedule</button>}
-      {scheduleView==='discipline'&&discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}
-      <button className="primary-btn" onClick={onExport}>Export schedule ↓</button>
-    </div>}>
-      {scheduleView==='gantt' ? <div className="schedule-gantt-wrap">
-        <div className="schedule-gantt-summary"><div><span className="eyebrow">FULL BASELINE</span><h3>Project schedule</h3><p>Planned work across the imported schedule, with actual progress shown on each activity.</p></div><span className="schedule-detail-count">{ganttRows.length} schedule rows</span></div>
-        <div className="schedule-gantt">
-          <div className="gantt-header"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ganttMonthLabels.map(m=><span key={m.label} style={{left:`${m.left}%`}}>{m.label}</span>)}</div><div className="gantt-progress-header">PROGRESS</div></div>
-          {ganttRows.map(a=>{
-            const isSummary=Boolean(a.isSummary);
-            const left=dayOffset(a.planStart); const width=barWidth(a.planStart,a.planFinish);
-            return <button key={a.id} className={`gantt-row ${isSummary?'gantt-summary-row':''} ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);if(!isSummary)onOpenDetail(a.id);}}>
-              <div className="gantt-task"><code>{a.id}</code><strong style={{paddingLeft:`${Math.max(0,(Number(a.outlineLevel||1)-1)*12)}px`}}>{a.desc}</strong><small>{isSummary?'WBS / summary':'L5/L6 executable activity'} · {a.planStart} → {a.planFinish}</small></div>
-              <div className="gantt-track"><div className={`gantt-plan-bar ${isSummary?'summary':''}`} style={{left:`${left}%`,width:`${width}%`}}><i style={{width:`${Math.min(100,Math.max(0,Number(a.progress||0)))}%`}}/></div></div>
-              <div className="gantt-progress-cell"><b>{Number(a.progress||0)}%</b><span>{a.status||'Not started'}</span></div>
-            </button>;
+    <PageSection title="Project schedule" action={<button className="primary-btn" onClick={onExport}>Export schedule ↓</button>}>
+      <div className="gantt-shell">
+        <div className="gantt-toolbar"><div><span className="eyebrow">GANTT SCHEDULE</span><h3>Full project timeline</h3><p>Planned dates and verified actual progress across the imported schedule.</p></div><span className="schedule-detail-count">{rows.length} schedule rows</span></div>
+        <div className="gantt-header"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ticks.map(t=><span key={t} style={{left:`${(t/span)*100}%`}}>{labelDate(t)}</span>)}</div><div className="gantt-progress-header">PROGRESS</div></div>
+        <div className="gantt-body">
+          {rows.map((a,i)=>{
+            const summary=!!a.isSummary;
+            const hasDates=a.planStart!=='—'&&a.planFinish!=='—';
+            return <div className={`gantt-row ${summary?'gantt-summary':''}`} key={a.dbId||a.id||i}>
+              <div className="gantt-task-cell"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.planStart} → {a.planFinish}</small></div>
+              <div className="gantt-track">{ticks.map(t=><i key={t} style={{left:`${(t/span)*100}%`}}/>)}{hasDates&&<div className="gantt-bar" style={{left:`${pct(a.planStart)}%`,width:`${widthPct(a.planStart,a.planFinish)}%`}}><span style={{width:`${Math.max(0,Math.min(100,Number(a.progress)||0))}%`}}/></div>}</div>
+              <div className="gantt-progress-cell"><b>{Number(a.progress||0).toFixed(0)}%</b><small>{Number(a.progress||0)>0?'Actual':'Planned'}</small></div>
+            </div>;
           })}
+          {!rows.length&&<div className="empty-state">No schedule has been imported yet.</div>}
         </div>
-      </div> : discipline==='All' ? <div className="discipline-card-grid">
-        {DISCIPLINES.map(d=>{
-          const evidence=recentEvidence(d.name);
-          void evidence;
-          return <div key={d.disc} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
-            <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
-              <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
-              <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
-              <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
-              <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
-            </button>
-          </div>;
-        })}
-      </div> : <>
-        <div className="schedule-detail-head"><div><h3>{discipline === 'Piping' ? 'Piping Workstream' : `${discipline} Workstream`}</h3><p>{discipline === 'Piping' ? 'Track piping activities, planned dates, actual progress, and execution evidence in one view.' : 'Track activities, planned dates, actual progress, and execution evidence in one view.'}</p></div><span className="schedule-detail-count">{disciplineRows.length} activities</span></div>
-        <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
-        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b>{a.pendingFieldProgress!=null&&<small className="pending-field-progress">Field report: {a.pendingFieldProgress}% · pending review</small>}</div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
-      </>}
+      </div>
     </PageSection>
-  </div>;
+  </div>
 }
+
 function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;name:string;setName:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
   const textareaRef=useRef<HTMLTextAreaElement|null>(null);
   useEffect(()=>{const el=textareaRef.current;if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,360)+'px';},[text]);
@@ -577,7 +441,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
             <h3>Name this progress update <span className="required-inline">Required</span></h3>
             <p>Give the complete submission a clear name so the project team can identify it later. The worker chooses this name.</p>
           </div>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
+          <input value={name} onChange={e=>{setName(e.target.value);setDirty(true)}} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
         </div>
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
@@ -591,48 +455,156 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
 }
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
-  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><strong className="review-submission-name">{q.submissionName || 'Field progress update'}</strong></td><td>{q.candidate ? (ACTIVITIES.find(a=>a.id===q.candidate)?.desc || q.candidate) : 'No baseline match'}</td><td>{q.progress!=null?`${q.progress}%`:'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
+  const {ACTIVITIES}=useRuntimeData();
+  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
     return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
       <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</p></div>
-      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Submission</th><th>Candidate activity</th><th>Progress</th><th>Confidence</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={6}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
+      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
     </PageSection></div>
   }
   return <div className="review-detail-page"><PageSection label="" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
     <div className="review-detail-grid">
       <main className="review-detail-main">
-        <div className="review-hero"><div><span className="eyebrow">FIELD SUBMISSION</span><h3 className="review-submission-title">{item?.submissionName || 'Field progress update'}</h3><span className="eyebrow review-original-label">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%{item?.progress!=null ? ` · Reported progress ${item.progress}%` : ''}</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
+        <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
+        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
         <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
       </main>
       
     </div>
   </PageSection></div>
 }
-function downloadTextFile(content:string,filename:string,mime='text/plain;charset=utf-8'){
-  const blob=new Blob([content],{type:mime});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement('a');
-  link.href=url;
-  link.download=filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(()=>URL.revokeObjectURL(url),0);
-}
-
 function Memory(){
-  const exportKnowledge=()=>{
-    const headers=['Activity type','Baseline average','Actual average','Drift','Occurrences'];
-    const csv=[headers.join(','),...MEMORY_ACTIVITIES.map((m:any)=>[m.type,m.baselineAvg,m.actualAvg,m.variance,m.occurrences].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
-    downloadTextFile(csv,'synchronex-knowledge.csv','text/csv;charset=utf-8');
+  const {MEMORY_ACTIVITIES}=useRuntimeData();
+  const [selectedType,setSelectedType]=useState<string|null>(null);
+  const [selectedOccurrence,setSelectedOccurrence]=useState<any|null>(null);
+  const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
+
+  const downloadTextFile=(content:string,filename:string,mime:string)=>{
+    const blob=new Blob([content],{type:mime});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),0);
   };
+
+  const exportKnowledge=()=>{
+    const headers=['Activity Type','Baseline Average','Actual Average','Drift','Occurrences','Evidence'];
+    const csv=[headers.join(','),...MEMORY_ACTIVITIES.map(m=>[m.type,m.baselineAvg,m.actualAvg,m.variance,m.occurrences,'Traceable'].map(v=>`\"${String(v??'').replace(/\"/g,'\"\"')}\"`).join(','))].join('\n');
+    downloadTextFile(csv,'synchronex-knowledge-export.csv','text/csv;charset=utf-8');
+  };
+
+  const downloadOccurrencePdf=(selected:any,occurrence:any)=>{
+    const escapePdf=(value:string)=>String(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+    const raw=[
+      'SYNCHRONEX - OCCURRENCE EVIDENCE',
+      `Occurrence: ${occurrence.id}`,
+      `Activity type: ${selected.type}`,
+      `Date: ${occurrence.date}`,
+      `Actual duration: ${occurrence.duration}`,
+      `Discipline: ${occurrence.discipline}`,
+      `Uploaded on: ${occurrence.date}`,
+      `Uploaded by: Synchronex validated execution history`,
+      `Source: Persisted execution event`,
+      '',
+      'Execution evidence:',
+      occurrence.evidence,
+      '',
+      'Status: Validated',
+      'Institutional memory: Linked',
+    ];
+    const lines:string[]=[];
+    raw.forEach(line=>{
+      const words=String(line).split(' '); let current='';
+      words.forEach(word=>{
+        const next=current?`${current} ${word}`:word;
+        if(next.length>88){lines.push(current); current=word;} else current=next;
+      });
+      lines.push(current);
+    });
+    const pageLines=48, pages=[] as string[][];
+    for(let i=0;i<lines.length;i+=pageLines) pages.push(lines.slice(i,i+pageLines));
+    const objects:string[]=[];
+    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+    const pageIds:number[]=[]; const contentIds:number[]=[];
+    let nextId=3;
+    pages.forEach(()=>{pageIds.push(nextId++);contentIds.push(nextId++);});
+    objects[1]=`<< /Type /Pages /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+    pages.forEach((page,i)=>{
+      const commands=['BT','/F1 11 Tf','50 760 Td','14 TL'];
+      page.forEach((line,j)=>{
+        if(j===0 && i===0) commands.push('/F1 15 Tf');
+        commands.push(`(${escapePdf(line)}) Tj`);
+        if(j===0 && i===0) commands.push('/F1 11 Tf');
+        if(j<page.length-1) commands.push('T*');
+      });
+      commands.push('ET');
+      const stream=commands.join('\n');
+      objects[pageIds[i]-1]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${3+pages.length*2} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`;
+      objects[contentIds[i]-1]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+    });
+    const fontId=3+pages.length*2; objects[fontId-1]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+    let pdf='%PDF-1.4\n'; const offsets=[0];
+    objects.forEach((obj,idx)=>{const id=idx+1; offsets[id]=pdf.length; pdf+=`${id} 0 obj\n${obj}\nendobj\n`;});
+    const xref=pdf.length; pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
+    for(let i=1;i<=objects.length;i++) pdf+=`${String(offsets[i]).padStart(10,'0')} 00000 n \n`;
+    pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    downloadTextFile(pdf,`synchronex-occurrence-${occurrence.id}.pdf`,'application/pdf');
+  };
+
+
+  const {MEMORY_OCCURRENCES}=useRuntimeData();
+  const occurrenceData: Record<string, any[]> = Object.fromEntries(MEMORY_ACTIVITIES.map(m=>[m.type,MEMORY_OCCURRENCES.filter(o=>o.discipline===m.type)]));
+
+  if(selected){
+    const occurrences=occurrenceData[selected.type] || [];
+    const exportOccurrences=()=>{
+      const headers=['Occurrence','Date','Duration','Discipline','Execution Evidence','Status'];
+      const csv=[headers.join(','),...occurrences.map(o=>[o.id,o.date,o.duration,o.discipline,o.evidence,o.status].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+      downloadTextFile(csv,`synchronex-${selected.type.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-occurrences.csv`,'text/csv;charset=utf-8');
+    };
+    return <PageSection title={selected.type} action={<div style={{display:'flex',gap:10}}><button className="outline-btn" onClick={exportOccurrences}>Export occurrences ↓</button><button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button></div>}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20,marginBottom:22}}>
+        <p className="lead" style={{margin:0}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
+      </div>
+      <div className="memory-table">
+        <table>
+          <thead><tr><th>Occurrence</th><th>Date</th><th>Duration</th><th>Discipline</th><th>Execution evidence</th><th>Status</th></tr></thead>
+          <tbody>{occurrences.map(o=><tr key={o.id} className="memory-occurrence-row" onClick={()=>setSelectedOccurrence(o)} tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedOccurrence(o)}}>
+            <td><code>{o.id}</code></td><td>{o.date}</td><td>{o.duration}</td><td>{o.discipline}</td><td style={{maxWidth:420}}>{o.evidence}</td><td><span className="trace-chip">{o.status}</span></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {selectedOccurrence&&<div className="memory-occurrence-overlay" role="dialog" aria-modal="true" aria-labelledby="occurrence-detail-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedOccurrence(null)}}>
+        <div className="memory-occurrence-card">
+          <div className="memory-occurrence-head">
+            <div><h2 id="occurrence-detail-title">{selectedOccurrence.id}</h2><p>{selected.type} · {selectedOccurrence.discipline}</p></div>
+            <button className="icon-btn memory-occurrence-close" aria-label="Close occurrence details" onClick={()=>setSelectedOccurrence(null)}>×</button>
+          </div>
+          <div className="memory-occurrence-grid">
+            <div><span>OCCURRENCE DATE</span><b>{selectedOccurrence.date}</b></div>
+            <div><span>ACTUAL DURATION</span><b>{selectedOccurrence.duration}</b></div>
+            <div><span>DISCIPLINE</span><b>{selectedOccurrence.discipline}</b></div>
+            <div><span>ACTIVITY TYPE</span><b>{selected.type}</b></div>
+            <div><span>UPLOADED ON</span><b>{selectedOccurrence.date}</b></div>
+            <div><span>UPLOADED BY</span><b>Synchronex validated execution history</b></div>
+            <div className="wide"><span>SOURCE</span><b>Persisted execution event</b></div>
+            <div className="wide"><span>EXECUTION EVIDENCE</span><p>{selectedOccurrence.evidence}</p></div>
+          </div>
+          <div className="memory-occurrence-footer"><button className="outline-btn" onClick={()=>setSelectedOccurrence(null)}>← Back to occurrences</button><button className="primary-btn" onClick={()=>downloadOccurrencePdf(selected,selectedOccurrence)}>Download as PDF ↓</button></div>
+        </div>
+      </div>}
+    </PageSection>;
+  }
+
   return <div className="memory-overview"><PageSection title="Memory" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
-    {MEMORY_ACTIVITIES.length ? <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map((m:any)=><tr key={m.type}><td><strong>{m.type}</strong></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td>{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div> : <div className="empty-state">No validated execution memory is available yet. Memory appears after reviewed execution events produce reusable historical evidence.</div>}
+    <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
+      <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
+    </tr>)}</tbody></table></div>
   </PageSection></div>;
 }
 
 function Trace(){
+  const {AUDIT_TRAIL}=useRuntimeData();
   const [selectedActor,setSelectedActor]=useState<string|null>(null);
   const actors=Array.from(new Set(AUDIT_TRAIL.map(a=>a.actor)));
   const actorUpdates=(actor:string)=>AUDIT_TRAIL.filter(a=>a.actor===actor);
@@ -676,123 +648,107 @@ function Trace(){
 function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';files:File[];setFiles:(files:File[])=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
   const [dragOver,setDragOver]=useState(false);
-  const supported='.mpp,.xer,.xml,.pod';
-  const supportedExt=new Set(['mpp','xer','xml','pod']);
+  const supported='.pod,.mpp,.xml,.xer,.mspdi';
   const addFiles=(incoming:FileList|null)=>{
     if(!incoming) return;
-    const incomingFiles=Array.from(incoming);
-    const valid=incomingFiles.filter(file=>supportedExt.has(file.name.split('.').pop()?.toLowerCase()||''));
-    const next=[...files,...valid].filter((file,i,arr)=>arr.findIndex(x=>x.name===file.name&&x.size===file.size&&x.lastModified===file.lastModified)===i);
-    setFiles(next);
+    const file=Array.from(incoming).find(candidate=>/\.(pod|mpp|xml|xer|mspdi)$/i.test(candidate.name));
+    if(!file){setFiles([]);return;}
+    setFiles([file]);
   };
   const removeFile=(index:number)=>setFiles(files.filter((_,i)=>i!==index));
   return <div className="import-page">
     <PageSection title="Import center">
-      <div className="import-purpose import-purpose-clean"><div><span className="eyebrow">SCHEDULE DATA INTAKE</span><h3>Bring approved planning files into the Synchronex bridge.</h3><p>Upload the schedule that should become the active baseline. Synchronex validates it before writing the normalized schedule to the project.</p></div><div className="import-supported-inline"><span>SUPPORTED</span><b>MS Project</b><b>Primavera</b><b>ProjectLibre</b><b>Excel / CSV</b></div></div>
+      <div className="import-purpose import-purpose-clean"><div><span className="eyebrow">MULTI-SOURCE SCHEDULE INTAKE</span><h3>Send the original project schedule directly through Synchronex.</h3><p>Upload the original planning file. Synchronex parses it itself, normalizes the schedule, validates it, and writes the parsed records directly to Supabase. No JSON, CSV, Excel, or generated SQL import file is required.</p></div><div className="import-supported-inline"><span>INPUT</span><b>ProjectLibre · Microsoft Project · Primavera</b></div></div>
       <article className="import-choice import-choice-single">
         <div className="import-choice-top"><div><span className="import-choice-icon">▤</span></div><span className="trace-chip">SCHEDULE</span></div>
         <span className="eyebrow">01 / SCHEDULE IMPORT</span>
         <h3>Upload project schedules</h3>
-        <p>Upload one planning schedule at a time. Supported project formats include Microsoft Project, Primavera, and ProjectLibre.</p>
-        <div className="import-format-list">{['Microsoft Project · .mpp / .xml','Primavera P6 · .xer','ProjectLibre · .pod'].map(x=><span key={x}>{x}</span>)}</div>
+        <p>Upload the original schedule. Synchronex supports ProjectLibre (.pod), Microsoft Project (.mpp/.xml), and Primavera P6 (.xer).</p>
+        <div className="import-format-list"><span>ProjectLibre · .pod</span><span>Microsoft Project · .mpp/.xml</span><span>Primavera P6 · .xer</span><span>Persisted only after manager upload</span></div>
         <input ref={inputRef} className="file-input-hidden" type="file" accept={supported} onChange={e=>{addFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select schedule files" />
         <div className={`import-drop-zone import-drop-zone-large ${dragOver?'dragging':''}`} role="button" tabIndex={0} onClick={()=>inputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')inputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);addFiles(e.dataTransfer.files)}}>
-          <span className="import-drop-icon">↑</span><strong>{files.length?`${files.length} schedule file${files.length===1?'':'s'} selected`:'Drop schedule files here'}</strong><span>Drag and drop a schedule file or browse from your computer.</span><small>Microsoft Project · Primavera P6 · ProjectLibre</small>
+          <span className="import-drop-icon">↑</span><strong>{files.length?'ProjectLibre .pod selected':'Drop a project schedule file here'}</strong><span>Drag and drop the original schedule or browse from your computer.</span><small>Accepted: .pod · .mpp · .xml · .xer</small>
         </div>
         {files.length>0&&<div className="import-file-list">{files.map((file,i)=><div className="import-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Schedule file'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" className="icon-btn" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
-        <div className="import-actions import-actions-submit"><button className="primary-btn" disabled={!files.length||state==='processing'} onClick={onProcess}>{state==='processing'?'Processing schedule…':state==='success'?'Import again':'Submit schedule'} <span>→</span></button></div>
+        <div className="import-actions import-actions-submit"><button className="primary-btn" disabled={!files.length||state==='processing'} onClick={onProcess}>{state==='processing'?'Parsing schedule and writing data…':state==='success'?'Import another schedule':'Submit schedule to Synchronex'} <span>→</span></button></div>
       </article>
-      {(state!=='idle'||files.length>0) && <div className={`import-status-banner ${state}`} role="status"><div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Processing selected schedules…':state==='success'?'Schedules processed successfully':state==='error'?'Import needs attention':'Ready to submit'}</strong><p>{files.length?`${files.length} file${files.length===1?'':'s'} selected · ${files.map(f=>f.name).join(', ')}`:'Select schedule files to begin.'}</p></div><div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div></div>}
+      {(state!=='idle'||files.length>0) && <div className={`import-status-banner ${state}`} role="status"><div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Synchronex is reading the POD…':state==='success'?'Schedule imported into Synchronex':state==='error'?'POD import needs attention':'Ready to import'}</strong><p>{files.length?`${files[0].name} · parsed by Synchronex after upload · schedule records persisted` :'Select a supported schedule file to begin.'}</p></div><div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div></div>}
     </PageSection>
   </div>
 }
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
+  const {PROGRESS_TREND,FIELD_EVENTS,REVIEW_QUEUE}=useRuntimeData();
   const trend=PROGRESS_TREND;
-  const width=760, height=250, left=42, right=18, top=20, bottom=42;
+  const width=760,height=250,left=42,right=18,top=20,bottom=42;
   const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
-  const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
-  const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
-  return <div className="field-page field-home-page">
-    <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
-      <div className="field-summary-grid">
-        <div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES TODAY</span><strong>{FIELD_EVENTS.length}</strong><small>Persisted execution events</small></div><span className="summary-status">ACTIVE</span></div>
-        <div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>{REVIEW_QUEUE.length}</strong><small>Pending planner decisions</small></div><span className="summary-status amber">IN REVIEW</span></div>
-      </div>
-      <div className="field-home-grid field-home-grid-enhanced">
-        <div className="field-panel field-trajectory-panel">
-          <div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">{PROJECT_METRICS.actualProgress.toFixed(1)}% actual</span></div>
-          <div className="field-chart-wrap">
-            {!trend.length && <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
-            {trend.length > 0 && <svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">
-              {[0,25,50,75,100].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}
-              <polyline points={plannedPoints} className="trajectory-line planned"/>
-              <polyline points={actualPoints} className="trajectory-line actual"/>
-              {trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}
-            </svg>}
-            <div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span><b>{PROJECT_METRICS.variance >= 0 ? `+${PROJECT_METRICS.variance.toFixed(1)} pts current gap` : `−${Math.abs(PROJECT_METRICS.variance).toFixed(1)} pts current gap`}</b></div>
-          </div>
-        </div>
-        <div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Recent execution events</h3><p className="panel-subtitle">Persisted field evidence and its current review state.</p></div></div>{FIELD_EVENTS.slice(0,2).map((e:any)=><div className="submission-mini" key={e.id}><span className={`submission-state ${e.status==='AI MATCHED'?'accepted':'review'}`}>{e.status}</span><strong>{e.submissionName || 'Field progress update'}</strong><small>{e.actDesc && e.actDesc !== 'No matching activity' ? `${e.actDesc}${e.progress!=null ? ` · ${e.progress}% reported` : ''}` : 'Awaiting planner activity match'}</small></div>)}{!FIELD_EVENTS.length&&<div className="empty-state">No execution events have been submitted yet.</div>}<button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
-      </div>
-      <div className="field-home-footer-space" aria-hidden="true"/>
-    </PageSection>
-  </div>
+  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' '); const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
+  const accepted=FIELD_EVENTS.filter(e=>e.status==='AI MATCHED').length; const pending=REVIEW_QUEUE.length;
+  return <div className="field-page field-home-page"><PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
+    <div className="field-summary-grid"><div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES AVAILABLE</span><strong>{FIELD_EVENTS.length}</strong><small>Persisted execution events</small></div><span className="summary-status">{accepted?'MATCHED':'NO DATA'}</span></div><div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>{pending}</strong><small>Events requiring planner review</small></div><span className="summary-status amber">{pending?'IN REVIEW':'CLEAR'}</span></div></div>
+    <div className="field-home-grid field-home-grid-enhanced"><div className="field-panel field-trajectory-panel"><div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">{trend.length?`${trend[trend.length-1].actual}% actual`:'No validated actuals'}</span></div><div className="field-chart-wrap">
+      {trend.length?<><svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">{[0,15,30,45,60].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}<polyline points={plannedPoints} className="trajectory-line planned"/><polyline points={actualPoints} className="trajectory-line actual"/>{trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}</svg><div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span></div></>:<div className="empty-state">No validated execution history is available yet. Capture and approve field evidence to build the trajectory.</div>}
+    </div></div><div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Execution submissions</h3><p className="panel-subtitle">Latest persisted field evidence and its current review state.</p></div></div>{FIELD_EVENTS.slice(0,3).map((e:any,i:number)=><div className="submission-mini" key={`${e.time}-${i}`}><span className={`submission-state ${e.status==='AI MATCHED'?'accepted':'review'}`}>{e.status==='AI MATCHED'?'Matched':'Under review'}</span><strong>{e.actDesc}</strong><small>{e.time} · {e.conf}% match confidence</small></div>)}{!FIELD_EVENTS.length&&<div className="empty-state">No field submissions have been persisted yet.</div>}<button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div></div><div className="field-home-footer-space" aria-hidden="true"/></PageSection></div>
 }
 
 function Submissions({onCapture}:{onCapture:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}>
-    {FIELD_EVENTS.length ? <div className="field-submissions-list">{FIELD_EVENTS.map((s:any)=><div className="submission-card" key={s.id}><div><span className={`submission-state ${s.status==='AI MATCHED'?'accepted':s.status==='UNMATCHED'?'needs':'review'}`}>{s.status}</span><strong>{s.submissionName || 'Field progress update'}</strong><small>{s.actDesc && s.actDesc !== 'No matching activity' ? `${s.actDesc}${s.progress!=null ? ` · ${s.progress}% reported` : ''}` : 'Awaiting planner activity match'}</small></div><span className="submission-arrow">→</span></div>)}</div> : <div className="empty-state">No field submissions are stored for this project yet.</div>}
-  </PageSection></div>
+  const {FIELD_EVENTS}=useRuntimeData();
+  const submissions=FIELD_EVENTS.map((e:any,i:number)=>({status:e.status==='AI MATCHED'?'Matched':'Under review',cls:e.status==='AI MATCHED'?'accepted':'review',title:e.actDesc||'Unmatched execution event',meta:`${e.time} · ${e.conf}% match confidence`}));
+  return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}><div className="field-submissions-list">{submissions.map((s:any,i:number)=><div className="submission-card" key={`${s.title}-${i}`}><div><span className={`submission-state ${s.cls}`}>{s.status}</span><strong>{s.title}</strong><small>{s.meta}</small></div><span className="submission-arrow">→</span></div>)}{!submissions.length&&<div className="empty-state">No persisted submissions yet.</div>}</div></PageSection></div>
 }
 
 function FieldProfile({onSignOut}:{onSignOut:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD WORKSPACE</span><h3>Signed-in field user</h3><p>{CURRENT_PROJECT?.name || 'No project imported'}</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div></PageSection></div>
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Field account</h3><p>Project context is loaded from the active Synchronex workspace.</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div></PageSection></div>
 }
 function Analytics(){
+  const {PROGRESS_TREND,DISCIPLINE_PERF,DELAY_CAUSES,REVIEW_QUEUE}=useRuntimeData();
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
-  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
+  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="analytics-page">
     <PageSection label="ANALYTICS / PROJECT PERFORMANCE" title="Project analytics">
       <div className="analytics-summary-grid">
-        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{PROJECT_METRICS.actualProgress.toFixed(1)}%</strong><small>Persisted execution progress across the project</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>{PROJECT_METRICS.plannedProgress.toFixed(1)}%</strong><small>Schedule-time planned progress from planned dates</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{PROJECT_METRICS.reviewCount}</strong><small>Ambiguous events awaiting planner action</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{PROJECT_METRICS.unmatchedCount}</strong><small>Unmatched pending events</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{trend.length?`${trend[trend.length-1].actual}%`:'—'}</strong><small>Verified execution progress across the project</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>{trend.length?`${trend[trend.length-1].planned}%`:'—'}</strong><small>Current planned project progress</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{REVIEW_QUEUE.length}</strong><small>Ambiguous events awaiting planner action</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{REVIEW_QUEUE.filter((r:any)=>r.status==='Unmatched').length}</strong><small>Explicit new-activity proposals</small></div>
       </div>
       <div className="analytics-grid-two">
         <article className="analytics-panel analytics-trajectory-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{PROJECT_METRICS.actualProgress.toFixed(1)}% actual</span></div>
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{trend.length?`${trend[trend.length-1].actual}% actual`:"No validated actuals"}</span></div>
           <div className="analytics-chart">
-            <div className="analytics-ylabels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
+            <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
             <div className="analytics-plot">
-              <div className="analytics-gridlines" aria-hidden="true"><i/><i/><i/><i/><i/></div>
-              {trend.length > 0 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress">{trend.length > 1 && <><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/></>}{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="analytics-chart-empty"><strong>No schedule progress snapshot</strong><span>Progress will appear after a schedule is imported.</span></div>}
-              {trend.length > 1 && <div className="analytics-xlabels">{trend.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>}
+              <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
+              <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d,i)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg>
+              <div className="analytics-xlabels">{trend.map(d=><span key={d.date}>{d.date}</span>)}</div>
             </div>
           </div>
           <div className="analytics-legend"><span><i className="legend-line actual-line"/>Actual</span><span><i className="legend-line planned-line"/>Planned</span></div>
         </article>
-        <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div>{DISCIPLINE_PERF.length ? <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div> : <div className="analytics-panel-empty"><strong>No discipline data yet</strong><span>Workstream output will appear after a schedule is imported.</span></div>}</article>
+        <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div><div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div></article>
       </div>
-      <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div>{DELAY_CAUSES.length ? <div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div> : <div className="analytics-panel-empty"><strong>No delay patterns yet</strong><span>Delay causes will appear after validated execution events are recorded.</span></div>}</article>
+      <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div><div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div></article>
     </PageSection>
   </div>
 }
 
 function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:string;name:string;role:string;workspace:string;status:string})=>void}){
-  void onManage;
+  const members=[
+    {initials:'PC',name:'Priya Menon',role:'Project Manager',workspace:'Company',status:'Active'},
+    {initials:'PL',name:'Arun Kumar',role:'Planner / Reviewer',workspace:'Company',status:'Active'},
+    {initials:'SV',name:'Karthik R',role:'Field Supervisor',workspace:'Field',status:'Active'},
+    {initials:'EN',name:'Meera S',role:'Field Engineer',workspace:'Field',status:'Active'},
+  ];
   return <div className="team-page">
     <PageSection title="Team members" action={<button className="primary-btn" onClick={onInvite}>Add member +</button>}>
-      <div className="empty-state">Team membership is not exposed by the current frontend API yet. No placeholder members are shown.</div>
+      <div className="team-table-wrap"><table className="team-table"><thead><tr><th>Member</th><th>Role</th><th>Workspace</th><th>Status</th><th>Access</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td><span className="member-avatar">{m.initials}</span><strong>{m.name}</strong></td><td>{m.role}</td><td>{m.workspace}</td><td><span className="status-badge track">{m.status}</span></td><td><button className="text-action" onClick={()=>onManage(m)}>Manage →</button></td></tr>)}</tbody></table></div>
     </PageSection>
   </div>
 }
-
 function FieldSettings({themeMode,setThemeMode,density,setDensity,autoSave,setAutoSave}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void}){
  return <div className="settings-page field-settings-page"><PageSection title="Field settings">
    <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>

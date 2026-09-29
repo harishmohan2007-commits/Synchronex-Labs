@@ -3836,152 +3836,23 @@ table{border-collapse:collapse;width:100%}th{font:600 9px var(--font-mono);lette
 :root[data-theme="dark"] .auth-path span{background:#17272b;border-color:#385055;color:#b8c9c5}
 :root[data-theme="dark"] .form-error{background:#3a2220;border-color:#6c3934;color:#ffb3ac}
 
-/* =====================================================================
-   EMPTY WORKSPACE + REVIEW DARK-MODE POLISH
-   Keep route layouts compact when no schedule exists. Data cards remain
-   visible, while the empty state is contained inside the relevant surface.
-   ===================================================================== */
-.schedule-empty-card{
-  display:grid;
-  grid-template-columns:auto minmax(0,1fr) auto;
-  align-items:center;
-  gap:20px;
-  min-height:150px;
-  padding:24px;
-  border:1px dashed var(--border, #d7ddd9);
-  background:var(--surface, #fff);
-  color:var(--text, var(--ink));
-}
-.schedule-empty-icon{
-  width:48px;
-  height:48px;
-  display:grid;
-  place-items:center;
-  border:1px solid var(--border, #d7ddd9);
-  background:var(--surface-2, #f4f6f3);
-  color:var(--brand-2, var(--green2));
-  font:600 18px 'IBM Plex Mono';
-}
-.schedule-empty-copy h3{margin:6px 0 5px;font-size:19px;color:var(--text, var(--ink));}
-.schedule-empty-copy p{margin:0;max-width:760px;color:var(--text-2, var(--muted));font-size:13px;line-height:1.55;}
-
-:root[data-theme="dark"] .schedule-empty-card{
-  background:#182328!important;
-  color:#e5ece9!important;
-  border-color:#3b5054!important;
-}
-:root[data-theme="dark"] .schedule-empty-icon{
-  background:#111c20!important;
-  border-color:#3b5054!important;
-  color:#78c7a5!important;
-}
-:root[data-theme="dark"] .schedule-empty-copy h3{color:#eef5f1!important;}
-:root[data-theme="dark"] .schedule-empty-copy p{color:#aebfbb!important;}
-
-/* The review queue's cleared-state row previously retained its light card
-   background in dark mode, producing the white block visible in the UI. */
-:root[data-theme="dark"] .review-empty{
-  background:#182328!important;
-  color:#aebfbb!important;
-  border-color:#3b5054!important;
-}
-:root[data-theme="dark"] .review-empty strong{color:#eef5f1!important;}
-:root[data-theme="dark"] .review-empty span{color:#aebfbb!important;}
-:root[data-theme="dark"] .review-table-wrap .review-empty{box-shadow:none!important;}
-
-/* Compact empty states elsewhere: avoid large blank visual gaps while
-   keeping the existing information architecture intact. */
-.empty-state{min-height:64px;display:flex;align-items:center;justify-content:center;padding:18px 16px;}
-:root[data-theme="dark"] .empty-state{color:#9fb2ae;}
-
-.pending-field-progress {
-  display: block;
-  margin-top: 4px;
-  font-size: 10px;
-  letter-spacing: .02em;
-  color: #d8b36a;
-}
-
-/* Field submission cards: keep the list scannable. The worker's chosen
-   submission name is the primary heading; the matched baseline activity is
-   the compact subheading. Full evidence remains available in planner review. */
-.submission-mini strong,
-.submission-card strong {
-  font-size: 15px;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-}
-.submission-mini small,
-.submission-card small {
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-2);
-}
-.submission-card {
-  min-height: 88px;
-}
-.submission-card > div {
-  min-width: 0;
-}
-.submission-card small {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: min(760px, 75vw);
-}
-
-/* Review queue is intentionally a summary surface. Full evidence is shown
-   only after opening a queue item. */
-.review-table {
-  min-width: 760px;
-}
-.review-table td:nth-child(1) {
-  min-width: 230px;
-  width: 28%;
-}
-.review-table td:nth-child(2) {
-  min-width: 280px;
-  width: 34%;
-}
-.review-table td:nth-child(3),
-.review-table td:nth-child(4),
-.review-table td:nth-child(5) {
-  white-space: nowrap;
-}
-.review-submission-name {
-  display: block;
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.review-submission-title{margin:8px 0 16px;font-size:22px;line-height:1.25;color:var(--ink);font-weight:600;letter-spacing:-.02em}.review-original-label{display:block;margin-bottom:7px}.review-detail-main .review-hero blockquote{font-size:16px;line-height:1.6;max-width:900px}.review-detail-main .review-hero{padding:26px 30px}
-
-/* Full schedule Gantt view: default manager view. */
-.schedule-gantt-wrap{border:1px solid var(--border,#d7ddd9);background:var(--surface,#fff);overflow:hidden;}
-.schedule-gantt-summary{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;padding:20px 22px;border-bottom:1px solid var(--border,#d7ddd9);background:var(--surface-2,#f7f8f4);}
-.schedule-gantt-summary h3{margin:5px 0 4px;font-size:22px;color:var(--text,#18252b);}
-.schedule-gantt-summary p{margin:0;color:var(--text-2,#69767a);font-size:13px;}
-.schedule-gantt{width:100%;overflow:auto;}
-.gantt-header,.gantt-row{display:grid;grid-template-columns:minmax(330px,1.05fr) minmax(480px,1.7fr) 105px;min-width:920px;}
-.gantt-header{background:var(--surface-2,#f7f8f4);border-bottom:1px solid var(--border,#d7ddd9);color:var(--text-2,#69767a);font:600 9px 'IBM Plex Mono',monospace;letter-spacing:.08em;text-align:left;}
-.gantt-task-header,.gantt-progress-header{padding:12px 18px;display:flex;align-items:center;}
-.gantt-progress-header{justify-content:flex-end;}
-.gantt-timeline-header{position:relative;height:40px;border-left:1px solid var(--border,#d7ddd9);}
-.gantt-timeline-header span{position:absolute;top:13px;transform:translateX(-50%);white-space:nowrap;}
-.gantt-row{width:100%;border:0;border-bottom:1px solid var(--border,#d7ddd9);background:var(--surface,#fff);color:var(--text,#18252b);text-align:left;align-items:center;min-height:68px;padding:0;}
-.gantt-row:hover{background:var(--surface-2,#f7f8f4);}
-.gantt-row.selected{background:#e9f2ed;box-shadow:inset 3px 0 var(--brand,#17463b);}
-.gantt-task{padding:11px 18px;display:flex;flex-direction:column;gap:3px;min-width:0;}
-.gantt-task code{font:600 9px 'IBM Plex Mono',monospace;color:var(--brand,#17463b);}
-.gantt-task strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gantt-task small{font-size:9px;color:var(--text-2,#69767a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.gantt-track{position:relative;height:68px;border-left:1px solid var(--border,#d7ddd9);background-image:linear-gradient(to right,transparent calc(100% - 1px),var(--border,#eef1ee) calc(100% - 1px));background-size:12.5% 100%;}
-.gantt-plan-bar{position:absolute;top:25px;height:18px;border-radius:3px;background:var(--brand,#2a6653);overflow:hidden;min-width:10px;box-shadow:0 1px 2px rgba(0,0,0,.08);}
-.gantt-plan-bar.summary{background:#526b63;height:14px;top:27px;}
-.gantt-plan-bar i{display:block;height:100%;background:#7fb59c;opacity:.95;}
-.gantt-progress-cell{padding:10px 18px;text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end;}
-.gantt-progress-cell b{font:600 12px 'IBM Plex Mono',monospace;color:var(--text,#18252b);}
-.gantt-progress-cell span{font-size:9px;color:var(--text-2,#69767a);white-space:nowrap;}
-@media(max-width:900px){.gantt-header,.gantt-row{grid-template-columns:280px 520px 90px;}}
+/* Synchronex: focused project Gantt view */
+.gantt-shell{border:1px solid var(--line);background:var(--panel);overflow:hidden}
+.gantt-toolbar{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px;border-bottom:1px solid var(--line)}
+.gantt-toolbar h3{margin:4px 0 4px;font-size:22px}.gantt-toolbar p{margin:0;color:var(--muted)}
+.gantt-header,.gantt-row{display:grid;grid-template-columns:minmax(300px,34%) minmax(420px,1fr) 90px}
+.gantt-header{min-height:42px;background:var(--panel-2);border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.gantt-task-header,.gantt-progress-header{padding:14px 16px}.gantt-progress-header{text-align:center}
+.gantt-timeline-header{position:relative;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.gantt-timeline-header span{position:absolute;top:14px;transform:translateX(-50%);white-space:nowrap;font-family:monospace}
+.gantt-body{max-height:calc(100vh - 320px);overflow:auto}
+.gantt-row{min-height:72px;border-bottom:1px solid var(--line)}
+.gantt-row:hover{background:rgba(255,255,255,.025)}
+.gantt-task-cell{padding:10px 16px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.gantt-task-cell code{font-size:10px;color:var(--accent);margin-bottom:3px}.gantt-task-cell strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.gantt-task-cell small{font-size:10px;color:var(--muted);margin-top:3px}
+.gantt-track{position:relative;border-left:1px solid var(--line);border-right:1px solid var(--line);min-height:72px}
+.gantt-track>i{position:absolute;top:0;bottom:0;width:1px;background:var(--line);opacity:.8}
+.gantt-bar{position:absolute;top:25px;height:18px;border-radius:4px;background:var(--track);overflow:hidden;min-width:12px}.gantt-bar span{display:block;height:100%;background:var(--accent)}
+.gantt-summary .gantt-bar{height:14px;top:27px;background:var(--text-strong)}.gantt-summary .gantt-task-cell strong{font-weight:700}
+.gantt-progress-cell{display:flex;flex-direction:column;justify-content:center;align-items:center}.gantt-progress-cell b{font-size:13px}.gantt-progress-cell small{font-size:9px;color:var(--muted);margin-top:2px}
+@media(max-width:900px){.gantt-header,.gantt-row{grid-template-columns:220px minmax(420px,1fr) 70px}.gantt-body{overflow:auto}.gantt-toolbar{padding:18px}}
