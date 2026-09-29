@@ -13,6 +13,17 @@ def _project_code(name: str) -> str:
     return base[:80]
 
 
+def _discipline(name: str) -> str:
+    low = (name or '').lower()
+    if re.search(r'spool|pipe|piping|weld|ndt|pipeline|erection', low): return 'Piping'
+    if re.search(r'pump|mechanical|commissioning|equipment|alignment', low): return 'Mechanical'
+    if re.search(r'civil|foundation|concrete|excavat|backfill', low): return 'Civil'
+    if re.search(r'electrical|cable|termination', low): return 'Electrical'
+    if re.search(r'instrument|calibrat|tubing', low): return 'Instrumentation'
+    if re.search(r'safety|hse|inspection', low): return 'HSE'
+    return 'Unassigned'
+
+
 def _resolve_or_create_project(sb, parsed: dict, project_id: str | None, filename: str):
     if project_id:
         project = sb.table('projects').select('*').eq('id', project_id).single().execute().data
@@ -111,7 +122,7 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
             activity_rows.append({
                 'project_id': pid, 'wbs_node_id': parent,
                 'activity_code': f"{Path(filename).stem[:8].upper()}-{t['uid']}",
-                'name': t['name'], 'discipline': None,
+                'name': t['name'], 'discipline': _discipline(t['name']),
                 'planned_start': (t.get('start') or '')[:10] or None,
                 'planned_finish': (t.get('finish') or '')[:10] or None,
                 'actual_start': None, 'actual_finish': None,

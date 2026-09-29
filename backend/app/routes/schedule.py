@@ -48,6 +48,7 @@ def bootstrap(project_id: str):
         'calendars': q('schedule_calendars'), 'resources': q('schedule_resources'),
         'dependencies': q('schedule_dependencies'), 'assignments': q('schedule_assignments'),
         'wbs': q('wbs_nodes'),
+        'progress_updates': q('progress_updates'),
         'analytics': {
             'activity_count': len(activities_rows), 'execution_event_count': len(events),
             'review_count': len([r for r in reviews if r.get('status') == 'pending']),

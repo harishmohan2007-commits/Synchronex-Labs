@@ -6,6 +6,12 @@ from ..services.supabase_service import get_supabase
 
 router = APIRouter(prefix='/api/review', tags=['review'])
 
+def _reported_progress(text: str) -> float | None:
+    import re
+    m = re.search(r'(?:current\s+(?:physical\s+)?progress|physical\s+progress|progress)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%', text or '', re.I)
+    return float(m.group(1)) if m else None
+
+
 class Decision(BaseModel):
     reviewer: str = 'planner'
     decision: str
@@ -36,6 +42,8 @@ def decide(review_id: str, body: Decision):
             raise HTTPException(404, 'Matched activity not found.')
 
         progress = body.new_progress
+        if progress is None:
+            progress = _reported_progress(event.get('raw_text') or '')
         if progress is not None and not 0 <= progress <= 100:
             raise HTTPException(400, 'new_progress must be between 0 and 100')
         update = {}
@@ -46,6 +54,7 @@ def decide(review_id: str, body: Decision):
             if progress is None:
                 progress = 100.0
         if progress is not None:
+            progress = max(float(activity.get('actual_progress') or 0), min(100.0, float(progress)))
             update['actual_progress'] = progress
             update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
             if progress > 0 and not activity.get('actual_start') and actual_date:
