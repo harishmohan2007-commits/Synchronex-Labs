@@ -1,4 +1,8 @@
-const API_BASE = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+const configuredBase = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+// In production Vercel proxies /api/* to Render, so the browser stays same-origin.
+// Set VITE_API_BASE_URL to /api for deployed Vercel builds. For local development,
+// use the full backend URL (for example http://localhost:8000).
+const API_BASE = configuredBase === '/api' ? '' : configuredBase || 'http://localhost:8000';
 
 export type Activity = {
   id: string;
