@@ -309,10 +309,9 @@ export default function App(){
         <div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
       </div>
       {dataLoading && <div className="helper" style={{marginBottom:16}}>Loading persisted Synchronex data…</div>}
-      {!dataLoading && !CURRENT_PROJECT && <div className="empty-state" style={{marginBottom:16}}>No project schedule has been imported yet. Use Import to upload a ProjectLibre, Microsoft Project, or Primavera schedule.</div>}
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount} metrics={PROJECT_METRICS}/>}
-      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
+      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} onGo={go} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
@@ -457,7 +456,7 @@ function Command({onGo,reviewCount,metrics}:{onGo:(s:Screen)=>void;reviewCount:n
 }
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
+function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail,onGo}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void;onGo:(s:Screen)=>void}){
   const [statusFilter,setStatusFilter]=useState('All');
   const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
   const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
@@ -475,11 +474,24 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   };
   const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
+  if(!rows.length){
+    return <div className="schedule-page">
+      <PageSection title="Schedule by discipline" action={<button className="primary-btn" onClick={()=>onGo('import')}>Import schedule →</button>}>
+        <div className="schedule-empty-card">
+          <div className="schedule-empty-icon">▤</div>
+          <div className="schedule-empty-copy"><span className="eyebrow">BASELINE NOT LOADED</span><h3>No schedule imported yet</h3><p>Upload a ProjectLibre, Microsoft Project, or Primavera schedule from Import. Once submitted, the normalized L5/L6 activities will appear here.</p></div>
+          <button className="outline-btn" onClick={()=>onGo('import')}>Open Import center →</button>
+        </div>
+      </PageSection>
+    </div>;
+  }
+
   return <div className="schedule-page">
     <PageSection title="Schedule by discipline" action={<div className="schedule-head-actions">{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}<button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
       {discipline==='All' ? <div className="discipline-card-grid">
         {DISCIPLINES.map(d=>{
           const evidence=recentEvidence(d.name);
+          void evidence;
           return <div key={d.disc} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
             <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
               <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
@@ -495,9 +507,8 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
         <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
       </>}
     </PageSection>
-  </div>
+  </div>;
 }
-
 function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;name:string;setName:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
   const textareaRef=useRef<HTMLTextAreaElement|null>(null);
   useEffect(()=>{const el=textareaRef.current;if(!el)return;el.style.height='auto';el.style.height=Math.min(el.scrollHeight,360)+'px';},[text]);

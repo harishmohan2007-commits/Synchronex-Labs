@@ -3835,3 +3835,61 @@ table{border-collapse:collapse;width:100%}th{font:600 9px var(--font-mono);lette
 :root[data-theme="dark"] .auth-brand,.auth-card h2{color:var(--text)}
 :root[data-theme="dark"] .auth-path span{background:#17272b;border-color:#385055;color:#b8c9c5}
 :root[data-theme="dark"] .form-error{background:#3a2220;border-color:#6c3934;color:#ffb3ac}
+
+/* =====================================================================
+   EMPTY WORKSPACE + REVIEW DARK-MODE POLISH
+   Keep route layouts compact when no schedule exists. Data cards remain
+   visible, while the empty state is contained inside the relevant surface.
+   ===================================================================== */
+.schedule-empty-card{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:20px;
+  min-height:150px;
+  padding:24px;
+  border:1px dashed var(--border, #d7ddd9);
+  background:var(--surface, #fff);
+  color:var(--text, var(--ink));
+}
+.schedule-empty-icon{
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--border, #d7ddd9);
+  background:var(--surface-2, #f4f6f3);
+  color:var(--brand-2, var(--green2));
+  font:600 18px 'IBM Plex Mono';
+}
+.schedule-empty-copy h3{margin:6px 0 5px;font-size:19px;color:var(--text, var(--ink));}
+.schedule-empty-copy p{margin:0;max-width:760px;color:var(--text-2, var(--muted));font-size:13px;line-height:1.55;}
+
+:root[data-theme="dark"] .schedule-empty-card{
+  background:#182328!important;
+  color:#e5ece9!important;
+  border-color:#3b5054!important;
+}
+:root[data-theme="dark"] .schedule-empty-icon{
+  background:#111c20!important;
+  border-color:#3b5054!important;
+  color:#78c7a5!important;
+}
+:root[data-theme="dark"] .schedule-empty-copy h3{color:#eef5f1!important;}
+:root[data-theme="dark"] .schedule-empty-copy p{color:#aebfbb!important;}
+
+/* The review queue's cleared-state row previously retained its light card
+   background in dark mode, producing the white block visible in the UI. */
+:root[data-theme="dark"] .review-empty{
+  background:#182328!important;
+  color:#aebfbb!important;
+  border-color:#3b5054!important;
+}
+:root[data-theme="dark"] .review-empty strong{color:#eef5f1!important;}
+:root[data-theme="dark"] .review-empty span{color:#aebfbb!important;}
+:root[data-theme="dark"] .review-table-wrap .review-empty{box-shadow:none!important;}
+
+/* Compact empty states elsewhere: avoid large blank visual gaps while
+   keeping the existing information architecture intact. */
+.empty-state{min-height:64px;display:flex;align-items:center;justify-content:center;padding:18px 16px;}
+:root[data-theme="dark"] .empty-state{color:#9fb2ae;}
