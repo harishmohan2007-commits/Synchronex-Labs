@@ -1,36 +1,89 @@
-# Synchronex — SIH26122 Prototype UI
+# Synchronex Labs — Deployment Package
 
-A React + Vite prototype for the Intelligent Data Capture & Schedule-Linking Layer for Infrastructure Project Management.
+Synchronex is the planning-to-execution bridge for SIH26122. This package contains the React/Vite frontend and the FastAPI/Supabase backend.
 
-## Run
+## Architecture
 
-```bash
-npm install
-npm run dev
+- **Frontend:** React + Vite → Vercel
+- **Backend:** FastAPI + Python → Python web host (recommended: Render)
+- **Database:** Supabase
+- **Schedule intake:** manager uploads `.pod`, `.mpp`, `.xml`/`.mspdi`, or `.xer` at runtime
+
+The schedule binary is **not bundled** in this package and is **not preloaded into Supabase**. The backend receives the manager's upload, parses it, validates it, and persists the normalized schedule records.
+
+## 1. Deploy the backend first
+
+Use the included `render.yaml`, or create a Python web service manually with:
+
+```text
+Root directory: backend
+Build command: pip install -r requirements.txt
+Start command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-## Build
+Set backend environment variables:
 
-```bash
-npm run build
+```text
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVICE_ROLE_KEY
 ```
 
-## Vercel
+Keep the service-role key server-side only.
+
+### Backend health check
+
+After deployment, open:
+
+```text
+https://YOUR-BACKEND/health
+```
+
+Expected response includes `"status":"ok"` and `"supabase_configured":true`.
+
+## 2. Configure the frontend
+
+Create a Vercel project from the repository root.
 
 - Framework: Vite
 - Build command: `npm run build`
 - Output directory: `dist`
-- No environment variables are required for the demo UI.
 
-## Prototype flow
+Set this Vercel environment variable:
 
-Sign in → Command → Capture/Import → Extract → Confidence gate → Review → Apply → Trace → Memory.
+```text
+VITE_API_BASE_URL=https://YOUR-BACKEND
+```
 
-The current UI uses synthetic data. Supabase/API/LLM integration can be added without changing the information architecture.
+Then deploy:
 
-## Current UX implementation notes
-- Command is the project-level control room; discipline/workstream execution belongs on Schedule only.
-- Schedule opens with separate discipline cards. Selecting a card filters the schedule to that discipline; “All disciplines” returns to the overview.
-- The global search supports activity IDs, titles, disciplines/WBS context, field evidence and review items, with typo-tolerant ranking and keyboard navigation (`Ctrl/Cmd + K`, arrows, Enter, Escape).
-- Review candidates resolve to their actual activity title rather than a hard-coded label, and approved review items leave the active queue for the current session.
-- Import success exposes a working path into Review.
+```bash
+npm install
+npm run build
+vercel --prod
+```
+
+The included `vercel.json` provides SPA fallback routing.
+
+## 3. First real schedule import
+
+1. Open the deployed Synchronex frontend.
+2. Enter the company/manager workspace.
+3. Open **Import**.
+4. Select the schedule file supplied by the manager.
+5. Submit the schedule.
+6. Synchronex parses it in the backend.
+7. The normalized project/WBS/activity/dependency/resource/assignment records are written to Supabase.
+8. Schedule and Command read the persisted records.
+
+No baseline schedule is expected before a manager performs this import.
+
+## Supported schedule formats
+
+- ProjectLibre `.pod`
+- Microsoft Project `.xml` / `.mspdi`
+- Primavera P6 `.xer`
+- Microsoft Project `.mpp` through the MPXJ adapter when its Java runtime is available on the backend host
+
+## Important production note
+
+The current login screen is the existing prototype workspace UI. It is not a replacement for a full Supabase Auth/RBAC implementation. Before exposing Synchronex to real users or sensitive project data, connect the UI to Supabase Auth and enforce the user's project role on backend operations.

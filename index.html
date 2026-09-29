@@ -3,21 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Synchronex Labs — execution intelligence for infrastructure projects." />
+    <meta name="theme-color" content="#111827" />
+    <meta name="description" content="Synchronex Labs — Planning-to-Execution Bridge" />
     <title>Synchronex Labs</title>
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      (function(){
-        try {
-          var mode = localStorage.getItem('synchronex-theme') || 'light';
-          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-          document.documentElement.dataset.density = localStorage.getItem('synchronex-density') === 'compact' ? 'compact' : 'comfortable';
-        } catch (_) {}
-      })();
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
