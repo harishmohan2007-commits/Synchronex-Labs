@@ -8,7 +8,7 @@ router = APIRouter(prefix='/api', tags=['schedule'])
 def _project_id(sb, project_id=None):
     if project_id:
         return project_id
-    r = sb.table('projects').select('id').order('created_at', desc=True).limit(1).execute()
+    r = sb.table('projects').select('id').order('created_at').limit(1).execute()
     if not r.data:
         raise HTTPException(status_code=404, detail='No Synchronex project exists in Supabase.')
     return r.data[0]['id']

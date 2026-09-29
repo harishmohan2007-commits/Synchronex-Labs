@@ -15,10 +15,10 @@ def _project_code(name: str) -> str:
 
 def _resolve_or_create_project(sb, parsed: dict, project_id: str | None, filename: str):
     if project_id:
-        project = sb.table('projects').select('*').eq('id', project_id).limit(1).execute().data or []
-        if project:
-            return project[0]
-        # The project may have been intentionally cleared for a fresh test. Resolve/create it from the uploaded schedule.
+        project = sb.table('projects').select('*').eq('id', project_id).single().execute().data
+        if not project:
+            raise HTTPException(404, 'Project was not found.')
+        return project
 
     meta = parsed.get('project', {})
     name = meta.get('name') or meta.get('title') or Path(filename).stem or 'Imported project'

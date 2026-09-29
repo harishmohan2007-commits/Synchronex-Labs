@@ -8,7 +8,6 @@ from rapidfuzz import fuzz, process
 from ..services.supabase_service import get_supabase
 
 router = APIRouter(prefix='/api/capture', tags=['capture'])
-AUTO_APPROVAL_SCORE = 1.0
 
 
 def _extract_file_text(filename: str, content: bytes) -> str:
@@ -40,186 +39,127 @@ def _discipline(text: str) -> str | None:
     return None
 
 
-def _extract_progress(text: str) -> float | None:
-    patterns = [
-        r'(?:current\s+(?:physical\s+)?progress|physical\s+progress|progress)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%',
-        r'(\d+(?:\.\d+)?)\s*%\s*(?:progress|complete|completed)',
-    ]
-    for pat in patterns:
-        m = re.search(pat, text, re.I)
-        if m:
-            value = float(m.group(1))
-            if 0 <= value <= 100:
-                return value
-    return None
-
-
-def _extract_date(text: str) -> str | None:
-    iso = re.search(r'20\d{2}-\d{2}-\d{2}', text)
-    if iso:
-        return iso.group(0)
-    numeric = re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]20\d{2}\b', text)
-    if numeric:
-        raw = numeric.group(0).replace('/', '-')
-        for fmt in ('%d-%m-%Y', '%m-%d-%Y'):
-            try:
-                return datetime.strptime(raw, fmt).date().isoformat()
-            except ValueError:
-                pass
-    named = re.search(r'\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b', text, re.I)
-    if named:
-        try:
-            return datetime.strptime(' '.join(named.groups()), '%d %B %Y').date().isoformat()
-        except ValueError:
-            pass
-    return None
-
-
-
-def _normalize_match_text(value: str) -> str:
-    return re.sub(r'[^a-z0-9]+', ' ', value.lower()).strip()
-
 def _extract_events(text: str):
-    clean = text.strip()
-    if not clean:
-        return []
-    # A field submission represents one activity update. When a progress percentage
-    # is present, keep the report as one execution event so a single submission
-    # cannot create multiple review items from incidental words like "started" or
-    # "complete" in the narrative.
-    progress = _extract_progress(clean)
-    if progress is not None:
-        action = 'finish' if progress >= 100 else 'observation'
-        return [{'event_type': action, 'event_date': _extract_date(clean), 'evidence': clean}]
-
     events = []
+    date_pat = r'(20\d{2}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]20\d{2})'
     patterns = [
         ('start', r'\b(start(?:ed|s)?|began|commenced|mobilized|installation started)\b'),
         ('finish', r'\b(complet(?:ed|e)|finished|ended|closed|installed|erected|welded|tested|inspected)\b'),
     ]
     for kind, pat in patterns:
-        for m in re.finditer(pat, clean, re.I):
-            left, right = max(0, m.start()-180), min(len(clean), m.end()+260)
-            snippet = clean[left:right].strip()
+        for m in re.finditer(pat, text, re.I):
+            left, right = max(0, m.start()-180), min(len(text), m.end()+260)
+            snippet = text[left:right].strip()
+            dates = re.findall(date_pat, snippet)
             events.append({
-                'event_type': kind, 'event_date': _extract_date(snippet) or _extract_date(clean),
+                'event_type': kind, 'event_date': dates[0] if dates else None,
                 'evidence': snippet,
             })
-    if not events:
-        events.append({'event_type': 'observation', 'event_date': _extract_date(clean), 'evidence': clean})
+    if not events and text.strip():
+        events.append({'event_type': 'observation', 'event_date': None, 'evidence': text.strip()})
     return events
 
 
 @router.post('')
-async def capture(project_id: str = Form(''), submitted_by: str = Form('field'), update_name: str = Form(''), text: str = Form(''), files: list[UploadFile] = File(default=[])):
+async def capture(project_id: str = Form(...), submitted_by: str = Form('field'), text: str = Form(''), files: list[UploadFile] = File(default=[])):
     sb = get_supabase()
-    if not project_id:
-        current = sb.table('projects').select('id').order('created_at', desc=True).limit(1).execute().data or []
-        if not current:
-            raise HTTPException(404, 'No project is available. Import a schedule first.')
-        project_id = current[0]['id']
     acts = sb.table('activities').select('id,activity_code,name,discipline,planned_start,planned_finish,actual_start,actual_finish,actual_progress').eq('project_id', project_id).execute().data or []
     if not text and not files:
         raise HTTPException(400, 'Provide text or at least one evidence file.')
+
     source_text, file_names = text, []
-    update_name = update_name.strip() or 'Field progress update'
     for f in files:
         content = await f.read(); name = f.filename or 'evidence'; file_names.append(name)
-        extracted = _extract_file_text(name, content)
-        source_text += '\n' + extracted
+        source_text += '\n' + _extract_file_text(name, content)
+
+    settings_rows = sb.table('workspace_settings').select('confidence_threshold').eq('project_id', project_id).execute().data or []
+    threshold = float(settings_rows[0].get('confidence_threshold', 0.90)) if settings_rows else 0.90
+    threshold = max(0.80, min(1.0, threshold))
 
     name_map = {a['id']: a['name'] for a in acts}
     code_map = {a['id']: a['activity_code'] for a in acts}
+    by_id = {a['id']: a for a in acts}
     events_out = []
-    auto_approved_count = 0
-    review_count = 0
+
+    progress_match = re.search(r'(?:current\s+(?:physical\s+)?progress|physical\s+progress|progress)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*%', source_text, re.I)
+    reported_progress = float(progress_match.group(1)) if progress_match else None
+
     for e in _extract_events(source_text):
-        normalized_evidence = _normalize_match_text(e['evidence'])
-        exact_mentions = [
-            (activity_id, activity_name)
-            for activity_id, activity_name in name_map.items()
-            if _normalize_match_text(activity_name) and _normalize_match_text(activity_name) in normalized_evidence
-        ]
-        ranked = process.extract(e['evidence'], name_map, scorer=fuzz.token_set_ratio, limit=2)
-        choice = ranked[0] if ranked else None
-        if len(exact_mentions) == 1:
-            aid = exact_mentions[0][0]
+        candidates = process.extract(e['evidence'], name_map, scorer=fuzz.token_set_ratio, limit=2) if name_map else []
+        choice = candidates[0] if candidates else None
+        score = float(choice[1]) / 100 if choice else 0.0
+        aid = choice[2] if choice and score >= 0.55 else None
+
+        # An explicit activity code/name is a deterministic signal; otherwise the
+        # configured workspace threshold controls eligibility for automatic application.
+        explicit_ids = [a['id'] for a in acts if a.get('activity_code') and a['activity_code'].lower() in e['evidence'].lower()]
+        if not explicit_ids:
+            explicit_ids = [a['id'] for a in acts if a.get('name') and a['name'].lower() in e['evidence'].lower()]
+        explicit_unique = len(set(explicit_ids)) == 1
+        if explicit_unique:
+            aid = explicit_ids[0]
             score = 1.0
-            match_method = 'exact_activity_mention'
-            unique_exact_match = True
-        else:
-            score = float(choice[1]) / 100 if choice else 0.0
-            second_score = float(ranked[1][1]) / 100 if len(ranked) > 1 else 0.0
-            # A 100% fuzzy match is auto-approved only when it is unique. Exact
-            # activity mentions are handled above so a normal sentence containing
-            # the scheduled activity name can still reach 100% deterministically.
-            unique_exact_match = score >= AUTO_APPROVAL_SCORE and second_score < AUTO_APPROVAL_SCORE and len(exact_mentions) == 0
-            aid = choice[2] if choice and score >= 0.55 else None
-            match_method = 'rapidfuzz_token_set' if aid else 'none'
-        action = e['event_type']
-        progress = _extract_progress(e['evidence']) or _extract_progress(source_text)
+
+        second_score = float(candidates[1][1]) / 100 if len(candidates) > 1 else 0.0
+        unique_candidate = explicit_unique or not candidates or (score - second_score >= 0.08)
+        eligible_auto = bool(aid and unique_candidate and score >= threshold)
+
         row = {
             'project_id': project_id, 'source_type': 'field_capture',
             'source_file': ', '.join(file_names) if file_names else None,
-            'raw_text': f'{update_name}\n{e["evidence"]}'.strip(), 'discipline': _discipline(e['evidence']),
-            'event_date': e['event_date'], 'extracted_action': action,
-            'location': None, 'quantity': progress, 'unit': '%' if progress is not None else None,
-            'extraction_confidence': 0.75 if action != 'observation' else 0.45,
+            'raw_text': e['evidence'], 'discipline': _discipline(e['evidence']),
+            'event_date': e['event_date'], 'extracted_action': e['event_type'],
+            'location': None, 'quantity': None, 'unit': None,
+            'extraction_confidence': 0.75 if e['event_type'] != 'observation' else 0.45,
         }
         inserted = sb.table('execution_events').insert(row).execute().data[0]
         events_out.append(inserted)
 
-        reason = (f"Exact scheduled activity mention: {code_map.get(aid)}" if match_method == 'exact_activity_mention' else f"RapidFuzz activity-name match to {code_map.get(aid)}") if aid else 'No matching schedule activity above threshold.'
-        # Exact/high-confidence matches do not need planner intervention. A 100%
-        # activity-name match is trusted automatically, while all lower-confidence
-        # matches remain in the human review queue.
-        auto_approved = bool(aid and unique_exact_match)
+        reason = f"Explicit activity reference to {code_map.get(aid)}" if explicit_unique else (f"RapidFuzz activity-name match to {code_map.get(aid)}" if aid else 'No matching schedule activity above threshold.')
+        match_status = 'approved' if eligible_auto else 'pending'
         match = sb.table('activity_matches').insert({
             'execution_event_id': inserted['id'], 'activity_id': aid,
-            'confidence_score': score, 'match_method': match_method,
-            'match_reason': reason, 'status': 'approved' if auto_approved else 'pending',
-            'reviewed_at': datetime.now(timezone.utc).isoformat() if auto_approved else None,
+            'confidence_score': score, 'match_method': 'explicit_reference' if explicit_unique else ('rapidfuzz_token_set' if aid else 'none'),
+            'match_reason': reason, 'status': match_status,
         }).execute().data[0]
 
-        if auto_approved:
-            auto_approved_count += 1
-            activity = sb.table('activities').select('*').eq('id', aid).single().execute().data
+        if eligible_auto:
+            activity = by_id.get(aid)
+            actual_date = e.get('event_date')
             update = {}
-            event_date = inserted.get('event_date')
-            progress = float(inserted.get('quantity')) if inserted.get('unit') == '%' and inserted.get('quantity') is not None else None
+            progress = reported_progress
+            if e['event_type'] == 'start' and actual_date:
+                update['actual_start'] = activity.get('actual_start') or actual_date
+            if e['event_type'] == 'finish' and actual_date:
+                update['actual_finish'] = activity.get('actual_finish') or actual_date
+                if progress is None:
+                    progress = 100.0
             if progress is not None:
-                # Actual progress is monotonic: a later report cannot silently move
-                # a verified activity backwards. A planner can still use the review
-                # workflow for corrections on non-auto-approved events.
-                progress = max(float(activity.get('actual_progress') or 0), progress)
+                progress = max(float(activity.get('actual_progress') or 0), min(100.0, progress))
                 update['actual_progress'] = progress
                 update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
-                if progress > 0 and not activity.get('actual_start') and event_date:
-                    update['actual_start'] = event_date
-            if inserted.get('extracted_action') == 'start' and event_date:
-                update['actual_start'] = activity.get('actual_start') or event_date
-            if inserted.get('extracted_action') == 'finish' or progress == 100:
-                update['actual_finish'] = activity.get('actual_finish') or event_date
-                update['actual_progress'] = 100.0
-                update['status'] = 'completed'
+                if progress > 0 and not activity.get('actual_start') and actual_date:
+                    update['actual_start'] = actual_date
             if update:
                 sb.table('activities').update(update).eq('id', aid).execute()
-                if progress is not None or inserted.get('extracted_action') in {'start', 'finish'}:
+                if progress is not None:
                     sb.table('progress_updates').insert({
                         'activity_id': aid, 'execution_event_id': inserted['id'],
                         'previous_progress': activity.get('actual_progress') or 0,
-                        'new_progress': update.get('actual_progress', activity.get('actual_progress') or 0),
-                        'quantity_completed': progress, 'quantity_unit': '%' if progress is not None else None,
-                        'update_source': 'auto_approved_match',
+                        'new_progress': progress, 'quantity_completed': None,
+                        'quantity_unit': None, 'update_source': 'auto_threshold',
                     }).execute()
+            sb.table('review_queue').insert({
+                'execution_event_id': inserted['id'], 'suggested_activity_id': aid,
+                'confidence_score': score, 'reason': f'{reason}. Auto-applied at workspace threshold {threshold:.0%}.', 'status': 'approved',
+            }).execute()
             sb.table('audit_logs').insert({
-                'project_id': project_id, 'action': 'capture_auto_approved', 'entity_type': 'activity',
-                'entity_id': aid, 'old_value': {'actual_progress': activity.get('actual_progress')},
-                'new_value': {'update': update, 'match_id': match['id'], 'confidence': score, 'execution_event_id': inserted['id']},
-                'source': 'field_capture_auto_approval',
+                'project_id': project_id, 'action': 'auto_apply_threshold', 'entity_type': 'activity',
+                'entity_id': aid, 'old_value': {'actual_progress': activity.get('actual_progress'), 'actual_start': activity.get('actual_start'), 'actual_finish': activity.get('actual_finish')},
+                'new_value': {'update': update, 'event_id': inserted['id'], 'confidence': score, 'threshold': threshold},
+                'source': 'auto_threshold',
             }).execute()
         else:
-            review_count += 1
             sb.table('review_queue').insert({
                 'execution_event_id': inserted['id'], 'suggested_activity_id': aid,
                 'confidence_score': score, 'reason': reason, 'status': 'pending',
@@ -227,7 +167,8 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
             sb.table('audit_logs').insert({
                 'project_id': project_id, 'action': 'capture_event', 'entity_type': 'execution_event',
                 'entity_id': inserted['id'], 'old_value': None,
-                'new_value': {'match_id': match['id'], 'activity_id': aid, 'confidence': score, 'update_name': update_name},
+                'new_value': {'match_id': match['id'], 'activity_id': aid, 'confidence': score, 'threshold': threshold},
                 'source': 'field_capture',
             }).execute()
-    return {'status': 'captured', 'events': events_out, 'files': file_names, 'auto_approved': auto_approved_count, 'review_required': review_count}
+
+    return {'status': 'captured', 'events': events_out, 'files': file_names, 'threshold': threshold}
