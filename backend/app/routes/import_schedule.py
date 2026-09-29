@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 import re
+from datetime import datetime, timezone
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from ..services.schedule_import import parse_schedule_file
 from ..services.supabase_service import get_supabase
@@ -22,6 +23,34 @@ def _discipline(name: str) -> str:
     if re.search(r'instrument|calibrat|tubing', low): return 'Instrumentation'
     if re.search(r'safety|hse|inspection', low): return 'HSE'
     return 'Unassigned'
+
+
+
+
+def _validate_parsed_schedule(parsed: dict) -> None:
+    tasks = parsed.get('tasks') or []
+    if not tasks:
+        raise ValueError('The schedule contains no tasks.')
+    uids = [t.get('uid') for t in tasks]
+    if any(uid is None for uid in uids):
+        raise ValueError('The schedule contains a task without a source UID.')
+    if len(set(uids)) != len(uids):
+        raise ValueError('The schedule contains duplicate task UIDs.')
+    outlines = [t.get('outline_number') for t in tasks if t.get('outline_number')]
+    if len(outlines) != len(set(outlines)):
+        raise ValueError('The schedule contains duplicate outline numbers.')
+    task_uids = set(uids)
+    for task in tasks:
+        start = (task.get('start') or '')[:10]
+        finish = (task.get('finish') or '')[:10]
+        if start and finish and finish < start:
+            raise ValueError(f"Task {task.get('name') or task.get('uid')} has a finish date before its start date.")
+        for pred in task.get('predecessors') or []:
+            if pred.get('predecessor_uid') not in task_uids:
+                raise ValueError(f"Task {task.get('uid')} references missing predecessor {pred.get('predecessor_uid')}.")
+    summary_count = sum(bool(t.get('is_summary')) for t in tasks)
+    if summary_count == len(tasks):
+        raise ValueError('The schedule contains no executable activities.')
 
 
 def _resolve_or_create_project(sb, parsed: dict, project_id: str | None, filename: str):
@@ -59,6 +88,7 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
 
+    _validate_parsed_schedule(parsed)
     sb = get_supabase()
     project = _resolve_or_create_project(sb, parsed, project_id, filename)
     pid = project['id']
@@ -78,10 +108,8 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
             'status': 'planning',
             'source_format': parsed.get('format'),
             'source_file_name': filename,
-            'source_imported_at': 'now()',
+            'source_imported_at': datetime.now(timezone.utc).isoformat(),
         }
-        # Supabase REST does not evaluate SQL expressions in values.
-        update['source_imported_at'] = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()
         sb.table('projects').update(update).eq('id', pid).execute()
 
         summaries = sorted(
@@ -121,8 +149,8 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
             pct = float(t.get('percent_complete') or 0)
             activity_rows.append({
                 'project_id': pid, 'wbs_node_id': parent,
-                'activity_code': f"{Path(filename).stem[:8].upper()}-{t['uid']}",
-                'name': t['name'], 'discipline': _discipline(t['name']),
+                'activity_code': f"SYNCHRON-{t['uid']}",
+                'name': t['name'], 'discipline': _discipline(t['name']) if not t.get('is_summary') else (_discipline(t['name']) if t.get('name') and _discipline(t['name']) != 'Unassigned' else 'Unassigned'),
                 'planned_start': (t.get('start') or '')[:10] or None,
                 'planned_finish': (t.get('finish') or '')[:10] or None,
                 'actual_start': None, 'actual_finish': None,
