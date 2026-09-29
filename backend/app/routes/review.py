@@ -48,6 +48,9 @@ def decide(review_id: str, body: Decision):
             if progress is None:
                 progress = 100.0
         if progress is not None:
+            # Keep verified actual progress monotonic unless a future explicit
+            # correction workflow is introduced.
+            progress = max(float(activity.get('actual_progress') or 0), progress)
             update['actual_progress'] = progress
             update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
             if progress > 0 and not activity.get('actual_start') and actual_date:

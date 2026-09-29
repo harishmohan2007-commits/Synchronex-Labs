@@ -8,6 +8,7 @@ from rapidfuzz import fuzz, process
 from ..services.supabase_service import get_supabase
 
 router = APIRouter(prefix='/api/capture', tags=['capture'])
+AUTO_APPROVAL_SCORE = 1.0
 
 
 def _extract_file_text(filename: str, content: bytes) -> str:
@@ -74,6 +75,10 @@ def _extract_date(text: str) -> str | None:
     return None
 
 
+
+def _normalize_match_text(value: str) -> str:
+    return re.sub(r'[^a-z0-9]+', ' ', value.lower()).strip()
+
 def _extract_events(text: str):
     clean = text.strip()
     if not clean:
@@ -129,9 +134,28 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
     auto_approved_count = 0
     review_count = 0
     for e in _extract_events(source_text):
-        choice = process.extractOne(e['evidence'], name_map, scorer=fuzz.token_set_ratio)
-        score = float(choice[1]) / 100 if choice else 0.0
-        aid = choice[2] if choice and score >= 0.55 else None
+        normalized_evidence = _normalize_match_text(e['evidence'])
+        exact_mentions = [
+            (activity_id, activity_name)
+            for activity_id, activity_name in name_map.items()
+            if _normalize_match_text(activity_name) and _normalize_match_text(activity_name) in normalized_evidence
+        ]
+        ranked = process.extract(e['evidence'], name_map, scorer=fuzz.token_set_ratio, limit=2)
+        choice = ranked[0] if ranked else None
+        if len(exact_mentions) == 1:
+            aid = exact_mentions[0][0]
+            score = 1.0
+            match_method = 'exact_activity_mention'
+            unique_exact_match = True
+        else:
+            score = float(choice[1]) / 100 if choice else 0.0
+            second_score = float(ranked[1][1]) / 100 if len(ranked) > 1 else 0.0
+            # A 100% fuzzy match is auto-approved only when it is unique. Exact
+            # activity mentions are handled above so a normal sentence containing
+            # the scheduled activity name can still reach 100% deterministically.
+            unique_exact_match = score >= AUTO_APPROVAL_SCORE and second_score < AUTO_APPROVAL_SCORE and len(exact_mentions) == 0
+            aid = choice[2] if choice and score >= 0.55 else None
+            match_method = 'rapidfuzz_token_set' if aid else 'none'
         action = e['event_type']
         progress = _extract_progress(e['evidence']) or _extract_progress(source_text)
         row = {
@@ -145,14 +169,14 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
         inserted = sb.table('execution_events').insert(row).execute().data[0]
         events_out.append(inserted)
 
-        reason = f"RapidFuzz activity-name match to {code_map.get(aid)}" if aid else 'No matching schedule activity above threshold.'
+        reason = (f"Exact scheduled activity mention: {code_map.get(aid)}" if match_method == 'exact_activity_mention' else f"RapidFuzz activity-name match to {code_map.get(aid)}") if aid else 'No matching schedule activity above threshold.'
         # Exact/high-confidence matches do not need planner intervention. A 100%
         # activity-name match is trusted automatically, while all lower-confidence
         # matches remain in the human review queue.
-        auto_approved = bool(aid and score >= 0.999999)
+        auto_approved = bool(aid and unique_exact_match)
         match = sb.table('activity_matches').insert({
             'execution_event_id': inserted['id'], 'activity_id': aid,
-            'confidence_score': score, 'match_method': 'rapidfuzz_token_set' if aid else 'none',
+            'confidence_score': score, 'match_method': match_method,
             'match_reason': reason, 'status': 'approved' if auto_approved else 'pending',
             'reviewed_at': datetime.now(timezone.utc).isoformat() if auto_approved else None,
         }).execute().data[0]
@@ -164,6 +188,10 @@ async def capture(project_id: str = Form(''), submitted_by: str = Form('field'),
             event_date = inserted.get('event_date')
             progress = float(inserted.get('quantity')) if inserted.get('unit') == '%' and inserted.get('quantity') is not None else None
             if progress is not None:
+                # Actual progress is monotonic: a later report cannot silently move
+                # a verified activity backwards. A planner can still use the review
+                # workflow for corrections on non-auto-approved events.
+                progress = max(float(activity.get('actual_progress') or 0), progress)
                 update['actual_progress'] = progress
                 update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
                 if progress > 0 and not activity.get('actual_start') and event_date:
