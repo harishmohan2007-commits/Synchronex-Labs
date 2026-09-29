@@ -43,124 +43,6 @@ const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
 
 const stages = ['Input received','Discipline identified','Events extracted','Activities searched','Confidence calculated','Ready for review'];
 
-/* ---------------------------------------------------------------------- */
-/* Global search: cross-entity index + fuzzy/typo-tolerant ranking        */
-/* ---------------------------------------------------------------------- */
-
-type SearchResult = {
-  group: string;
-  id: string;
-  label: string;
-  sub: string;
-  score: number;
-  action: { discipline?: string; activityId?: string; reviewId?: string };
-};
-
-function normalize(s: string): string {
-  return (s || '').toLowerCase().replace(/["“”]/g, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  if (!m) return n;
-  if (!n) return m;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-    }
-  }
-  return dp[m][n];
-}
-
-/** Exact ID > exact title > prefix/token > substring > typo-tolerant fuzzy. */
-function fieldScore(query: string, rawField: string): number {
-  if (!rawField) return 0;
-  const q = normalize(query), f = normalize(rawField);
-  if (!q) return 0;
-  if (f === q) return 100;
-  if (f.startsWith(q)) return 90;
-  const tokensF = f.split(' ');
-  const tokensQ = q.split(' ');
-  if (tokensQ.every(t => tokensF.some(tf => tf.startsWith(t)))) return 80;
-  if (f.includes(q)) return 70;
-  const distWhole = levenshtein(q, f.slice(0, q.length + 3));
-  const tolerance = Math.max(1, Math.floor(q.length * 0.3));
-  if (distWhole <= tolerance) return 55;
-  for (const tf of tokensF) {
-    const d = levenshtein(q, tf);
-    if (d <= Math.max(1, Math.floor(tf.length * 0.34))) return 45;
-  }
-  return 0;
-}
-
-function searchAll(query: string): SearchResult[] {
-  const q = query.trim();
-  if (!q) return [];
-  const results: SearchResult[] = [];
-
-  ACTIVITIES.forEach(a => {
-    const idScore = fieldScore(q, a.id) + (normalize(a.id) === normalize(q) ? 15 : 0);
-    const titleScore = fieldScore(q, a.desc);
-    const wbsScore = fieldScore(q, `${a.wbs} ${a.discipline} node`);
-    const best = Math.max(idScore, titleScore, wbsScore * 0.9);
-    if (best > 0) {
-      results.push({
-        group: 'Activities', id: a.id, label: `${a.id} · ${a.desc}`,
-        sub: `${a.discipline} · ${a.wbs} · ${a.progress}% complete · ${a.status}`,
-        score: best, action: { discipline: a.discipline, activityId: a.id },
-      });
-    }
-  });
-
-  DISCIPLINES.forEach(d => {
-    const s = fieldScore(q, d.name);
-    if (s > 0) {
-      results.push({
-        group: 'Disciplines / WBS', id: d.name, label: d.name,
-        sub: `${d.status} · ${d.actual}% actual vs ${d.planned}% planned · next: ${d.nextMilestone}`,
-        score: s, action: { discipline: d.name },
-      });
-    }
-  });
-
-  FIELD_EVENTS.forEach((e, i) => {
-    const s = Math.max(fieldScore(q, e.text), fieldScore(q, e.actId), fieldScore(q, e.actDesc));
-    if (s > 0) {
-      const linked = ACTIVITIES.find(a => a.id === e.actId);
-      results.push({
-        group: 'Field reports / evidence', id: `fe-${i}`, label: e.text.replace(/^"|"$/g, ''),
-        sub: `${e.actDesc} · ${e.actId} · ${e.status}`,
-        score: s, action: { discipline: linked?.discipline, activityId: linked ? e.actId : undefined },
-      });
-    }
-  });
-
-  REVIEW_QUEUE.forEach(r => {
-    const s = Math.max(fieldScore(q, r.text), fieldScore(q, r.candidate), fieldScore(q, r.issue));
-    if (s > 0) {
-      results.push({
-        group: 'Review items', id: r.id, label: r.text.replace(/^"|"$/g, ''),
-        sub: `${r.issue} · ${r.candidate !== '—' ? r.candidate : 'Unmatched'} · ${r.status}`,
-        score: s, action: { reviewId: r.id },
-      });
-    }
-  });
-
-  return results.sort((a, b) => b.score - a.score).slice(0, 20);
-}
-
-function highlight(text: string, q: string): React.ReactNode {
-  const query = q.trim();
-  if (!query) return text;
-  const idx = text.toLowerCase().indexOf(normalize(query).split(' ')[0]);
-  if (idx === -1) return text;
-  const len = normalize(query).split(' ')[0].length;
-  return <>{text.slice(0, idx)}<mark>{text.slice(idx, idx + len)}</mark>{text.slice(idx + len)}</>;
-}
-
 function statusAccent(status:string):string{
   if(status==='Delayed') return '#B7352C';
   if(status==='At Risk') return '#A45B13';
@@ -172,7 +54,6 @@ export default function App(){
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
-  const [query,setQuery]=useState('');
   const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
@@ -209,13 +90,7 @@ export default function App(){
   const [memberTarget,setMemberTarget]=useState<{initials:string;name:string;role:string;workspace:string;status:string}|null>(null);
   const [memberDraft,setMemberDraft]=useState({role:'',workspace:'',status:'Active',canReview:true,canImport:true,canEditBaseline:false});
 
-  // Global search
-  const [searchOpen,setSearchOpen]=useState(false);
-  const [searching,setSearching]=useState(false);
-  const [activeResult,setActiveResult]=useState(0);
-  const searchInputRef=useRef<HTMLInputElement>(null);
-
-  // Schedule discipline selection (lifted so global search can jump into it)
+  // Schedule discipline selection
   const [scheduleDiscipline,setScheduleDiscipline]=useState('All');
 
   // Activity detail modal target
@@ -225,20 +100,6 @@ export default function App(){
   const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
-  const searchResults=useMemo(()=>{const results=searchAll(query); if(role==='company') return results; return results.filter(r=>r.group==='Activities' || r.group==='Field reports / evidence').slice(0,12)},[query,role]);
-  const groupedResults=useMemo(()=>{
-    const map:Record<string,SearchResult[]>={};
-    searchResults.forEach(r=>{(map[r.group]=map[r.group]||[]).push(r)});
-    return map;
-  },[searchResults]);
-
-  useEffect(()=>{
-    setActiveResult(0);
-    if(!query){setSearching(false);setSearchOpen(false);return;}
-    setSearching(true);setSearchOpen(true);
-    const t=window.setTimeout(()=>setSearching(false),160);
-    return ()=>window.clearTimeout(t);
-  },[query]);
 
   useEffect(()=>{
     const root=document.documentElement;
@@ -257,53 +118,20 @@ export default function App(){
     }
   },[themeMode,density]);
 
-  useEffect(()=>{
-    const handler=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchInputRef.current?.focus();}};
-    window.addEventListener('keydown',handler);
-    return ()=>window.removeEventListener('keydown',handler);
-  },[]);
 
   const notify=(message:string)=>{setToast(message);window.setTimeout(()=>setToast(''),3000)};
   const go=(next:Screen)=>{
     if(next===screen) return;
     if(dirty){setModal('confirm'); (window as any).__pendingScreen=next; return;}
-    setScreen(next); setQuery('');
+    setScreen(next);
   };
-  const confirmLeave=()=>{const next=(window as any).__pendingScreen as Screen; setDirty(false);setModal(null);setScreen(next);setQuery('');};
+  const confirmLeave=()=>{const next=(window as any).__pendingScreen as Screen; setDirty(false);setModal(null);setScreen(next);};
 
-  const openResult=(r:SearchResult)=>{
-    setSearchOpen(false);setQuery('');
-    if(role==='field'){
-      if(r.action.activityId){setSelectedId(r.action.activityId);setScreen('field-home');return;}
-      setScreen('submissions');return;
-    }
-    if(r.action.reviewId){
-      const idx=REVIEW_QUEUE.findIndex(x=>x.id===r.action.reviewId);
-      if(idx>=0)setReviewIndex(idx);
-      setScreen('review');
-      setReviewDetailOpen(true);
-      return;
-    }
-    if(r.action.discipline) setScheduleDiscipline(r.action.discipline);
-    if(r.action.activityId){
-      setSelectedId(r.action.activityId);
-      setDetailId(r.action.activityId);
-      setModal('activity');
-    }
-    setScreen('schedule');
-  };
-
-  const searchKeyDown=(e:React.KeyboardEvent<HTMLInputElement>)=>{
-    if(e.key==='Escape'){setSearchOpen(false);searchInputRef.current?.blur();}
-    else if(e.key==='ArrowDown'){e.preventDefault();setActiveResult(i=>Math.min(i+1,Math.max(0,searchResults.length-1)));}
-    else if(e.key==='ArrowUp'){e.preventDefault();setActiveResult(i=>Math.max(i-1,0));}
-    else if(e.key==='Enter'){e.preventDefault();if(searchResults[activeResult])openResult(searchResults[activeResult]);}
-  };
 
   const runCapture=()=>{
     if(captureBusy)return;
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
-    if(!captureFiles.length){notify('Upload at least one file before submitting.');return;}
+    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
     window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the selected evidence.');},1200);
   };
@@ -430,31 +258,6 @@ export default function App(){
     <main className="workspace">
       <div className="page-head">
         <div><div className="breadcrumb">SYNCHRONEX / {pageMeta[screen].eyebrow.split(' / ')[0]}</div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
-        <div className="head-tools">
-          <div className="global-search-wrap" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setSearchOpen(false);}}>
-            <label className="global-search">
-              <span>⌕</span>
-              <input ref={searchInputRef} value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={searchKeyDown} onFocus={()=>{if(query)setSearchOpen(true)}} placeholder="Find activity, report or WBS node" aria-label="Search workspace" role="combobox" aria-expanded={searchOpen} aria-controls="global-search-results" autoComplete="off"/>
-              <kbd>⌘ K</kbd>
-            </label>
-            {searchOpen && <div className="search-dropdown" id="global-search-results" role="listbox">
-              {searching && <div className="search-loading">Searching…</div>}
-              {!searching && searchResults.length===0 && <div className="search-empty">No matches for “{query}”. Try an activity ID like PIP-245, a discipline, or field-report text.</div>}
-              {!searching && Object.keys(groupedResults).map(group=>{const items=groupedResults[group]; return (
-                <div className="search-group" key={group}>
-                  <span className="search-group-label">{group}</span>
-                  {items.slice(0,4).map(r=>{
-                    const flatIndex=searchResults.indexOf(r);
-                    return <button key={group+r.id} type="button" role="option" aria-selected={flatIndex===activeResult} className={`search-result-row ${flatIndex===activeResult?'active':''}`} onMouseEnter={()=>setActiveResult(flatIndex)} onClick={()=>openResult(r)}>
-                      <strong>{highlight(r.label,query)}</strong><span>{r.sub}</span>
-                    </button>;
-                  })}
-                </div>
-              )})}
-            </div>}
-          </div>
-
-        </div>
       </div>
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
@@ -652,7 +455,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
         <div className="capture-text-meta"><span className="optional-chip">OPTIONAL</span><span>Text note</span></div><textarea ref={textareaRef} className="capture-progress-textarea" value={text} onChange={e=>setText(e.target.value)} aria-label="Optional field progress note" placeholder="Optional: add a short progress note, site update, or supervisor comment…" />
         <div className="capture-input-grid capture-input-grid-three">
           <section className="capture-source-card">
-            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / REQUIRED</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / OPTIONAL</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
             <input ref={fileInputRef} type="file" multiple accept="*/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value='';}} />
             <button className="capture-dropzone" type="button" onClick={()=>fileInputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFiles(e.dataTransfer.files);}}>
               <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>Images · PDF · Word · Excel · CSV · TXT · ZIP · video · and more</small>
@@ -680,7 +483,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
           <button className="outline-btn" type="button" onClick={resetCapture}>Reset update</button>
-          <span className="helper"><strong>Required:</strong> progress name + at least one file. <strong>Optional:</strong> text or voice.</span>
+          <span className="helper"><strong>Required:</strong> progress update name. <strong>Optional:</strong> text, files, or voice — add at least one.</span>
         </div>
         {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your progress note and selected evidence are ready for the project record and review workflow.</p></div></div>}
       </PageSection>
