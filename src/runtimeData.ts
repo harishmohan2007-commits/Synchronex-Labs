@@ -1,6 +1,6 @@
 const configuredBase = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
-// In production Vercel proxies /api/* to Render, so the browser stays same-origin.
-// Set VITE_API_BASE_URL to /api for deployed Vercel builds. For local development,
+// In production Netlify proxies /api/* to the Render backend, so the browser stays same-origin.
+// Set VITE_API_BASE_URL to /api for the deployed Netlify build. For local development,
 // use the full backend URL (for example http://localhost:8000).
 const API_BASE = configuredBase === '/api' ? '' : configuredBase || 'http://localhost:8000';
 
@@ -55,7 +55,7 @@ async function request(path: string, init?: RequestInit) {
     response = await fetch(url, init);
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'Network request failed';
-    throw new Error(`Cannot reach the Synchronex backend at ${API_BASE}. Check that Render is live and VITE_API_BASE_URL is set to the Render URL. (${reason})`);
+    throw new Error(`Cannot reach the Synchronex backend at ${API_BASE}. Check that the backend is live and VITE_API_BASE_URL is configured correctly. (${reason})`);
   }
 
   const text = await response.text();
@@ -100,7 +100,55 @@ function inferDiscipline(name: string, existing?: string | null) {
   return 'Other';
 }
 
-function disciplineRows(rows: any[]) {
+function parseDateOnly(value: any) {
+  if (!value) return null;
+  const s = String(value).slice(0, 10);
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function inferAsOfDate(project: any, events: any[]) {
+  const candidates: Date[] = [];
+  for (const event of events) {
+    for (const value of [event?.execution_date, event?.event_date, event?.reported_date]) {
+      const d = parseDateOnly(value);
+      if (d) candidates.push(d);
+    }
+    const raw = String(event?.raw_text || '');
+    const iso = raw.match(/\b(20\d{2})[-\/](\d{1,2})[-\/](\d{1,2})\b/);
+    if (iso) {
+      const d = parseDateOnly(`${iso[1]}-${String(iso[2]).padStart(2,'0')}-${String(iso[3]).padStart(2,'0')}`);
+      if (d) candidates.push(d);
+    }
+    const longDate = raw.match(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i);
+    if (longDate) {
+      const d = new Date(`${longDate[1]} ${longDate[2]} ${longDate[3]} 00:00:00`);
+      if (!Number.isNaN(d.getTime())) candidates.push(d);
+    }
+  }
+  if (candidates.length) return new Date(Math.max(...candidates.map(d => d.getTime())));
+  const projectFinish = parseDateOnly(project?.planned_finish);
+  const projectStart = parseDateOnly(project?.planned_start);
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (projectStart && now < projectStart) return projectStart;
+  if (projectFinish && now > projectFinish) return projectFinish;
+  return now;
+}
+
+function schedulePlannedProgress(row: any, asOf: Date) {
+  const stored = Number(row?.planned_progress);
+  if (Number.isFinite(stored) && stored > 0) return Math.max(0, Math.min(100, stored));
+  const start = parseDateOnly(row?.planned_start);
+  const finish = parseDateOnly(row?.planned_finish);
+  if (!start || !finish) return 0;
+  if (asOf <= start) return 0;
+  if (asOf >= finish) return 100;
+  const total = finish.getTime() - start.getTime();
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(100, ((asOf.getTime() - start.getTime()) / total) * 100));
+}
+
+function disciplineRows(rows: any[], asOf: Date) {
   const grouped = new Map<string, any[]>();
   rows.filter(a => !a.is_summary).forEach(a => {
     const d = inferDiscipline(a.name, a.discipline);
@@ -108,7 +156,7 @@ function disciplineRows(rows: any[]) {
     grouped.get(d)!.push(a);
   });
   return Array.from(grouped.entries()).map(([name, items]) => {
-    const planned = items.length ? items.reduce((s, a) => s + Number(a.planned_progress || 0), 0) / items.length : 0;
+    const planned = items.length ? items.reduce((s, a) => s + schedulePlannedProgress(a, asOf), 0) / items.length : 0;
     const actual = items.length ? items.reduce((s, a) => s + Number(a.actual_progress || 0), 0) / items.length : 0;
     const variance = actual - planned;
     return {
@@ -125,7 +173,7 @@ function disciplineRows(rows: any[]) {
   });
 }
 
-function mapActivity(row: any, matches: any[], events: any[]): Activity {
+function mapActivity(row: any, matches: any[], events: any[], asOf: Date): Activity {
   const related = matches.filter(m => m.activity_id === row.id);
   const conf = related.length ? Math.max(...related.map(m => Number(m.confidence_score || 0))) : 0;
   const pendingEvent = related
@@ -143,7 +191,7 @@ function mapActivity(row: any, matches: any[], events: any[]): Activity {
     actStart: formatDate(row.actual_start),
     actFinish: formatDate(row.actual_finish),
     progress: Number(row.actual_progress || 0),
-    plannedProgress: Number(row.planned_progress || 0),
+    plannedProgress: schedulePlannedProgress(row, asOf),
     status: activityStatus(row),
     aiConf: Math.round(conf * 100),
     isSummary: Boolean(row.is_summary),
@@ -158,8 +206,9 @@ export function applyBootstrap(data: any) {
   const matches = Array.isArray(data?.matches) ? data.matches : [];
   const reviews = Array.isArray(data?.reviews) ? data.reviews : [];
   const trace = Array.isArray(data?.trace) ? data.trace : [];
+  const asOf = inferAsOfDate(CURRENT_PROJECT, events);
 
-  ACTIVITIES = rawActivities.map((a: any) => mapActivity(a, matches, events));
+  ACTIVITIES = rawActivities.map((a: any) => mapActivity(a, matches, events, asOf));
   const byCode = new Map(ACTIVITIES.map(a => [a.dbId, a]));
 
   FIELD_EVENTS = events.map((e: any) => {
@@ -211,7 +260,8 @@ export function applyBootstrap(data: any) {
   });
 
   const executable = rawActivities.filter((a: any) => !a.is_summary);
-  const planned = executable.length ? executable.reduce((s: number, a: any) => s + Number(a.planned_progress || 0), 0) / executable.length : 0;
+  const plannedValues = executable.map((a: any) => schedulePlannedProgress(a, asOf));
+  const planned = plannedValues.length ? plannedValues.reduce((s: number, value: number) => s + value, 0) / plannedValues.length : 0;
   const actual = executable.length ? executable.reduce((s: number, a: any) => s + Number(a.actual_progress || 0), 0) / executable.length : 0;
   const unmatchedCount = reviews.filter((r: any) => !r.suggested_activity_id && r.status === 'pending').length;
   PROJECT_METRICS = {
@@ -225,10 +275,26 @@ export function applyBootstrap(data: any) {
     eventCount: events.length,
   };
 
-  DISCIPLINES = disciplineRows(rawActivities);
+  DISCIPLINES = disciplineRows(rawActivities, asOf);
   DISCIPLINE_PERF = DISCIPLINES.map(d => ({ disc: d.name, planned: d.planned, actual: d.actual }));
-  // No historical progress series exists in the current API. Do not invent one.
-  PROGRESS_TREND = [];
+  // The imported schedule may contain 0% planned_progress even though planned dates
+  // define a usable schedule-time trajectory. Use the latest field-report date when
+  // available; otherwise use the current project date. This is a schedule-time
+  // estimate, not a fabricated historical baseline.
+  const projectStart = parseDateOnly(CURRENT_PROJECT?.planned_start) || asOf;
+  const plannedAtStart = 0;
+  const plannedAtAsOf = planned;
+  const actualAtStart = 0;
+  const actualAtAsOf = actual;
+  const points: any[] = [
+    { date: formatDate(projectStart), planned: plannedAtStart, actual: actualAtStart },
+  ];
+  if (asOf.getTime() !== projectStart.getTime()) {
+    points.push({ date: formatDate(asOf), planned: plannedAtAsOf, actual: actualAtAsOf });
+  } else {
+    points[0] = { date: formatDate(asOf), planned: plannedAtAsOf, actual: actualAtAsOf };
+  }
+  PROGRESS_TREND = points;
   // Memory/delay history is not exposed by the current bootstrap endpoint yet.
   MEMORY_ACTIVITIES = [];
   DELAY_CAUSES = [];

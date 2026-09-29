@@ -438,9 +438,10 @@ function Command({onGo,reviewCount,metrics}:{onGo:(s:Screen)=>void;reviewCount:n
          </div>
          <div className="chart">
            {PROGRESS_TREND.length ? <div className="gridlines"/> : <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
-           {PROGRESS_TREND.length > 1 && <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
-             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.planned||0)/100)*180}`).join(' ')} fill="none" stroke="var(--info)" strokeWidth="2" strokeDasharray="5 5"/>
-             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.actual||0)/100)*180}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="4"/>
+           {PROGRESS_TREND.length > 0 && <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
+             {PROGRESS_TREND.length > 1 && <><polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.planned||0)/100)*180}`).join(' ')} fill="none" stroke="var(--info)" strokeWidth="2" strokeDasharray="5 5"/>
+             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.actual||0)/100)*180}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="4"/></>}
+             {PROGRESS_TREND.map((d:any,i:number)=><circle key={i} cx={(i/Math.max(1,PROGRESS_TREND.length-1))*720} cy={220-(Number(d.actual||0)/100)*180} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}
            </svg>}
          </div>
          <div className="chart-axis">{PROGRESS_TREND.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>
@@ -459,6 +460,7 @@ function Metric({label,value,note,tone}:{label:string;value:string;note:string;t
 function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail,onGo}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void;onGo:(s:Screen)=>void}){
   const [statusFilter,setStatusFilter]=useState('All');
   const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
+  const [scheduleView,setScheduleView]=useState<'gantt'|'discipline'>('gantt');
   const executableRows=rows.filter(a=>!a.isSummary);
   const disciplineRows=discipline==='All'?executableRows:executableRows.filter(a=>a.discipline===discipline);
   const visibleRows=[...disciplineRows].filter(a=>statusFilter==='All'||a.status===statusFilter).sort((a,b)=>{
@@ -476,20 +478,52 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
 
   if(!rows.length){
-    return <div className="schedule-page">
-      <PageSection title="Schedule by discipline" action={<button className="primary-btn" onClick={()=>onGo('import')}>Import schedule →</button>}>
-        <div className="schedule-empty-card">
-          <div className="schedule-empty-icon">▤</div>
-          <div className="schedule-empty-copy"><span className="eyebrow">BASELINE NOT LOADED</span><h3>No schedule imported yet</h3><p>Upload a ProjectLibre, Microsoft Project, or Primavera schedule from Import. Once submitted, the normalized L5/L6 activities will appear here.</p></div>
-          <button className="outline-btn" onClick={()=>onGo('import')}>Open Import center →</button>
-        </div>
-      </PageSection>
-    </div>;
+    return <div className="schedule-page"><PageSection title="Project schedule" action={<button className="primary-btn" onClick={()=>onGo('import')}>Import schedule →</button>}><div className="schedule-empty-card"><div className="schedule-empty-icon">▤</div><div className="schedule-empty-copy"><span className="eyebrow">BASELINE NOT LOADED</span><h3>No schedule imported yet</h3><p>Upload a ProjectLibre, Microsoft Project, or Primavera schedule from Import. Once submitted, the normalized schedule will appear here.</p></div><button className="outline-btn" onClick={()=>onGo('import')}>Open Import center →</button></div></PageSection></div>;
   }
 
+  const parseScheduleDate=(value:string)=>{ 
+    const d=new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const ganttRows=rows.filter(a=>a.planStart&&a.planFinish).sort((a,b)=>{
+    const ad=parseScheduleDate(a.planStart)?.getTime()||0;
+    const bd=parseScheduleDate(b.planStart)?.getTime()||0;
+    return ad-bd || Number(a.outlineNumber||999)-Number(b.outlineNumber||999);
+  });
+  const ganttDates=ganttRows.flatMap(a=>[parseScheduleDate(a.planStart),parseScheduleDate(a.planFinish)]).filter(Boolean) as Date[];
+  const ganttStart=ganttDates.length?new Date(Math.min(...ganttDates.map(d=>d.getTime()))):new Date();
+  const ganttEnd=ganttDates.length?new Date(Math.max(...ganttDates.map(d=>d.getTime()))):new Date(ganttStart.getTime()+86400000);
+  const totalDays=Math.max(1,Math.round((ganttEnd.getTime()-ganttStart.getTime())/86400000)+1);
+  const dayOffset=(value:string)=>{const d=parseScheduleDate(value);return d?Math.max(0,Math.min(100,((d.getTime()-ganttStart.getTime())/86400000)/Math.max(1,totalDays-1)*100)):0};
+  const barWidth=(startValue:string,endValue:string)=>Math.max(1.5,dayOffset(endValue)-dayOffset(startValue));
+  const ganttMonthLabels=Array.from({length:Math.min(6,Math.max(1,Math.ceil(totalDays/7)))},(_,i)=>{
+    const d=new Date(ganttStart.getTime()+i*7*86400000);
+    return {label:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),left:Math.min(96,(i*7/Math.max(1,totalDays-1))*100)};
+  });
+
   return <div className="schedule-page">
-    <PageSection title="Schedule by discipline" action={<div className="schedule-head-actions">{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}<button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
-      {discipline==='All' ? <div className="discipline-card-grid">
+    <PageSection title={scheduleView==='gantt' ? 'Project schedule' : 'Schedule by discipline'} action={<div className="schedule-head-actions">
+      {scheduleView==='gantt'
+        ? <button className="filter-btn" onClick={()=>{setScheduleView('discipline');setDiscipline('All');}}>Sort by discipline →</button>
+        : <button className="filter-btn" onClick={()=>{setScheduleView('gantt');setDiscipline('All');}}>← Full schedule</button>}
+      {scheduleView==='discipline'&&discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}
+      <button className="primary-btn" onClick={onExport}>Export schedule ↓</button>
+    </div>}>
+      {scheduleView==='gantt' ? <div className="schedule-gantt-wrap">
+        <div className="schedule-gantt-summary"><div><span className="eyebrow">FULL BASELINE</span><h3>Project schedule</h3><p>Planned work across the imported schedule, with actual progress shown on each activity.</p></div><span className="schedule-detail-count">{ganttRows.length} schedule rows</span></div>
+        <div className="schedule-gantt">
+          <div className="gantt-header"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ganttMonthLabels.map(m=><span key={m.label} style={{left:`${m.left}%`}}>{m.label}</span>)}</div><div className="gantt-progress-header">PROGRESS</div></div>
+          {ganttRows.map(a=>{
+            const isSummary=Boolean(a.isSummary);
+            const left=dayOffset(a.planStart); const width=barWidth(a.planStart,a.planFinish);
+            return <button key={a.id} className={`gantt-row ${isSummary?'gantt-summary-row':''} ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);if(!isSummary)onOpenDetail(a.id);}}>
+              <div className="gantt-task"><code>{a.id}</code><strong style={{paddingLeft:`${Math.max(0,(Number(a.outlineLevel||1)-1)*12)}px`}}>{a.desc}</strong><small>{isSummary?'WBS / summary':'L5/L6 executable activity'} · {a.planStart} → {a.planFinish}</small></div>
+              <div className="gantt-track"><div className={`gantt-plan-bar ${isSummary?'summary':''}`} style={{left:`${left}%`,width:`${width}%`}}><i style={{width:`${Math.min(100,Math.max(0,Number(a.progress||0)))}%`}}/></div></div>
+              <div className="gantt-progress-cell"><b>{Number(a.progress||0)}%</b><span>{a.status||'Not started'}</span></div>
+            </button>;
+          })}
+        </div>
+      </div> : discipline==='All' ? <div className="discipline-card-grid">
         {DISCIPLINES.map(d=>{
           const evidence=recentEvidence(d.name);
           void evidence;
@@ -691,7 +725,7 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
           <div className="field-chart-wrap">
             {!trend.length && <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
             {trend.length > 0 && <svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">
-              {[0,15,30,45,60].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}
+              {[0,25,50,75,100].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}
               <polyline points={plannedPoints} className="trajectory-line planned"/>
               <polyline points={actualPoints} className="trajectory-line actual"/>
               {trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}
@@ -726,7 +760,7 @@ function Analytics(){
     <PageSection label="ANALYTICS / PROJECT PERFORMANCE" title="Project analytics">
       <div className="analytics-summary-grid">
         <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{PROJECT_METRICS.actualProgress.toFixed(1)}%</strong><small>Persisted execution progress across the project</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>{PROJECT_METRICS.plannedProgress.toFixed(1)}%</strong><small>Current persisted planned progress</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>{PROJECT_METRICS.plannedProgress.toFixed(1)}%</strong><small>Schedule-time planned progress from planned dates</small></div>
         <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{PROJECT_METRICS.reviewCount}</strong><small>Ambiguous events awaiting planner action</small></div>
         <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{PROJECT_METRICS.unmatchedCount}</strong><small>Unmatched pending events</small></div>
       </div>
@@ -737,7 +771,7 @@ function Analytics(){
             <div className="analytics-ylabels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
             <div className="analytics-plot">
               <div className="analytics-gridlines" aria-hidden="true"><i/><i/><i/><i/><i/></div>
-              {trend.length > 1 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="analytics-chart-empty"><strong>No validated progress history</strong><span>Historical points will appear after approved execution updates are recorded.</span></div>}
+              {trend.length > 0 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress">{trend.length > 1 && <><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/></>}{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="analytics-chart-empty"><strong>No schedule progress snapshot</strong><span>Progress will appear after a schedule is imported.</span></div>}
               {trend.length > 1 && <div className="analytics-xlabels">{trend.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>}
             </div>
           </div>
