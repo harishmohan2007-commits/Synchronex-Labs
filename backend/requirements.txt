@@ -7,3 +7,4 @@ openpyxl>=3.1
 PyMuPDF>=1.26
 rapidfuzz>=3.13
 mpxj>=16.4
+python-docx>=1.1
