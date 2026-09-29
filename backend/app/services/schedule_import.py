@@ -210,11 +210,13 @@ def parse_mpp_with_mpxj(data: bytes, filename: str) -> dict:
         for idx,t in enumerate(task_objects,1):
             uid=int(t.getUniqueID() or idx); uid_map[uid]=t
             outline=str(t.getOutlineNumber() or idx)
+            calendar=t.getCalendar()
+            duration=t.getDuration()
             tasks.append({'uid':uid,'outline_number':outline,'outline_level':int(t.getOutlineLevel() or outline.count('.')+1),'name':str(t.getName() or ''),
                           'start':str(t.getStart()) if t.getStart() else None,'finish':str(t.getFinish()) if t.getFinish() else None,
-                          'duration_hours':float(t.getDuration().getDuration()/3600000) if t.getDuration() else None,
+                          'duration_hours':float(duration.getDuration()/3600000) if duration else None,
                           'percent_complete':float(t.getPercentageComplete() or 0),'is_summary':bool(t.getSummary()),'is_milestone':bool(t.getMilestone()),
-                          'calendar_uid':None,'predecessors':[]})
+                          'calendar_uid':int(calendar.getUniqueID()) if calendar and calendar.getUniqueID() is not None else None,'predecessors':[]})
         by_id={t['uid']:t for t in tasks}
         for t in task_objects:
             cur=by_id.get(int(t.getUniqueID()))
@@ -222,7 +224,37 @@ def parse_mpp_with_mpxj(data: bytes, filename: str) -> dict:
             for rel in list(t.getPredecessors() or []):
                 pred=rel.getTargetTask()
                 if pred: cur['predecessors'].append({'predecessor_uid':int(pred.getUniqueID()),'type':int(rel.getType().getValue()),'lag':int(rel.getLag().getDuration()/60000) if rel.getLag() else 0})
-        return {'format':'Microsoft Project MPP via MPXJ','filename':filename,'project':project_meta,'tasks':tasks,'calendars':[],'resources':[],'assignments':[]}
+        calendars=[]
+        for calendar in list(project.getCalendars()):
+            uid=calendar.getUniqueID()
+            if uid is not None:
+                calendars.append({'uid':int(uid),'name':str(calendar.getName() or '')})
+
+        resources=[]
+        for resource in list(project.getResources()):
+            uid=resource.getUniqueID()
+            if uid is None:
+                continue
+            calendar=resource.getCalendar()
+            resources.append({'uid':int(uid),'name':str(resource.getName() or ''),
+                              'resource_type':None,
+                              'calendar_uid':int(calendar.getUniqueID()) if calendar and calendar.getUniqueID() is not None else None})
+
+        assignments=[]
+        for assignment in list(project.getResourceAssignments()):
+            task=assignment.getTask()
+            resource=assignment.getResource()
+            if task is None or resource is None:
+                continue
+            task_uid=task.getUniqueID(); resource_uid=resource.getUniqueID()
+            if task_uid is None or resource_uid is None:
+                continue
+            units=assignment.getUnits()
+            assignments.append({'uid':int(assignment.getUniqueID() or len(assignments)+1),
+                                'task_uid':int(task_uid),'resource_uid':int(resource_uid),
+                                'units':float(units.doubleValue()) if hasattr(units,'doubleValue') else float(units or 1)})
+
+        return {'format':'Microsoft Project MPP via MPXJ','filename':filename,'project':project_meta,'tasks':tasks,'calendars':calendars,'resources':resources,'assignments':assignments}
     finally:
         try: os.unlink(path)
         except OSError: pass
