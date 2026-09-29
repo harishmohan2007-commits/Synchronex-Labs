@@ -21,7 +21,7 @@ let snapshot=empty;
 const listeners=new Set<()=>void>();
 const emit=()=>listeners.forEach(l=>l());
 export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
-const apiBase=()=> (import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+const apiBase=()=> (import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
 
 function mapActivities(rows:any[]){return rows.map(a=>({
   id:a.activity_code, dbId:a.id, wbs:a.outline_number||'—', desc:a.name, discipline:a.discipline||'—',

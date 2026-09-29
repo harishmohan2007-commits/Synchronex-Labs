@@ -137,7 +137,7 @@ export default function App(){
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
     if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
-    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
     try{
       const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',captureText);
       captureFiles.forEach(f=>body.append('files',f,f.name));
@@ -213,7 +213,7 @@ export default function App(){
 
   const decideReview=async(decision:'approve'|'reject'|'flag')=>{
     if(!activeReview) return;
-    try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
+    try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
   };
   const approveReview=()=>decideReview('approve');
   const rejectReview=()=>decideReview('reject');
@@ -222,7 +222,7 @@ export default function App(){
     if(!importFiles.length){notify('Choose a ProjectLibre, Microsoft Project, or Primavera schedule file first.');return;}
     const file=importFiles[0];
     if(!/\.(pod|mpp|xml|xer|mspdi)$/i.test(file.name)){setImportState('error');notify('Supported schedules: ProjectLibre .pod, Microsoft Project .mpp/.xml, Primavera P6 .xer.');return;}
-    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
     const projectId=project?.id;
     setImportState('processing');
     try{
@@ -289,7 +289,7 @@ export default function App(){
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
-      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/settings/${project?.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
+      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{if(!project?.id){notify('Import a schedule before saving workspace controls.');return;}try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/settings/${project.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
@@ -333,10 +333,10 @@ export default function App(){
 }
 
 function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';setMode:(v:'login'|'forgot')=>void;role:Role;setRole:(v:Role)=>void;onLogin:()=>void}){
- const [email,setEmail]=useState(role==='company'?'planner@northfield.example':'field.supervisor@northfield.example');
+ const [email,setEmail]=useState('');
  const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false); const [forgotOpen,setForgotOpen]=useState(false); const [forgotEmail,setForgotEmail]=useState(''); const [forgotBusy,setForgotBusy]=useState(false); const [forgotSent,setForgotSent]=useState(false);
- const chooseRole=(next:Role)=>{setRole(next);setEmail(next==='company'?'planner@northfield.example':'field.supervisor@northfield.example');setError('');setPassword('')};
- const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');if(!email.includes('@')){setError('Enter a valid work email.');return}if(!password){setError('Enter your password.');return}setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},700)};
+ const chooseRole=(next:Role)=>{setRole(next);setEmail('');setError('');setPassword('')};
+ const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');const demoEntry=!email.trim()&&!password.trim();if(demoEntry){setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},250);return}if(!email.includes('@')){setError('Enter a valid work email, or leave both fields blank for demo entry.');return}if(!password){setError('Enter your password, or leave both fields blank for demo entry.');return}setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},700)};
  const openForgot=()=>{setForgotEmail(email.includes('@')?email:'');setForgotSent(false);setError('');setForgotOpen(true)};
  const sendReset=(e:React.FormEvent)=>{e.preventDefault();if(!forgotEmail.includes('@')){setError('Enter the registered email address.');return}setForgotBusy(true);setError('');window.setTimeout(()=>{setForgotBusy(false);setForgotSent(true)},900)};
  return <div className="auth-shell"><div className="auth-left"><div className="auth-brand"><span className="brand-mark">S</span><div><strong>SYNCHRONEX LABS</strong></div></div><div className="auth-hero"><h1>{role==='company'?'Connect planning with execution intelligence.':'Turn field updates into trusted schedule actuals.'}</h1><p>{role==='company'?'Manage the baseline, review field evidence, validate actuals, and preserve project intelligence.':'Report site progress with text, voice, or evidence files without exposing company planning controls.'}</p><div className="auth-path">{role==='company'?<><span>01 Plan</span><i>→</i><span>02 Review</span><i>→</i><span>03 Apply</span><i>→</i><span>04 Learn</span></>:<><span>01 Work</span><i>→</i><span>02 Capture</span><i>→</i><span>03 Submit</span><i>→</i><span>04 Track</span></>}</div></div></div><div className="auth-right"><div className="auth-card"><span className="eyebrow">SECURE WORKSPACE</span><h2>Choose your workspace</h2><div className="role-switch" role="tablist" aria-label="Workspace type"><button type="button" className={role==='company'?'selected':''} onClick={()=>chooseRole('company')}><strong>Company portal</strong><span>Planning, review & control</span></button><button type="button" className={role==='field'?'selected':''} onClick={()=>chooseRole('field')}><strong>Field portal</strong><span>Work, capture & submissions</span></button></div><p>{role==='company'?'Use your project-controls account to manage the project workspace.':'Use your field account to report execution and track submissions.'}</p><form onSubmit={submit}><label>Work email<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<button className="primary-btn" disabled={busy}>{busy?'Working…':`Enter ${role==='company'?'company':'field'} portal`} <span>→</span></button></form><button className="link-btn" type="button" onClick={openForgot}>Forgot password?</button></div></div>{forgotOpen&&<div className="modal-backdrop auth-recovery-backdrop" role="dialog" aria-modal="true" aria-labelledby="recovery-title" onMouseDown={e=>e.currentTarget===e.target&&setForgotOpen(false)}><div className="modal auth-recovery-modal"><div className="modal-head"><h2 id="recovery-title">Reset your password</h2><button className="icon-btn" aria-label="Close password recovery" onClick={()=>setForgotOpen(false)}>×</button></div>{forgotSent?<div className="recovery-success"><span className="success-chip">REQUEST RECEIVED</span><h3>Check your registered email</h3><p>If the address is registered, a password-reset email will be sent to <strong>{forgotEmail}</strong>.</p><button className="primary-btn" onClick={()=>setForgotOpen(false)}>Back to sign in →</button></div>:<form onSubmit={sendReset} className="recovery-form"><p className="modal-copy">Enter the email address registered to your Synchronex account. We'll use it for the password-reset request.</p><label>Registered email<input autoFocus value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} type="email" placeholder="name@company.com" autoComplete="email"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setForgotOpen(false)}>Cancel</button><button type="submit" className="primary-btn" disabled={forgotBusy}>{forgotBusy?'Sending…':'Send reset email →'}</button></div></form>}</div></div>}</div>
@@ -376,42 +376,24 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
 function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
-  const [statusFilter,setStatusFilter]=useState('All');
-  const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
-  const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
-  const visibleRows=[...disciplineRows].filter(a=>statusFilter==='All'||a.status===statusFilter).sort((a,b)=>{
-    if(sortBy==='progress') return b.progress-a.progress;
-    if(sortBy==='status') return a.status.localeCompare(b.status);
-    if(sortBy==='id') return a.id.localeCompare(b.id);
-    return a.planStart.localeCompare(b.planStart);
-  });
-  const selectDiscipline=(name:string)=>{
-    setDiscipline(name);
-    setStatusFilter('All');
-    const first=rows.find(a=>a.discipline===name);
-    if(first) onSelect(first.id);
-  };
-  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
-
+  const visibleRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+  const plannedRows=visibleRows.filter(a=>a.planStart!=='—'&&a.planFinish!=='—');
+  const dates=plannedRows.flatMap(a=>[new Date(a.planStart).getTime(),new Date(a.planFinish).getTime()]).filter(Number.isFinite);
+  const minDate=dates.length?new Date(Math.min(...dates)):new Date();
+  const maxDate=dates.length?new Date(Math.max(...dates)):new Date(minDate.getTime()+86400000);
+  const span=Math.max(1,maxDate.getTime()-minDate.getTime());
+  const days=Math.max(1,Math.ceil(span/86400000));
+  const marks=Array.from({length:Math.min(8,Math.max(2,Math.ceil(days/7)+1))},(_,i)=>new Date(minDate.getTime()+span*i/(Math.min(8,Math.max(2,Math.ceil(days/7)+1))-1)));
+  const pct=(date:string)=>Math.max(0,Math.min(100,(new Date(date).getTime()-minDate.getTime())/span*100));
+  const formatDate=(d:Date)=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  const disciplines=Array.from(new Set(rows.map(a=>a.discipline).filter((d:any)=>d&&d!=='—')));
   return <div className="schedule-page">
-    <PageSection title="Schedule by discipline" action={<div className="schedule-head-actions">{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}<button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
-      {discipline==='All' ? <div className="discipline-card-grid">
-        {DISCIPLINES.map(d=>{
-          const evidence=recentEvidence(d.name);
-          return <div key={d.disc} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
-            <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
-              <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
-              <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
-              <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
-              <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
-            </button>
-          </div>;
-        })}
-      </div> : <>
-        <div className="schedule-detail-head"><div><h3>{discipline === 'Piping' ? 'Piping Workstream' : `${discipline} Workstream`}</h3><p>{discipline === 'Piping' ? 'Track piping activities, planned dates, actual progress, and execution evidence in one view.' : 'Track activities, planned dates, actual progress, and execution evidence in one view.'}</p></div><span className="schedule-detail-count">{disciplineRows.length} activities</span></div>
-        <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
-        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
-      </>}
+    <PageSection title="Schedule" action={<div className="schedule-head-actions"><label className="gantt-filter-label">Discipline<select value={discipline} onChange={e=>setDiscipline(e.target.value)} aria-label="Filter schedule by discipline"><option value="All">All disciplines</option>{disciplines.map(d=><option key={d} value={d}>{d}</option>)}</select></label><button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
+      <div className="gantt-shell">
+        <div className="gantt-head"><div>Activity</div><div className="gantt-timeline-head">{marks.map((d,i)=><span key={i}>{formatDate(d)}</span>)}</div></div>
+        {plannedRows.length?plannedRows.map(a=>{const left=pct(a.planStart);const right=pct(a.planFinish);return <button key={a.id} className={`gantt-row ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="gantt-activity"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.discipline}</small></div><div className="gantt-track"><div className="gantt-grid">{marks.map((_,i)=><i key={i}/>)}</div><span className="gantt-bar" style={{left:`${left}%`,width:`${Math.max(1.5,right-left)}%`}}/></div></button>}) : <div className="screen-empty-state"><strong>No scheduled activities so far</strong><span>Import a valid project schedule to populate the planned Gantt view.</span></div>}
+      </div>
+      <div className="gantt-legend"><span><i/> Planned schedule duration</span><span>{visibleRows.length} activities</span></div>
     </PageSection>
   </div>
 }
@@ -449,7 +431,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
             <h3>Name this progress update <span className="required-inline">Required</span></h3>
             <p>Give the complete submission a clear name so the project team can identify it later. The worker chooses this name.</p>
           </div>
-          <input value={name} onChange={e=>{setName(e.target.value);setDirty(true)}} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
         </div>
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
@@ -712,7 +694,7 @@ function Analytics(){
   const {PROGRESS_TREND,DISCIPLINE_PERF,DELAY_CAUSES,REVIEW_QUEUE}=useRuntimeData();
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
-  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
   const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
@@ -726,20 +708,25 @@ function Analytics(){
       </div>
       <div className="analytics-grid-two">
         <article className="analytics-panel analytics-trajectory-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{trend.length?`${trend[trend.length-1].actual}% actual`:"No validated actuals"}</span></div>
-          <div className="analytics-chart">
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{trend.length?`${trend[trend.length-1].actual}% actual`:'No validated actuals'}</span></div>
+          {trend.length ? <><div className="analytics-chart">
             <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
             <div className="analytics-plot">
               <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
               <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d,i)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg>
               <div className="analytics-xlabels">{trend.map(d=><span key={d.date}>{d.date}</span>)}</div>
             </div>
-          </div>
-          <div className="analytics-legend"><span><i className="legend-line actual-line"/>Actual</span><span><i className="legend-line planned-line"/>Planned</span></div>
+          </div><div className="analytics-legend"><span><i className="legend-line actual-line"/>Actual</span><span><i className="legend-line planned-line"/>Planned</span></div></> : <div className="analytics-chart-empty"><strong>No progress trajectory so far</strong><span>Planned vs actual history will appear after validated execution progress is recorded.</span></div>}
         </article>
-        <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div><div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div></article>
+        <article className="analytics-panel">
+          <div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div>
+          {DISCIPLINE_PERF.length ? <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div> : <div className="analytics-panel-empty"><strong>No workstream output so far</strong><span>Discipline performance will appear after the imported schedule contains validated execution actuals.</span></div>}
+        </article>
       </div>
-      <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div><div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div></article>
+      <article className="analytics-panel">
+        <div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div>
+        {DELAY_CAUSES.length ? <div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div> : <div className="analytics-panel-empty"><strong>No primary execution causes so far</strong><span>No validated delay causes have been recorded yet. Delay patterns will appear after execution evidence identifies a cause.</span></div>}
+      </article>
     </PageSection>
   </div>
 }
