@@ -1725,3 +1725,71 @@ button,input,textarea,select{font-family:var(--font-ui)}
 .rail-signout strong{font-family:Inter,system-ui,sans-serif!important;letter-spacing:.01em!important;font-size:13px!important;}
 .rail-signout small{font-size:9px!important;letter-spacing:.03em!important;}
 .settings-page .section-head .eyebrow{display:none!important;}
+
+/* =====================================================================
+   FINAL REQUEST — trace light theme + analytics trajectory spacing
+   ===================================================================== */
+:root[data-theme="light"] .trace-actor-card{
+  background:var(--surface);
+  color:var(--text);
+  border-color:var(--border);
+}
+:root[data-theme="light"] .trace-actor-card:hover{
+  background:var(--surface-2);
+  border-color:#8eaaa0;
+}
+:root[data-theme="light"] .trace-actor-card.active{
+  background:#edf5f1;
+  border-color:#83aa9b;
+  box-shadow:inset 3px 0 0 var(--accent);
+}
+:root[data-theme="light"] .trace-actor-mark{
+  background:var(--surface-2);
+  color:var(--brand);
+  border-color:var(--border-strong);
+}
+:root[data-theme="light"] .trace-actor-count{color:var(--text-3);}
+:root[data-theme="light"] .trace-actor-card>strong{color:var(--text);}
+:root[data-theme="light"] .trace-actor-card>p{color:var(--text-2);}
+:root[data-theme="light"] .trace-stage-list{border-top-color:var(--border);}
+:root[data-theme="light"] .trace-stage-list span{color:var(--text-3);}
+:root[data-theme="light"] .trace-stage-list i{color:var(--accent);}
+:root[data-theme="light"] .trace-actor-open{color:var(--brand-2);}
+:root[data-theme="light"] .trace-actor-modal{background:rgba(16,33,28,.30);}
+:root[data-theme="light"] .trace-actor-modal-card{background:var(--surface);color:var(--text);border-color:var(--border);box-shadow:0 28px 90px rgba(16,33,28,.20);}
+:root[data-theme="light"] .trace-actor-modal-head{border-bottom-color:var(--border);}
+:root[data-theme="light"] .trace-actor-modal-head h2{color:var(--text);}
+:root[data-theme="light"] .trace-actor-modal-head p{color:var(--text-2);}
+:root[data-theme="light"] .trace-actor-modal-head .icon-btn{color:var(--text);border-color:var(--border-strong);background:var(--surface);}
+:root[data-theme="light"] .trace-actor-modal-toolbar{color:var(--text-3);}
+:root[data-theme="light"] .trace-modal-table{background:var(--surface);border-color:var(--border);}
+:root[data-theme="light"] .trace-modal-table th{background:var(--surface-2);color:var(--text-3);border-color:var(--border);}
+:root[data-theme="light"] .trace-modal-table td{background:var(--surface);color:var(--text);border-color:var(--border);}
+:root[data-theme="light"] .trace-modal-table tbody tr:hover{background:var(--surface-2)!important;}
+:root[data-theme="light"] .trace-modal-table code{color:var(--info);}
+:root[data-theme="light"] .trace-actor-modal-footer .outline-btn{background:var(--surface);color:var(--text);border-color:var(--border-strong);}
+
+/* More breathing room and clearer hierarchy for Planned vs actual. */
+.analytics-grid-two{gap:22px;}
+.analytics-grid-two .analytics-panel{padding:24px 24px 20px;}
+.analytics-grid-two .analytics-panel-head{margin-bottom:22px;}
+.analytics-grid-two .analytics-panel-head h3{font-size:22px;}
+.analytics-chart{grid-template-columns:48px minmax(0,1fr);gap:16px;min-height:330px;padding:4px 4px 0 0;}
+.analytics-ylabels{height:280px;padding-right:6px;}
+.analytics-ylabels span{font-size:10px;}
+.analytics-plot{height:308px;padding:0 2px 0 0;}
+.analytics-gridlines{inset:0 0 40px;}
+.analytics-plot svg{height:280px;flex-basis:280px;}
+.analytics-xlabels{height:28px;flex-basis:28px;padding:7px 0 0;font-size:9px;}
+.analytics-legend{margin-top:12px;padding-top:12px;gap:28px;}
+.analytics-legend span{font-size:12px;color:var(--text-2);}
+.legend-dot{width:26px;height:3px;}
+@media(max-width:1050px){
+  .analytics-grid-two .analytics-panel{padding:22px;}
+}
+@media(max-width:760px){
+  .analytics-chart{grid-template-columns:40px minmax(0,1fr);gap:10px;min-height:290px;}
+  .analytics-ylabels{height:245px;}
+  .analytics-plot{height:272px;}
+  .analytics-plot svg{height:245px;flex-basis:245px;}
+}
