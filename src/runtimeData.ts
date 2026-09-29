@@ -21,7 +21,7 @@ let snapshot=empty;
 const listeners=new Set<()=>void>();
 const emit=()=>listeners.forEach(l=>l());
 export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
-const apiBase=()=> (import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+const apiBase=()=> (() => { const configured = import.meta.env.VITE_API_BASE_URL; const base = configured || (typeof window !== 'undefined' && !['localhost','127.0.0.1'].includes(window.location.hostname) ? '' : 'http://localhost:8000'); const normalized = base.replace(/\/$/,''); return normalized.endsWith('/api') ? normalized.slice(0,-4) : normalized; })();
 
 function mapActivities(rows:any[]){return rows.map(a=>({
   id:a.activity_code, dbId:a.id, wbs:a.outline_number||'—', desc:a.name, discipline:a.discipline||'—',
@@ -40,13 +40,54 @@ export async function refreshRuntimeData(projectId?:string){
     const p=await fetch(`${apiBase()}/api/projects/current${projectId?`?project_id=${encodeURIComponent(projectId)}`:''}`);
     const project=await p.json(); if(!p.ok) throw new Error(project?.detail||'Unable to load the current project.');
     const b=await fetch(`${apiBase()}/api/projects/${project.id}/bootstrap`); const payload=await b.json(); if(!b.ok) throw new Error(payload?.detail||'Unable to load project data.');
-    const activities=mapActivities(payload.activities||[]); const events=payload.events||[]; const reviews=payload.reviews||[]; const trace=payload.trace||[];
-    const activityByDb=new Map((payload.activities||[]).map((a:any)=>[a.id,a]));
+    const rawActivities=payload.activities||[];
+    const activities=mapActivities(rawActivities);
+    const events=payload.events||[];
+    const reviews=payload.reviews||[];
+    const matches=payload.matches||[];
+    const trace=payload.trace||[];
+    const activityByDb=new Map(rawActivities.map((a:any)=>[a.id,a]));
     const byEvent=new Map(events.map((e:any)=>[e.id,e]));
-    const idByDb=new Map(activities.map((a:any)=>[a.dbId,a.id]));
-    const fieldEvents=events.map((e:any)=>{const aid=e.activity_id?activityByDb.get(e.activity_id):null;return {time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),status:e.status==='matched'?'AI MATCHED':'REVIEW REQUIRED',text:`"${e.evidence_text||''}"`,actId:aid?.activity_code||'—',actDesc:aid?.name||'No matching activity',conf:Math.round((e.confidence||0)*100)};});
-    const reviewQueue=reviews.filter((r:any)=>r.status==='open').map((r:any)=>{const e=byEvent.get(r.execution_event_id);const a=r.activity_id?activityByDb.get(r.activity_id):null;return {id:r.id,text:`"${e?.evidence_text||'Execution event'}"`,candidate:a?.activity_code||'—',conf:Math.round((r.confidence||0)*100),issue:r.reason||'Review required',status:r.activity_id?'Review':'Unmatched'};});
-    const audit=trace.map((t:any)=>{const a=t.activity_id?activityByDb.get(t.activity_id):null;return {ts:new Date(t.created_at).toLocaleString(),actor:t.actor||'System',action:t.action,activity:a?.activity_code||'—',source:t.source||'—',prev:t.previous_value?JSON.stringify(t.previous_value):'—',next:t.next_value?JSON.stringify(t.next_value):'—',conf:Math.round((t.confidence||0)*100)};});
+    const matchByEvent=new Map(matches.map((m:any)=>[m.execution_event_id,m]));
+    const reviewByEvent=new Map(reviews.map((r:any)=>[r.execution_event_id,r]));
+    const fieldEvents=events.map((e:any)=>{
+      const match=matchByEvent.get(e.id);
+      const aid=match?.activity_id?activityByDb.get(match.activity_id):null;
+      const conf=match?.confidence_score ?? e.extraction_confidence ?? 0;
+      return {
+        time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+        status:match?.status==='approved'?'APPROVED':match?.status==='rejected'?'REJECTED':'REVIEW REQUIRED',
+        text:`\"${e.raw_text||''}\"`,
+        actId:aid?.activity_code||'—',
+        actDesc:aid?.name||'No matching activity',
+        conf:Math.round(Number(conf)*100)
+      };
+    });
+    const reviewQueue=reviews.filter((r:any)=>r.status==='pending').map((r:any)=>{
+      const e=byEvent.get(r.execution_event_id);
+      const a=r.suggested_activity_id?activityByDb.get(r.suggested_activity_id):null;
+      return {
+        id:r.id,
+        text:`\"${e?.raw_text||'Execution event'}\"`,
+        candidate:a?.activity_code||'—',
+        conf:Math.round(Number(r.confidence_score||0)*100),
+        issue:r.reason||'Review required',
+        status:a?'Review':'Unmatched'
+      };
+    });
+    const audit=trace.map((t:any)=>{
+      const a=t.entity_id?activityByDb.get(t.entity_id):null;
+      return {
+        ts:new Date(t.created_at).toLocaleString(),
+        actor:t.user_id||'System',
+        action:t.action,
+        activity:a?.activity_code||'—',
+        source:t.source||'—',
+        prev:t.old_value?JSON.stringify(t.old_value):'—',
+        next:t.new_value?JSON.stringify(t.new_value):'—',
+        conf:typeof t.new_value?.confidence==='number'?Math.round(t.new_value.confidence*100):0
+      };
+    });
     const memoryOccurrences=activities.filter(a=>a.actStart!=='—'&&a.actFinish!=='—').map(a=>({id:a.id,date:a.actFinish,duration:a.actStart&&a.actFinish?`${Math.max(0,Math.round((new Date(a.actFinish).getTime()-new Date(a.actStart).getTime())/86400000))} days`:'—',discipline:a.discipline,evidence:`Validated actual dates for ${a.desc}.`,status:'Validated'}));
     const memory=memoryOccurrences.length?Array.from(new Map(memoryOccurrences.map(o=>[o.discipline||'Unassigned',o])).entries()).map(([type,o])=>({type,baselineAvg:'—',actualAvg:o.duration,variance:'—',occurrences:memoryOccurrences.filter(x=>x.discipline===type).length})):[];
     snapshot={project,settings:payload.settings||null,ACTIVITIES:activities,DISCIPLINES:buildDisciplines(activities,events),FIELD_EVENTS:fieldEvents,REVIEW_QUEUE:reviewQueue,AUDIT_TRAIL:audit,MEMORY_ACTIVITIES:memory,MEMORY_OCCURRENCES:memoryOccurrences,PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],loading:false,error:''}; emit();
