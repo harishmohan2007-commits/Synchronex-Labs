@@ -36,6 +36,8 @@ def decide(review_id: str, body: Decision):
             raise HTTPException(404, 'Matched activity not found.')
 
         progress = body.new_progress
+        if progress is None and event.get('unit') == '%' and event.get('quantity') is not None:
+            progress = float(event.get('quantity'))
         if progress is not None and not 0 <= progress <= 100:
             raise HTTPException(400, 'new_progress must be between 0 and 100')
         update = {}
