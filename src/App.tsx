@@ -55,7 +55,7 @@ export default function App(){
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
   const [selectedId,setSelectedId]=useState('');
-  const [,setDataVersion]=useState(0);
+  const [dataVersion,setDataVersion]=useState(0);
   const [dataLoading,setDataLoading]=useState(true);
   const [reviewCount,setReviewCount]=useState(0);
   const [reviewIndex,setReviewIndex]=useState(0);
@@ -126,7 +126,7 @@ export default function App(){
   const [detailId,setDetailId]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
+  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds,dataVersion]);
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
 
@@ -340,7 +340,7 @@ export default function App(){
           <div><span>PROGRESS</span><b>{detailActivity.progress}%</b><i className="activity-detail-progress"><em style={{width:`${detailActivity.progress}%`}}/></i></div>
           <div><span>AI CONFIDENCE</span><b>{detailActivity.aiConf?`${detailActivity.aiConf}%`:'No link'}</b></div>
         </div>
-        <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p></div>
+        <div className="activity-detail-evidence activity-detail-panel"><span className="eyebrow">LATEST FIELD EVIDENCE</span><p>{detailEvidence?`“${detailEvidence.text.replace(/^"|"$/g,'')}”`:'No field evidence linked yet.'}</p>{detailEvidence?.progress!=null&&<span className="evidence-score">Reported field progress · {detailEvidence.progress}% · {detailEvidence.status==='REVIEW REQUIRED'?'Pending planner validation':'Validated'}</span>}</div>
         <div className="activity-detail-trace activity-detail-panel"><div className="activity-detail-panel-head"><span className="eyebrow">RECENT PROGRESS UPDATES</span><span className="trace-chip">{detailTrail.length} recorded</span></div>{detailTrail.length?detailTrail.map((t,i)=><div key={i} className="trace-mini-row"><span>{t.ts}</span><span className="actor">{t.actor}</span><span>{t.action.toLowerCase().includes('progress update')?`Progress update by ${t.actor}`:t.action}</span><span>{t.prev} → <b>{t.next}</b></span></div>):<p className="helper">No accepted changes recorded yet for this activity.</p>}</div>
         <div className="activity-detail-footer"><button className="outline-btn" onClick={()=>setModal(null)}>Close</button></div>
       </div> : <p>Activity not found.</p>}
@@ -459,7 +459,8 @@ function Metric({label,value,note,tone}:{label:string;value:string;note:string;t
 function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail,onGo}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void;onGo:(s:Screen)=>void}){
   const [statusFilter,setStatusFilter]=useState('All');
   const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
-  const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+  const executableRows=rows.filter(a=>!a.isSummary);
+  const disciplineRows=discipline==='All'?executableRows:executableRows.filter(a=>a.discipline===discipline);
   const visibleRows=[...disciplineRows].filter(a=>statusFilter==='All'||a.status===statusFilter).sort((a,b)=>{
     if(sortBy==='progress') return b.progress-a.progress;
     if(sortBy==='status') return a.status.localeCompare(b.status);
@@ -469,7 +470,7 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   const selectDiscipline=(name:string)=>{
     setDiscipline(name);
     setStatusFilter('All');
-    const first=rows.find(a=>a.discipline===name);
+    const first=executableRows.find(a=>a.discipline===name);
     if(first) onSelect(first.id);
   };
   const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
@@ -504,7 +505,7 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
       </div> : <>
         <div className="schedule-detail-head"><div><h3>{discipline === 'Piping' ? 'Piping Workstream' : `${discipline} Workstream`}</h3><p>{discipline === 'Piping' ? 'Track piping activities, planned dates, actual progress, and execution evidence in one view.' : 'Track activities, planned dates, actual progress, and execution evidence in one view.'}</p></div><span className="schedule-detail-count">{disciplineRows.length} activities</span></div>
         <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
-        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
+        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b>{a.pendingFieldProgress!=null&&<small className="pending-field-progress">Field report: {a.pendingFieldProgress}% · pending review</small>}</div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
       </>}
     </PageSection>
   </div>;
@@ -556,18 +557,18 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
 }
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
-  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
+  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.progress!=null?`${q.progress}%`:'—'}</td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
     return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
       <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</p></div>
-      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
+      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Field progress</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={8}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
     </PageSection></div>
   }
   return <div className="review-detail-page"><PageSection label="" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
     <div className="review-detail-grid">
       <main className="review-detail-main">
         <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
+        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%{item?.progress!=null ? ` · Reported progress ${item.progress}%` : ''}</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
         <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
       </main>
       

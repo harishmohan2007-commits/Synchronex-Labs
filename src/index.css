@@ -3893,3 +3893,11 @@ table{border-collapse:collapse;width:100%}th{font:600 9px var(--font-mono);lette
    keeping the existing information architecture intact. */
 .empty-state{min-height:64px;display:flex;align-items:center;justify-content:center;padding:18px 16px;}
 :root[data-theme="dark"] .empty-state{color:#9fb2ae;}
+
+.pending-field-progress {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: .02em;
+  color: #d8b36a;
+}

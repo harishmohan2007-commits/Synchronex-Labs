@@ -18,6 +18,8 @@ export type Activity = {
   plannedProgress: number;
   status: string;
   aiConf: number;
+  isSummary: boolean;
+  pendingFieldProgress: number | null;
 };
 
 export let ACTIVITIES: Activity[] = [];
@@ -87,10 +89,21 @@ function activityStatus(row: any) {
   return 'Planned';
 }
 
+function inferDiscipline(name: string, existing?: string | null) {
+  if (existing) return existing;
+  const low = String(name || '').toLowerCase();
+  if (/spool|piping|pipeline|pipe|weld|ndt|erection/.test(low)) return 'Piping';
+  if (/pump|mechanical|equipment|commissioning|alignment/.test(low)) return 'Mechanical';
+  if (/cable|electrical|termination|continuity/.test(low)) return 'Electrical';
+  if (/instrument|calibration|tubing/.test(low)) return 'Instrumentation';
+  if (/civil|excavat|concrete|foundation|backfill/.test(low)) return 'Civil';
+  return 'Other';
+}
+
 function disciplineRows(rows: any[]) {
   const grouped = new Map<string, any[]>();
   rows.filter(a => !a.is_summary).forEach(a => {
-    const d = a.discipline || 'Unassigned';
+    const d = inferDiscipline(a.name, a.discipline);
     if (!grouped.has(d)) grouped.set(d, []);
     grouped.get(d)!.push(a);
   });
@@ -115,12 +128,16 @@ function disciplineRows(rows: any[]) {
 function mapActivity(row: any, matches: any[], events: any[]): Activity {
   const related = matches.filter(m => m.activity_id === row.id);
   const conf = related.length ? Math.max(...related.map(m => Number(m.confidence_score || 0))) : 0;
+  const pendingEvent = related
+    .filter(m => m.status === 'pending')
+    .map(m => events.find(e => e.id === m.execution_event_id))
+    .find(e => e?.unit === '%' && e?.quantity != null);
   return {
     id: row.activity_code || row.source_uid || row.id,
     dbId: row.id,
     wbs: row.outline_level ? `L${row.outline_level}` : '—',
     desc: row.name || 'Unnamed activity',
-    discipline: row.discipline || 'Unassigned',
+    discipline: inferDiscipline(row.name, row.discipline),
     planStart: formatDate(row.planned_start),
     planFinish: formatDate(row.planned_finish),
     actStart: formatDate(row.actual_start),
@@ -129,6 +146,8 @@ function mapActivity(row: any, matches: any[], events: any[]): Activity {
     plannedProgress: Number(row.planned_progress || 0),
     status: activityStatus(row),
     aiConf: Math.round(conf * 100),
+    isSummary: Boolean(row.is_summary),
+    pendingFieldProgress: pendingEvent ? Number(pendingEvent.quantity) : null,
   };
 }
 
@@ -153,6 +172,7 @@ export function applyBootstrap(data: any) {
       text: `"${e.raw_text || ''}"`,
       actId: act?.id || match?.activity_id || '—',
       actDesc: act?.desc || 'No matching activity',
+      progress: e.unit === '%' && e.quantity != null ? Number(e.quantity) : null,
       conf: Math.round(Number(match?.confidence_score || e.extraction_confidence || 0) * 100),
     };
   });
@@ -166,6 +186,7 @@ export function applyBootstrap(data: any) {
       candidate: act?.id || '—',
       conf: Math.round(Number(r.confidence_score || 0) * 100),
       issue: r.reason || (act ? 'Review required' : 'No matching activity'),
+      progress: event?.unit === '%' && event?.quantity != null ? Number(event.quantity) : null,
       status: r.status === 'pending' ? 'Review' : r.status,
     };
   }).filter((r: any) => r.status === 'Review' || r.status === 'pending');
