@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF } from './data';
+import { ACTIVITIES, DISCIPLINES, FIELD_EVENTS, REVIEW_QUEUE, AUDIT_TRAIL, MEMORY_ACTIVITIES, PROGRESS_TREND, DELAY_CAUSES, DISCIPLINE_PERF, CURRENT_PROJECT, PROJECT_METRICS, loadCurrentProject, submitCapture, decideReview, importSchedule, getSettings, saveSettings } from './runtimeData';
 
 type Role = 'company'|'field';
 type Screen = 'command'|'schedule'|'capture'|'review'|'memory'|'trace'|'import'|'analytics'|'team'|'settings'|'field-home'|'submissions'|'profile';
@@ -54,8 +54,10 @@ export default function App(){
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
-  const [selectedId,setSelectedId]=useState('PIP-245');
-  const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
+  const [selectedId,setSelectedId]=useState('');
+  const [,setDataVersion]=useState(0);
+  const [dataLoading,setDataLoading]=useState(true);
+  const [reviewCount,setReviewCount]=useState(0);
   const [reviewIndex,setReviewIndex]=useState(0);
   const [reviewDetailOpen,setReviewDetailOpen]=useState(false);
   const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
@@ -89,6 +91,33 @@ export default function App(){
   const [retention,setRetention]=useState('project');
   const [memberTarget,setMemberTarget]=useState<{initials:string;name:string;role:string;workspace:string;status:string}|null>(null);
   const [memberDraft,setMemberDraft]=useState({role:'',workspace:'',status:'Active',canReview:true,canImport:true,canEditBaseline:false});
+
+  useEffect(()=>{
+    let cancelled=false;
+    loadCurrentProject().then(()=>{
+      if(cancelled)return;
+      setSelectedId(ACTIVITIES[0]?.id||'');
+      setReviewCount(REVIEW_QUEUE.length);
+      setDataVersion(v=>v+1);
+    }).catch(err=>{
+      if(!cancelled) notify(err instanceof Error ? err.message : 'Unable to load Synchronex data.');
+    }).finally(()=>{if(!cancelled)setDataLoading(false);});
+    return ()=>{cancelled=true};
+  },[]);
+
+  useEffect(()=>{
+    if(CURRENT_PROJECT?.id){
+      getSettings(CURRENT_PROJECT.id).then((settings:any)=>{
+        if(settings?.confidence_threshold!=null)setThreshold(Math.round(Number(settings.confidence_threshold)*100));
+        if(settings?.date_format)setDateFormat(settings.date_format);
+        if(settings?.timezone)setTimezone(settings.timezone);
+        if(settings?.retention)setRetention(settings.retention);
+        if(typeof settings?.auto_save==='boolean')setAutoSave(settings.auto_save);
+        if(typeof settings?.email_notifications==='boolean')setEmailNotifications(settings.email_notifications);
+        if(typeof settings?.in_app_notifications==='boolean')setInAppNotifications(settings.in_app_notifications);
+      }).catch(()=>{});
+    }
+  },[CURRENT_PROJECT?.id]);
 
   // Schedule discipline selection
   const [scheduleDiscipline,setScheduleDiscipline]=useState('All');
@@ -128,12 +157,24 @@ export default function App(){
   const confirmLeave=()=>{const next=(window as any).__pendingScreen as Screen; setDirty(false);setModal(null);setScreen(next);};
 
 
-  const runCapture=()=>{
+  const runCapture=async()=>{
     if(captureBusy)return;
+    if(!CURRENT_PROJECT?.id){notify('Import a schedule before submitting field evidence.');return;}
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
-    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
-    setCaptureBusy(true);setCaptureResult(false);setDirty(false);
-    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the selected evidence.');},1200);
+    if(!captureText.trim() && !captureFiles.length){
+      notify(recordedAudioUrl ? 'Voice recording is captured locally, but the current backend accepts text/PDF/Excel evidence. Add text or a supported file before submitting.' : 'Add at least one information source: text or a supported evidence file.');
+      return;
+    }
+    setCaptureBusy(true);setCaptureResult(false);
+    try{
+      await submitCapture(CURRENT_PROJECT.id,captureName.trim(),captureText,captureFiles);
+      setCaptureBusy(false);setCaptureResult(true);setDirty(false);
+      setReviewCount(REVIEW_QUEUE.length);setDataVersion(v=>v+1);
+      notify('Execution evidence captured and added to the review workflow.');
+    }catch(err){
+      setCaptureBusy(false);
+      notify(err instanceof Error ? err.message : 'Capture failed.');
+    }
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
@@ -200,27 +241,35 @@ export default function App(){
   };
   const formatRecordingTime=(seconds:number)=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
 
-  const approveReview=()=>{
-    if(!activeReview) return;
-    setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
-    setReviewCount(c=>Math.max(0,c-1));
-    notify(`Match ${activeReview.candidate || 'new activity'} confirmed. Actual update queued with provenance.`);
-    setReviewDetailOpen(false);
-    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
+  const finishReviewDecision=async(decision:'approve'|'reject'|'flag')=>{
+    if(!activeReview)return;
+    try{
+      await decideReview(activeReview.id,decision);
+      setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
+      setReviewCount(REVIEW_QUEUE.length);
+      setDataVersion(v=>v+1);
+      setReviewDetailOpen(false);
+      setReviewIndex(i=>Math.min(i,Math.max(0,REVIEW_QUEUE.length-1)));
+      notify(decision==='approve' ? `Match ${activeReview.candidate || 'activity'} approved and actuals updated.` : decision==='reject' ? 'Suggested activity rejected.' : 'Event flagged for manual/new-activity handling.');
+    }catch(err){
+      notify(err instanceof Error ? err.message : 'Review decision failed.');
+    }
   };
-  const rejectReview=()=>{
-    if(!activeReview) return;
-    setResolvedReviewIds(ids=>ids.includes(activeReview.id)?ids:[...ids,activeReview.id]);
-    setReviewCount(c=>Math.max(0,c-1));
-    notify(`Suggested activity ${activeReview.candidate || "match"} rejected. The field event was not accepted as the correct activity.`);
-    setReviewDetailOpen(false);
-    setReviewIndex(i=>Math.min(i,Math.max(0,openReviewQueue.length-2)));
-  };
-  const flagNew=()=>{notify('New activity proposal created. Planner confirmation is required before it enters the baseline.');};
-  const processImport=()=>{
-    if(!importFiles.length){notify('Choose one or more schedule files first.');return;}
+  const approveReview=()=>finishReviewDecision('approve');
+  const rejectReview=()=>finishReviewDecision('reject');
+  const flagNew=()=>finishReviewDecision('flag');
+  const processImport=async()=>{
+    if(!importFiles.length){notify('Choose a schedule file first.');return;}
+    if(importFiles.length>1){notify('Submit one planning schedule at a time. Importing another schedule replaces only the schedule layer for the selected project.');return;}
     setImportState('processing');
-    window.setTimeout(()=>{setImportState('success');setDirty(false);notify(`${importFiles.length} schedule file${importFiles.length===1?'':'s'} processed and queued for baseline review.`)},1600);
+    try{
+      const result=await importSchedule(importFiles[0],CURRENT_PROJECT?.id);
+      setImportState('success');setDirty(false);setReviewCount(REVIEW_QUEUE.length);setSelectedId(ACTIVITIES[0]?.id||'');setDataVersion(v=>v+1);
+      notify(`Schedule imported: ${result?.counts?.tasks ?? 0} tasks, ${result?.counts?.dependencies ?? 0} dependencies.`);
+    }catch(err){
+      setImportState('error');
+      notify(err instanceof Error ? err.message : 'Schedule import failed.');
+    }
   };
   const exportSchedule=()=>{
     const headers=['Activity ID','Discipline','Activity','WBS','Plan Start','Plan Finish','Actual Start','Actual Finish','Progress','Status','AI Confidence'];
@@ -259,8 +308,10 @@ export default function App(){
       <div className="page-head">
         <div><h1>{pageMeta[screen].title}</h1><p>{pageMeta[screen].subtitle}</p></div>
       </div>
+      {dataLoading && <div className="helper" style={{marginBottom:16}}>Loading persisted Synchronex data…</div>}
+      {!dataLoading && !CURRENT_PROJECT && <div className="empty-state" style={{marginBottom:16}}>No project schedule has been imported yet. Use Import to upload a ProjectLibre, Microsoft Project, or Primavera schedule.</div>}
 
-      {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
+      {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount} metrics={PROJECT_METRICS}/>}
       {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
@@ -269,7 +320,7 @@ export default function App(){
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
-      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={()=>{setSaved(true);notify('Workspace controls saved.')}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
+      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{if(!CURRENT_PROJECT?.id){notify('Import a schedule before saving workspace settings.');return;}try{await saveSettings(CURRENT_PROJECT.id,{confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications});setSaved(true);notify('Workspace controls saved.');}catch(err){notify(err instanceof Error ? err.message : 'Unable to save settings.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
@@ -324,13 +375,13 @@ function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';s
 
 function PageSection({label,title,children,action}:{label?:string;title:string;children:React.ReactNode;action?:React.ReactNode}){return <section className="section"><div className="section-head"><div>{label&&<span className="eyebrow">{label}</span>}<h2>{title}</h2></div>{action}</div>{children}</section>}
 
-function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
+function Command({onGo,reviewCount,metrics}:{onGo:(s:Screen)=>void;reviewCount:number;metrics:typeof PROJECT_METRICS}){
  return <div className="command-page">
    <div className="command-top">
      <div className="metric-band command-metrics">
-       <Metric label="L5/L6 activities" value="246" note="executable nodes"/>
-       <Metric label="Actual progress" value="52.3%" note="vs 57.0% planned" tone="blue"/>
-       <Metric label="Schedule variance" value="−4.7%" note="behind baseline" tone="red"/>
+       <Metric label="L5/L6 activities" value={String(metrics.executableCount)} note="executable nodes"/>
+       <Metric label="Actual progress" value={`${metrics.actualProgress.toFixed(1)}%`} note={`vs ${metrics.plannedProgress.toFixed(1)}% planned`} tone="blue"/>
+       <Metric label="Schedule variance" value={`${metrics.variance >= 0 ? ' +' : '−'}${Math.abs(metrics.variance).toFixed(1)}%`} note="current actual vs planned" tone={metrics.variance < 0 ? "red" : ""}/>
        <Metric label="Review workload" value={String(reviewCount)} note="planner decisions" tone="amber"/>
      </div>
    </div>
@@ -354,18 +405,18 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
            <span className="eyebrow">PROJECT PROGRESS</span>
            <h3>Planned trajectory &amp; actual progress</h3>
          </div>
-         <span className="summary-delta">−4.7%</span>
+         <span className="summary-delta">{`${metrics.variance >= 0 ? ' +' : '−'}${Math.abs(metrics.variance).toFixed(1)}%`}</span>
        </div>
        <div className="summary-progress-grid">
          <div>
            <span>PLANNED</span>
-           <strong>57.0%</strong>
-           <div className="summary-bar"><i style={{width:'57%'}}/></div>
+           <strong>{metrics.plannedProgress.toFixed(1)}%</strong>
+           <div className="summary-bar"><i style={{width:`${Math.max(0,Math.min(100,metrics.plannedProgress))}%`}}/></div>
          </div>
          <div>
            <span>ACTUAL</span>
-           <strong>52.3%</strong>
-           <div className="summary-bar actual"><i style={{width:'52.3%'}}/></div>
+           <strong>{metrics.actualProgress.toFixed(1)}%</strong>
+           <div className="summary-bar actual"><i style={{width:`${Math.max(0,Math.min(100,metrics.actualProgress))}%`}}/></div>
          </div>
        </div>
      </div>
@@ -387,17 +438,17 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
            <span><b className="legend-line actual"/>Actual <b className="legend-line planned"/>Planned</span>
          </div>
          <div className="chart">
-           <div className="gridlines"/>
-           <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
-             <polyline points="0,158 100,142 200,118 300,98 400,79 520,64 720,35" fill="none" stroke="#93a1ad" strokeWidth="2" strokeDasharray="5 5"/>
-             <polyline points="0,166 100,151 200,128 300,104 400,88 520,80 720,64" fill="none" stroke="#173f35" strokeWidth="4"/>
-           </svg>
+           {PROGRESS_TREND.length ? <div className="gridlines"/> : <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
+           {PROGRESS_TREND.length > 1 && <svg viewBox="0 0 720 220" preserveAspectRatio="none" aria-label="Planned and actual progress trend">
+             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.planned||0)/100)*180}`).join(' ')} fill="none" stroke="var(--info)" strokeWidth="2" strokeDasharray="5 5"/>
+             <polyline points={PROGRESS_TREND.map((d:any,i:number)=>`${(i/(PROGRESS_TREND.length-1))*720},${220-(Number(d.actual||0)/100)*180}`).join(' ')} fill="none" stroke="var(--accent)" strokeWidth="4"/>
+           </svg>}
          </div>
-         <div className="chart-axis"><span>01 Sep</span><span>10 Sep</span><span>18 Sep</span><span>23 Sep</span></div>
+         <div className="chart-axis">{PROGRESS_TREND.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>
          <div className="pulse-kpis">
-           <div><span>ACTUAL</span><b>52.3%</b></div>
-           <div><span>PLANNED</span><b>57.0%</b></div>
-           <div><span>VARIANCE</span><b className="negative">−4.7%</b></div>
+           <div><span>ACTUAL</span><b>{metrics.actualProgress.toFixed(1)}%</b></div>
+           <div><span>PLANNED</span><b>{metrics.plannedProgress.toFixed(1)}%</b></div>
+           <div><span>VARIANCE</span><b className={metrics.variance<0?"negative":"positive"}>{metrics.variance >= 0 ? ' +' : '−'}{Math.abs(metrics.variance).toFixed(1)}%</b></div>
          </div>
        </div>
      </div>
@@ -480,7 +531,7 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
             <h3>Name this progress update <span className="required-inline">Required</span></h3>
             <p>Give the complete submission a clear name so the project team can identify it later. The worker chooses this name.</p>
           </div>
-          <input value={name} onChange={e=>{setName(e.target.value);setDirty(true)}} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
         </div>
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
@@ -492,9 +543,6 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
     </div>
   </div>
 }
-
-function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
-function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
   const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
@@ -515,173 +563,26 @@ function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailO
     </div>
   </PageSection></div>
 }
+function downloadTextFile(content:string,filename:string,mime='text/plain;charset=utf-8'){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+
 function Memory(){
-  const [selectedType,setSelectedType]=useState<string|null>(null);
-  const [selectedOccurrence,setSelectedOccurrence]=useState<any|null>(null);
-  const selected=MEMORY_ACTIVITIES.find(m=>m.type===selectedType) || null;
-
-  const downloadTextFile=(content:string,filename:string,mime:string)=>{
-    const blob=new Blob([content],{type:mime});
-    const url=URL.createObjectURL(blob);
-    const link=document.createElement('a'); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
-    window.setTimeout(()=>URL.revokeObjectURL(url),0);
-  };
-
   const exportKnowledge=()=>{
-    const headers=['Activity Type','Baseline Average','Actual Average','Drift','Occurrences','Evidence'];
-    const csv=[headers.join(','),...MEMORY_ACTIVITIES.map(m=>[m.type,m.baselineAvg,m.actualAvg,m.variance,m.occurrences,'Traceable'].map(v=>`\"${String(v??'').replace(/\"/g,'\"\"')}\"`).join(','))].join('\n');
-    downloadTextFile(csv,'synchronex-knowledge-export.csv','text/csv;charset=utf-8');
+    const headers=['Activity type','Baseline average','Actual average','Drift','Occurrences'];
+    const csv=[headers.join(','),...MEMORY_ACTIVITIES.map((m:any)=>[m.type,m.baselineAvg,m.actualAvg,m.variance,m.occurrences].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    downloadTextFile(csv,'synchronex-knowledge.csv','text/csv;charset=utf-8');
   };
-
-  const downloadOccurrencePdf=(selected:any,occurrence:any)=>{
-    const escapePdf=(value:string)=>String(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
-    const raw=[
-      'SYNCHRONEX - OCCURRENCE EVIDENCE',
-      `Occurrence: ${occurrence.id}`,
-      `Activity type: ${selected.type}`,
-      `Date: ${occurrence.date}`,
-      `Actual duration: ${occurrence.duration}`,
-      `Discipline: ${occurrence.discipline}`,
-      `Uploaded on: ${occurrence.date} - 18:30 IST`,
-      `Uploaded by: ${occurrence.discipline==='Piping'?'Site Supervisor - Arun Kumar':occurrence.discipline==='Civil'?'Civil Supervisor - Karthik R':'Discipline Supervisor - Priya S'}`,
-      `Source file: Daily_${occurrence.discipline.replace(/\s+/g,'_')}_Report_${occurrence.id}.pdf`,
-      '',
-      'Execution evidence:',
-      occurrence.evidence,
-      '',
-      'Status: Validated',
-      'Institutional memory: Linked',
-    ];
-    const lines:string[]=[];
-    raw.forEach(line=>{
-      const words=String(line).split(' '); let current='';
-      words.forEach(word=>{
-        const next=current?`${current} ${word}`:word;
-        if(next.length>88){lines.push(current); current=word;} else current=next;
-      });
-      lines.push(current);
-    });
-    const pageLines=48, pages=[] as string[][];
-    for(let i=0;i<lines.length;i+=pageLines) pages.push(lines.slice(i,i+pageLines));
-    const objects:string[]=[];
-    objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-    const pageIds:number[]=[]; const contentIds:number[]=[];
-    let nextId=3;
-    pages.forEach(()=>{pageIds.push(nextId++);contentIds.push(nextId++);});
-    objects[1]=`<< /Type /Pages /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
-    pages.forEach((page,i)=>{
-      const commands=['BT','/F1 11 Tf','50 760 Td','14 TL'];
-      page.forEach((line,j)=>{
-        if(j===0 && i===0) commands.push('/F1 15 Tf');
-        commands.push(`(${escapePdf(line)}) Tj`);
-        if(j===0 && i===0) commands.push('/F1 11 Tf');
-        if(j<page.length-1) commands.push('T*');
-      });
-      commands.push('ET');
-      const stream=commands.join('\n');
-      objects[pageIds[i]-1]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${3+pages.length*2} 0 R >> >> /Contents ${contentIds[i]} 0 R >>`;
-      objects[contentIds[i]-1]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
-    });
-    const fontId=3+pages.length*2; objects[fontId-1]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-    let pdf='%PDF-1.4\n'; const offsets=[0];
-    objects.forEach((obj,idx)=>{const id=idx+1; offsets[id]=pdf.length; pdf+=`${id} 0 obj\n${obj}\nendobj\n`;});
-    const xref=pdf.length; pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
-    for(let i=1;i<=objects.length;i++) pdf+=`${String(offsets[i]).padStart(10,'0')} 00000 n \n`;
-    pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    downloadTextFile(pdf,`synchronex-occurrence-${occurrence.id}.pdf`,'application/pdf');
-  };
-
-
-  const occurrenceData: Record<string, Array<{id:string;date:string;duration:string;discipline:string;evidence:string;status:string}>> = {
-    'Pipe Erection': [
-      {id:'PE-042',date:'23 Sep 2026',duration:'8 days',discipline:'Piping',evidence:'P-101 Spool B erection completed after material release.',status:'Validated'},
-      {id:'PE-041',date:'19 Sep 2026',duration:'7 days',discipline:'Piping',evidence:'Pipe erection progressed across the north rack workfront.',status:'Validated'},
-      {id:'PE-040',date:'14 Sep 2026',duration:'6 days',discipline:'Piping',evidence:'Spool erection completed with inspection handover.',status:'Validated'},
-      {id:'PE-039',date:'08 Sep 2026',duration:'9 days',discipline:'Piping',evidence:'Erection extended due to material availability constraint.',status:'Validated'},
-      {id:'PE-038',date:'01 Sep 2026',duration:'7 days',discipline:'Piping',evidence:'Pipe erection completed for the assigned workfront.',status:'Validated'},
-    ],
-    'Foundation Work': [
-      {id:'FW-031',date:'22 Sep 2026',duration:'10 days',discipline:'Civil',evidence:'Foundation block concrete and curing activities completed.',status:'Validated'},
-      {id:'FW-030',date:'16 Sep 2026',duration:'9 days',discipline:'Civil',evidence:'Foundation work completed after inspection clearance.',status:'Validated'},
-      {id:'FW-029',date:'10 Sep 2026',duration:'8 days',discipline:'Civil',evidence:'Foundation excavation, reinforcement and pour completed.',status:'Validated'},
-      {id:'FW-028',date:'03 Sep 2026',duration:'11 days',discipline:'Civil',evidence:'Additional preparation work extended the foundation cycle.',status:'Validated'},
-      {id:'FW-027',date:'27 Aug 2026',duration:'9 days',discipline:'Civil',evidence:'Foundation block released for the next work package.',status:'Validated'},
-    ],
-    'Cable Installation': [
-      {id:'CI-027',date:'23 Sep 2026',duration:'6 days',discipline:'Electrical',evidence:'Cable pulling and termination completed for the panel area.',status:'Validated'},
-      {id:'CI-026',date:'17 Sep 2026',duration:'5 days',discipline:'Electrical',evidence:'Cable installation completed after route clearance.',status:'Validated'},
-      {id:'CI-025',date:'11 Sep 2026',duration:'4 days',discipline:'Electrical',evidence:'Cable pulling completed for the assigned tray section.',status:'Validated'},
-      {id:'CI-024',date:'05 Sep 2026',duration:'5 days',discipline:'Electrical',evidence:'Cable installation and tagging verified.',status:'Validated'},
-      {id:'CI-023',date:'29 Aug 2026',duration:'5 days',discipline:'Electrical',evidence:'Installation completed and handed over for testing.',status:'Validated'},
-    ],
-    'Instrument Hook-Up': [
-      {id:'IH-018',date:'24 Sep 2026',duration:'9 days',discipline:'Instrumentation',evidence:'Instrument hook-up completed and prepared for loop checks.',status:'Validated'},
-      {id:'IH-017',date:'18 Sep 2026',duration:'8 days',discipline:'Instrumentation',evidence:'Field instruments connected after cable readiness.',status:'Validated'},
-      {id:'IH-016',date:'12 Sep 2026',duration:'7 days',discipline:'Instrumentation',evidence:'Hook-up completed with inspection sign-off.',status:'Validated'},
-      {id:'IH-015',date:'06 Sep 2026',duration:'9 days',discipline:'Instrumentation',evidence:'Additional calibration checks extended execution.',status:'Validated'},
-      {id:'IH-014',date:'30 Aug 2026',duration:'8 days',discipline:'Instrumentation',evidence:'Instrument hook-up completed for the assigned package.',status:'Validated'},
-    ],
-    'Equipment Alignment': [
-      {id:'EA-022',date:'21 Sep 2026',duration:'5 days',discipline:'Mechanical',evidence:'Pump alignment completed and recorded in the field report.',status:'Validated'},
-      {id:'EA-021',date:'15 Sep 2026',duration:'4 days',discipline:'Mechanical',evidence:'Equipment alignment completed after baseplate correction.',status:'Validated'},
-      {id:'EA-020',date:'09 Sep 2026',duration:'4 days',discipline:'Mechanical',evidence:'Alignment verified within accepted tolerance.',status:'Validated'},
-      {id:'EA-019',date:'03 Sep 2026',duration:'3 days',discipline:'Mechanical',evidence:'Initial alignment completed for the equipment package.',status:'Validated'},
-      {id:'EA-018',date:'28 Aug 2026',duration:'5 days',discipline:'Mechanical',evidence:'Re-alignment required following inspection feedback.',status:'Validated'},
-    ],
-    'Structural Steel': [
-      {id:'SS-015',date:'20 Sep 2026',duration:'13 days',discipline:'Structural',evidence:'Structural steel erection completed for the north module.',status:'Validated'},
-      {id:'SS-014',date:'12 Sep 2026',duration:'12 days',discipline:'Structural',evidence:'Steel erection progressed with staged material releases.',status:'Validated'},
-      {id:'SS-013',date:'04 Sep 2026',duration:'11 days',discipline:'Structural',evidence:'Structural frame completed and released for follow-on work.',status:'Validated'},
-      {id:'SS-012',date:'27 Aug 2026',duration:'13 days',discipline:'Structural',evidence:'Erection cycle extended due to access constraints.',status:'Validated'},
-      {id:'SS-011',date:'15 Aug 2026',duration:'12 days',discipline:'Structural',evidence:'Steel package completed with inspection evidence retained.',status:'Validated'},
-    ],
-  };
-
-  if(selected){
-    const occurrences=occurrenceData[selected.type] || [];
-    const exportOccurrences=()=>{
-      const headers=['Occurrence','Date','Duration','Discipline','Execution Evidence','Status'];
-      const csv=[headers.join(','),...occurrences.map(o=>[o.id,o.date,o.duration,o.discipline,o.evidence,o.status].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
-      downloadTextFile(csv,`synchronex-${selected.type.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-occurrences.csv`,'text/csv;charset=utf-8');
-    };
-    return <PageSection title={selected.type} action={<div style={{display:'flex',gap:10}}><button className="outline-btn" onClick={exportOccurrences}>Export occurrences ↓</button><button className="outline-btn" onClick={()=>setSelectedType(null)}>← Back to Memory</button></div>}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',gap:20,marginBottom:22}}>
-        <p className="lead" style={{margin:0}}>Validated execution occurrences retained as reusable evidence for future planning.</p>
-      </div>
-      <div className="memory-table">
-        <table>
-          <thead><tr><th>Occurrence</th><th>Date</th><th>Duration</th><th>Discipline</th><th>Execution evidence</th><th>Status</th></tr></thead>
-          <tbody>{occurrences.map(o=><tr key={o.id} className="memory-occurrence-row" onClick={()=>setSelectedOccurrence(o)} tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedOccurrence(o)}}>
-            <td><code>{o.id}</code></td><td>{o.date}</td><td>{o.duration}</td><td>{o.discipline}</td><td style={{maxWidth:420}}>{o.evidence}</td><td><span className="trace-chip">{o.status}</span></td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-      {selectedOccurrence&&<div className="memory-occurrence-overlay" role="dialog" aria-modal="true" aria-labelledby="occurrence-detail-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedOccurrence(null)}}>
-        <div className="memory-occurrence-card">
-          <div className="memory-occurrence-head">
-            <div><h2 id="occurrence-detail-title">{selectedOccurrence.id}</h2><p>{selected.type} · {selectedOccurrence.discipline}</p></div>
-            <button className="icon-btn memory-occurrence-close" aria-label="Close occurrence details" onClick={()=>setSelectedOccurrence(null)}>×</button>
-          </div>
-          <div className="memory-occurrence-grid">
-            <div><span>OCCURRENCE DATE</span><b>{selectedOccurrence.date}</b></div>
-            <div><span>ACTUAL DURATION</span><b>{selectedOccurrence.duration}</b></div>
-            <div><span>DISCIPLINE</span><b>{selectedOccurrence.discipline}</b></div>
-            <div><span>ACTIVITY TYPE</span><b>{selected.type}</b></div>
-            <div><span>UPLOADED ON</span><b>{selectedOccurrence.date} · 18:30 IST</b></div>
-            <div><span>UPLOADED BY</span><b>{selectedOccurrence.discipline==='Piping'?'Site Supervisor · Arun Kumar':selectedOccurrence.discipline==='Civil'?'Civil Supervisor · Karthik R':'Discipline Supervisor · Priya S'}</b></div>
-            <div className="wide"><span>SOURCE FILE</span><b>Daily_{selectedOccurrence.discipline.replace(/\s+/g,'_')}_Report_{selectedOccurrence.id}.pdf</b></div>
-            <div className="wide"><span>EXECUTION EVIDENCE</span><p>{selectedOccurrence.evidence}</p></div>
-          </div>
-          <div className="memory-occurrence-footer"><button className="outline-btn" onClick={()=>setSelectedOccurrence(null)}>← Back to occurrences</button><button className="primary-btn" onClick={()=>downloadOccurrencePdf(selected,selectedOccurrence)}>Download as PDF ↓</button></div>
-        </div>
-      </div>}
-    </PageSection>;
-  }
-
   return <div className="memory-overview"><PageSection title="Memory" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
-    <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
-      <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
-    </tr>)}</tbody></table></div>
+    {MEMORY_ACTIVITIES.length ? <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map((m:any)=><tr key={m.type}><td><strong>{m.type}</strong></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td>{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td></tr>)}</tbody></table></div> : <div className="empty-state">No validated execution memory is available yet. Memory appears after reviewed execution events produce reusable historical evidence.</div>}
   </PageSection></div>;
 }
 
@@ -729,8 +630,8 @@ function Trace(){
 function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'idle'|'processing'|'success'|'error';files:File[];setFiles:(files:File[])=>void;onProcess:()=>void;onRetry:()=>void;onOpenReview:()=>void}){
   const inputRef=useRef<HTMLInputElement>(null);
   const [dragOver,setDragOver]=useState(false);
-  const supported='.mpp,.xer,.xml,.pod,.xlsx,.xls,.csv';
-  const supportedExt=new Set(['mpp','xer','xml','pod','xlsx','xls','csv']);
+  const supported='.mpp,.xer,.xml,.pod';
+  const supportedExt=new Set(['mpp','xer','xml','pod']);
   const addFiles=(incoming:FileList|null)=>{
     if(!incoming) return;
     const incomingFiles=Array.from(incoming);
@@ -741,19 +642,19 @@ function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'id
   const removeFile=(index:number)=>setFiles(files.filter((_,i)=>i!==index));
   return <div className="import-page">
     <PageSection title="Import center">
-      <div className="import-purpose import-purpose-clean"><div><span className="eyebrow">SCHEDULE DATA INTAKE</span><h3>Bring approved planning files into the Synchronex bridge.</h3><p>Select one or more schedule files. Synchronex validates the selected formats together and prepares them for schedule review.</p></div><div className="import-supported-inline"><span>SUPPORTED</span><b>MS Project</b><b>Primavera</b><b>ProjectLibre</b><b>Excel / CSV</b></div></div>
+      <div className="import-purpose import-purpose-clean"><div><span className="eyebrow">SCHEDULE DATA INTAKE</span><h3>Bring approved planning files into the Synchronex bridge.</h3><p>Upload the schedule that should become the active baseline. Synchronex validates it before writing the normalized schedule to the project.</p></div><div className="import-supported-inline"><span>SUPPORTED</span><b>MS Project</b><b>Primavera</b><b>ProjectLibre</b><b>Excel / CSV</b></div></div>
       <article className="import-choice import-choice-single">
         <div className="import-choice-top"><div><span className="import-choice-icon">▤</span></div><span className="trace-chip">SCHEDULE</span></div>
         <span className="eyebrow">01 / SCHEDULE IMPORT</span>
         <h3>Upload project schedules</h3>
-        <p>Select multiple planning files in one submission. Supported project formats include Microsoft Project, Primavera, ProjectLibre, Excel, and CSV.</p>
-        <div className="import-format-list">{['MS Project · .mpp / .xml','Primavera · .xer / .xml','ProjectLibre · .pod / .xml','Excel · .xlsx / .xls','CSV · .csv'].map(x=><span key={x}>{x}</span>)}</div>
-        <input ref={inputRef} className="file-input-hidden" type="file" multiple accept={supported} onChange={e=>{addFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select schedule files" />
+        <p>Upload one planning schedule at a time. Supported project formats include Microsoft Project, Primavera, and ProjectLibre.</p>
+        <div className="import-format-list">{['Microsoft Project · .mpp / .xml','Primavera P6 · .xer','ProjectLibre · .pod'].map(x=><span key={x}>{x}</span>)}</div>
+        <input ref={inputRef} className="file-input-hidden" type="file" accept={supported} onChange={e=>{addFiles(e.target.files);e.currentTarget.value='';}} aria-label="Select schedule files" />
         <div className={`import-drop-zone import-drop-zone-large ${dragOver?'dragging':''}`} role="button" tabIndex={0} onClick={()=>inputRef.current?.click()} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')inputRef.current?.click()}} onDragOver={e=>{e.preventDefault();setDragOver(true)}} onDragLeave={()=>setDragOver(false)} onDrop={e=>{e.preventDefault();setDragOver(false);addFiles(e.dataTransfer.files)}}>
-          <span className="import-drop-icon">↑</span><strong>{files.length?`${files.length} schedule file${files.length===1?'':'s'} selected`:'Drop schedule files here'}</strong><span>Drag and drop multiple files or browse from your computer.</span><small>MS Project · Primavera · ProjectLibre · Excel · CSV</small>
+          <span className="import-drop-icon">↑</span><strong>{files.length?`${files.length} schedule file${files.length===1?'':'s'} selected`:'Drop schedule files here'}</strong><span>Drag and drop a schedule file or browse from your computer.</span><small>Microsoft Project · Primavera P6 · ProjectLibre</small>
         </div>
         {files.length>0&&<div className="import-file-list">{files.map((file,i)=><div className="import-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Schedule file'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" className="icon-btn" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
-        <div className="import-actions import-actions-submit"><button className="primary-btn" disabled={!files.length||state==='processing'} onClick={onProcess}>{state==='processing'?'Processing schedules…':state==='success'?'Submit again':'Submit schedules'} <span>→</span></button></div>
+        <div className="import-actions import-actions-submit"><button className="primary-btn" disabled={!files.length||state==='processing'} onClick={onProcess}>{state==='processing'?'Processing schedule…':state==='success'?'Import again':'Submit schedule'} <span>→</span></button></div>
       </article>
       {(state!=='idle'||files.length>0) && <div className={`import-status-banner ${state}`} role="status"><div><span className="eyebrow">IMPORT STATUS</span><strong>{state==='processing'?'Processing selected schedules…':state==='success'?'Schedules processed successfully':state==='error'?'Import needs attention':'Ready to submit'}</strong><p>{files.length?`${files.length} file${files.length===1?'':'s'} selected · ${files.map(f=>f.name).join(', ')}`:'Select schedule files to begin.'}</p></div><div className="import-status-actions">{state==='processing'&&<span className="import-status-chip">Processing</span>}{state==='success'&&<><span className="import-status-chip success">Complete</span><button className="text-action" onClick={onOpenReview}>Open review →</button></>}{state==='error'&&<button className="outline-btn" onClick={onRetry}>Retry</button>}</div></div>}
     </PageSection>
@@ -762,30 +663,31 @@ function Import({state,files,setFiles,onProcess,onRetry,onOpenReview}:{state:'id
 function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const trend=PROGRESS_TREND;
   const width=760, height=250, left=42, right=18, top=20, bottom=42;
-  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
   const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="field-page field-home-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
       <div className="field-summary-grid">
-        <div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES TODAY</span><strong>3</strong><small>Progress reports submitted today</small></div><span className="summary-status">ACTIVE</span></div>
-        <div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><span className="summary-status amber">IN REVIEW</span></div>
+        <div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES TODAY</span><strong>{FIELD_EVENTS.length}</strong><small>Persisted execution events</small></div><span className="summary-status">ACTIVE</span></div>
+        <div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>{REVIEW_QUEUE.length}</strong><small>Pending planner decisions</small></div><span className="summary-status amber">IN REVIEW</span></div>
       </div>
       <div className="field-home-grid field-home-grid-enhanced">
         <div className="field-panel field-trajectory-panel">
-          <div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">52% actual</span></div>
+          <div className="panel-heading"><div><span className="eyebrow">PROJECT TRAJECTORY</span><h3>How progress is moving</h3><p className="panel-subtitle">Planned progress compared with verified project actuals.</p></div><span className="trajectory-delta">{PROJECT_METRICS.actualProgress.toFixed(1)}% actual</span></div>
           <div className="field-chart-wrap">
-            <svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">
+            {!trend.length && <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
+            {trend.length > 0 && <svg className="field-trajectory-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Project planned versus actual progress trajectory">
               {[0,15,30,45,60].map(v=><g key={v}><line x1={left} x2={width-right} y1={y(v)} y2={y(v)} className="chart-grid-line"/><text x={left-10} y={y(v)+4} textAnchor="end" className="chart-axis-label">{v}%</text></g>)}
               <polyline points={plannedPoints} className="trajectory-line planned"/>
               <polyline points={actualPoints} className="trajectory-line actual"/>
               {trend.map((d,i)=><g key={d.date}><circle cx={x(i)} cy={y(d.actual)} r="3.5" className="trajectory-dot actual"/><text x={x(i)} y={height-15} textAnchor="middle" className="chart-date-label">{d.date}</text></g>)}
-            </svg>
-            <div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span><b>−5 pts current gap</b></div>
+            </svg>}
+            <div className="trajectory-legend"><span><i className="legend-line planned"/>Planned</span><span><i className="legend-line actual"/>Actual</span><b>{PROJECT_METRICS.variance >= 0 ? `+${PROJECT_METRICS.variance.toFixed(1)} pts current gap` : `−${Math.abs(PROJECT_METRICS.variance).toFixed(1)} pts current gap`}</b></div>
           </div>
         </div>
-        <div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Your submissions</h3><p className="panel-subtitle">Latest field reports and their current review state.</p></div></div><div className="submission-mini"><span className="submission-state accepted">Accepted</span><strong>P-101 Spool B erection</strong><small>Submitted today · linked to PIP-261</small></div><div className="submission-mini"><span className="submission-state review">Under review</span><strong>Line 25 erection started</strong><small>Submitted today · planner validation pending</small></div><button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
+        <div className="field-panel field-submissions-panel"><div className="panel-heading"><div><span className="eyebrow">RECENT ACTIVITY</span><h3>Recent execution events</h3><p className="panel-subtitle">Persisted field evidence and its current review state.</p></div></div>{FIELD_EVENTS.slice(0,2).map((e:any)=><div className="submission-mini" key={e.id}><span className={`submission-state ${e.status==='AI MATCHED'?'accepted':'review'}`}>{e.status}</span><strong>{e.actDesc}</strong><small>{e.text}</small></div>)}{!FIELD_EVENTS.length&&<div className="empty-state">No execution events have been submitted yet.</div>}<button className="outline-btn full" onClick={()=>onGo('submissions')}>Open submissions →</button></div>
       </div>
       <div className="field-home-footer-space" aria-hidden="true"/>
     </PageSection>
@@ -793,41 +695,38 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
 }
 
 function Submissions({onCapture}:{onCapture:()=>void}){
-  const submissions=[
-    {status:'Accepted',cls:'accepted',title:'P-101 Spool B erection',meta:'Today · 10:32 · linked to PIP-261'},
-    {status:'Under review',cls:'review',title:'Line 25 erection started',meta:'Today · 11:14 · planner validation pending'},
-    {status:'Needs information',cls:'needs',title:'Foundation Block A update',meta:'Yesterday · 17:45 · add workfront context'},
-  ];
-  return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}><div className="field-submissions-list">{submissions.map(s=><div className="submission-card" key={s.title}><div><span className={`submission-state ${s.cls}`}>{s.status}</span><strong>{s.title}</strong><small>{s.meta}</small></div><span className="submission-arrow">→</span></div>)}</div></PageSection></div>
+  return <div className="field-page"><PageSection label="FIELD / SUBMISSIONS" title="My submissions" action={<button className="primary-btn" onClick={onCapture}>New report →</button>}>
+    {FIELD_EVENTS.length ? <div className="field-submissions-list">{FIELD_EVENTS.map((s:any)=><div className="submission-card" key={s.id}><div><span className={`submission-state ${s.status==='AI MATCHED'?'accepted':s.status==='UNMATCHED'?'needs':'review'}`}>{s.status}</span><strong>{s.actDesc}</strong><small>{s.text}</small></div><span className="submission-arrow">→</span></div>)}</div> : <div className="empty-state">No field submissions are stored for this project yet.</div>}
+  </PageSection></div>
 }
 
 function FieldProfile({onSignOut}:{onSignOut:()=>void}){
-  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD SUPERVISOR</span><h3>Karthik R</h3><p>North Field Gas Processing / Phase 1</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div></PageSection></div>
+  return <div className="field-page"><PageSection label="FIELD / ACCOUNT" title="My profile"><div className="field-profile-card"><div className="profile-avatar">FS</div><div><span className="eyebrow">FIELD WORKSPACE</span><h3>Signed-in field user</h3><p>{CURRENT_PROJECT?.name || 'No project imported'}</p></div><div className="profile-actions"><button className="danger-btn" onClick={onSignOut}>Sign out</button></div></div></PageSection></div>
 }
 function Analytics(){
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
-  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
+  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
   const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="analytics-page">
     <PageSection label="ANALYTICS / PROJECT PERFORMANCE" title="Project analytics">
       <div className="analytics-summary-grid">
-        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>52%</strong><small>Verified execution progress across the project</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>57%</strong><small>Current planned project progress</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>9</strong><small>Ambiguous events awaiting planner action</small></div>
-        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>3</strong><small>Explicit new-activity proposals</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">ACTUAL PROGRESS</span><strong>{PROJECT_METRICS.actualProgress.toFixed(1)}%</strong><small>Persisted execution progress across the project</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">PLAN TRAJECTORY</span><strong>{PROJECT_METRICS.plannedProgress.toFixed(1)}%</strong><small>Current persisted planned progress</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">REVIEW WORKLOAD</span><strong>{PROJECT_METRICS.reviewCount}</strong><small>Ambiguous events awaiting planner action</small></div>
+        <div className="analytics-kpi"><span className="eyebrow">UNMATCHED</span><strong>{PROJECT_METRICS.unmatchedCount}</strong><small>Unmatched pending events</small></div>
       </div>
       <div className="analytics-grid-two">
         <article className="analytics-panel analytics-trajectory-panel">
-          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">52% actual</span></div>
+          <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{PROJECT_METRICS.actualProgress.toFixed(1)}% actual</span></div>
           <div className="analytics-chart">
             <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
             <div className="analytics-plot">
               <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
-              <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d,i)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg>
-              <div className="analytics-xlabels">{trend.map(d=><span key={d.date}>{d.date}</span>)}</div>
+              {trend.length > 1 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
+              <div className="analytics-xlabels">{trend.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>
             </div>
           </div>
           <div className="analytics-legend"><span><i className="legend-line actual-line"/>Actual</span><span><i className="legend-line planned-line"/>Planned</span></div>
@@ -840,18 +739,14 @@ function Analytics(){
 }
 
 function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:string;name:string;role:string;workspace:string;status:string})=>void}){
-  const members=[
-    {initials:'PC',name:'Priya Menon',role:'Project Manager',workspace:'Company',status:'Active'},
-    {initials:'PL',name:'Arun Kumar',role:'Planner / Reviewer',workspace:'Company',status:'Active'},
-    {initials:'SV',name:'Karthik R',role:'Field Supervisor',workspace:'Field',status:'Active'},
-    {initials:'EN',name:'Meera S',role:'Field Engineer',workspace:'Field',status:'Active'},
-  ];
+  void onManage;
   return <div className="team-page">
     <PageSection title="Team members" action={<button className="primary-btn" onClick={onInvite}>Add member +</button>}>
-      <div className="team-table-wrap"><table className="team-table"><thead><tr><th>Member</th><th>Role</th><th>Workspace</th><th>Status</th><th>Access</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td><span className="member-avatar">{m.initials}</span><strong>{m.name}</strong></td><td>{m.role}</td><td>{m.workspace}</td><td><span className="status-badge track">{m.status}</span></td><td><button className="text-action" onClick={()=>onManage(m)}>Manage →</button></td></tr>)}</tbody></table></div>
+      <div className="empty-state">Team membership is not exposed by the current frontend API yet. No placeholder members are shown.</div>
     </PageSection>
   </div>
 }
+
 function FieldSettings({themeMode,setThemeMode,density,setDensity,autoSave,setAutoSave}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void}){
  return <div className="settings-page field-settings-page"><PageSection title="Field settings">
    <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>
