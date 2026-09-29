@@ -27,7 +27,7 @@ const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
  command:{eyebrow:'COMMAND / PROJECT CONTROL',title:'Execution command',subtitle:'A decision surface connecting baseline intent, field evidence, and verified actuals.'},
- schedule:{eyebrow:'SCHEDULE / L5–L6',title:'Schedule lattice',subtitle:'Inspect the imported planned baseline and filter it by discipline.'},
+ schedule:{eyebrow:'SCHEDULE / L5–L6',title:'Schedule lattice',subtitle:'Inspect executable work, planned dates, actual dates, progress, and linkage evidence in one view.'},
  capture:{eyebrow:'FIELD INTELLIGENCE / INPUT',title:'Field capture',subtitle:'Report what happened on site using text, voice, or any supporting evidence.'},
  review:{eyebrow:'FIELD INTELLIGENCE / HUMAN GATE',title:'Planner review',subtitle:'Resolve ambiguity before an AI suggestion becomes a trusted schedule actual.'},
  memory:{eyebrow:'KNOWLEDGE / VALIDATED ACTUALS',title:'Institutional memory',subtitle:'Preserve real execution durations, recurring delay causes, and productivity evidence for future planning.'},
@@ -50,18 +50,19 @@ function statusAccent(status:string):string{
 }
 
 export default function App(){
-  const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings}=useRuntimeData();
+  const {ACTIVITIES,DISCIPLINES,FIELD_EVENTS,REVIEW_QUEUE,AUDIT_TRAIL,MEMORY_ACTIVITIES,PROGRESS_TREND,DELAY_CAUSES,DISCIPLINE_PERF,project,settings:backendSettings,loading:dataLoading,error:dataError}=useRuntimeData();
   useEffect(()=>{refreshRuntimeData().catch(()=>{});},[]);
-  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);setReviewIndex(0);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
+  useEffect(()=>{setReviewCount(REVIEW_QUEUE.length);if(ACTIVITIES.length && !ACTIVITIES.some(a=>a.id===selectedId))setSelectedId(ACTIVITIES[0].id);},[REVIEW_QUEUE.length,ACTIVITIES.length]);
   useEffect(()=>{if(!backendSettings)return;setThreshold(Math.round((backendSettings.confidence_threshold??0.9)*100));setDateFormat(backendSettings.date_format||'DD MMM YYYY');setTimezone(backendSettings.timezone||'Asia/Kolkata');setRetention(backendSettings.retention||'project');setAutoSave(backendSettings.auto_save??true);setEmailNotifications(backendSettings.email_notifications??true);setInAppNotifications(backendSettings.in_app_notifications??true);},[backendSettings]);
   const [authenticated,setAuthenticated]=useState(false);
   const [role,setRole]=useState<Role>('company');
   const [authMode,setAuthMode]=useState<'login'|'forgot'>('login');
   const [screen,setScreen]=useState<Screen>('command');
-  const [selectedId,setSelectedId]=useState('');
+  const [selectedId,setSelectedId]=useState('PIP-245');
   const [reviewCount,setReviewCount]=useState(REVIEW_QUEUE.length);
   const [reviewIndex,setReviewIndex]=useState(0);
   const [reviewDetailOpen,setReviewDetailOpen]=useState(false);
+  const [resolvedReviewIds,setResolvedReviewIds]=useState<string[]>([]);
   const [toast,setToast]=useState('');
   const [modal,setModal]=useState<Modal>(null);
   const [dirty,setDirty]=useState(false);
@@ -100,7 +101,7 @@ export default function App(){
   const [detailId,setDetailId]=useState<string|null>(null);
 
   const selected=ACTIVITIES.find(a=>a.id===selectedId) || ACTIVITIES[0];
-  const openReviewQueue=REVIEW_QUEUE;
+  const openReviewQueue=useMemo(()=>REVIEW_QUEUE.filter(r=>!resolvedReviewIds.includes(r.id)),[resolvedReviewIds]);
   const activeReview=openReviewQueue[Math.min(reviewIndex,Math.max(0,openReviewQueue.length-1))] || REVIEW_QUEUE[0];
 
 
@@ -136,14 +137,13 @@ export default function App(){
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
     if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
-    const apiBase=(() => { const configured = import.meta.env.VITE_API_BASE_URL; const base = configured || (typeof window !== 'undefined' && !['localhost','127.0.0.1'].includes(window.location.hostname) ? '' : 'http://localhost:8000'); const normalized = base.replace(/\/$/,''); return normalized.endsWith('/api') ? normalized.slice(0,-4) : normalized; })();
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
     try{
-      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('update_name',captureName.trim()); body.append('text',captureText);
+      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',captureText);
       captureFiles.forEach(f=>body.append('files',f,f.name));
-      if(recordedAudioUrl){ try{ const audioResponse=await fetch(recordedAudioUrl); const audioBlob=await audioResponse.blob(); body.append('files',audioBlob,'field-progress-voice.webm'); }catch{ /* voice preview remains local if the blob cannot be attached */ } }
       const response=await fetch(`${apiBase}/api/capture`,{method:'POST',body}); const payload=await response.json().catch(()=>({detail:'Capture failed.'}));
       if(!response.ok) throw new Error(payload?.detail||'Capture failed.');
-      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify(payload?.auto_approved ? `Progress update submitted. ${payload.auto_approved} exact match${payload.auto_approved===1?'':'es'} auto-approved and actual progress updated.` : payload?.review_required ? `Progress update submitted. ${payload.review_required} item${payload.review_required===1?'':'s'} sent to planner review.` : 'Progress update submitted.');
+      setCaptureBusy(false);setCaptureResult(true);await refreshRuntimeData(project?.id);notify('Progress update submitted and sent through matching/review.');
     }catch(error){setCaptureBusy(false);notify(error instanceof Error?error.message:'Capture failed.');}
   };
   const handleCaptureFiles=(files:FileList|null)=>{
@@ -213,7 +213,7 @@ export default function App(){
 
   const decideReview=async(decision:'approve'|'reject'|'flag')=>{
     if(!activeReview) return;
-    try{const apiBase=(() => { const configured = import.meta.env.VITE_API_BASE_URL; const base = configured || (typeof window !== 'undefined' && !['localhost','127.0.0.1'].includes(window.location.hostname) ? '' : 'http://localhost:8000'); const normalized = base.replace(/\/$/,''); return normalized.endsWith('/api') ? normalized.slice(0,-4) : normalized; })();const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
+    try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
   };
   const approveReview=()=>decideReview('approve');
   const rejectReview=()=>decideReview('reject');
@@ -222,7 +222,7 @@ export default function App(){
     if(!importFiles.length){notify('Choose a ProjectLibre, Microsoft Project, or Primavera schedule file first.');return;}
     const file=importFiles[0];
     if(!/\.(pod|mpp|xml|xer|mspdi)$/i.test(file.name)){setImportState('error');notify('Supported schedules: ProjectLibre .pod, Microsoft Project .mpp/.xml, Primavera P6 .xer.');return;}
-    const apiBase=(() => { const configured = import.meta.env.VITE_API_BASE_URL; const base = configured || (typeof window !== 'undefined' && !['localhost','127.0.0.1'].includes(window.location.hostname) ? '' : 'http://localhost:8000'); const normalized = base.replace(/\/$/,''); return normalized.endsWith('/api') ? normalized.slice(0,-4) : normalized; })();
+    const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
     const projectId=project?.id;
     setImportState('processing');
     try{
@@ -281,7 +281,7 @@ export default function App(){
       </div>
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
-      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} onExport={exportSchedule} />}
+      {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
       {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
@@ -289,7 +289,7 @@ export default function App(){
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
-      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{try{const apiBase=(() => { const configured = import.meta.env.VITE_API_BASE_URL; const base = configured || (typeof window !== 'undefined' && !['localhost','127.0.0.1'].includes(window.location.hostname) ? '' : 'http://localhost:8000'); const normalized = base.replace(/\/$/,''); return normalized.endsWith('/api') ? normalized.slice(0,-4) : normalized; })();const r=await fetch(`${apiBase}/api/settings/${project?.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
+      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/settings/${project?.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
@@ -333,10 +333,10 @@ export default function App(){
 }
 
 function AuthScreen({mode,setMode,role,setRole,onLogin}:{mode:'login'|'forgot';setMode:(v:'login'|'forgot')=>void;role:Role;setRole:(v:Role)=>void;onLogin:()=>void}){
- const [email,setEmail]=useState('');
+ const [email,setEmail]=useState(role==='company'?'planner@northfield.example':'field.supervisor@northfield.example');
  const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [busy,setBusy]=useState(false); const [forgotOpen,setForgotOpen]=useState(false); const [forgotEmail,setForgotEmail]=useState(''); const [forgotBusy,setForgotBusy]=useState(false); const [forgotSent,setForgotSent]=useState(false);
- const chooseRole=(next:Role)=>{setRole(next);setEmail('');setError('');setPassword('')};
- const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},250)};
+ const chooseRole=(next:Role)=>{setRole(next);setEmail(next==='company'?'planner@northfield.example':'field.supervisor@northfield.example');setError('');setPassword('')};
+ const submit=(e:React.FormEvent)=>{e.preventDefault();setError('');if(!email.includes('@')){setError('Enter a valid work email.');return}if(!password){setError('Enter your password.');return}setBusy(true);window.setTimeout(()=>{setBusy(false);onLogin()},700)};
  const openForgot=()=>{setForgotEmail(email.includes('@')?email:'');setForgotSent(false);setError('');setForgotOpen(true)};
  const sendReset=(e:React.FormEvent)=>{e.preventDefault();if(!forgotEmail.includes('@')){setError('Enter the registered email address.');return}setForgotBusy(true);setError('');window.setTimeout(()=>{setForgotBusy(false);setForgotSent(true)},900)};
  return <div className="auth-shell"><div className="auth-left"><div className="auth-brand"><span className="brand-mark">S</span><div><strong>SYNCHRONEX LABS</strong></div></div><div className="auth-hero"><h1>{role==='company'?'Connect planning with execution intelligence.':'Turn field updates into trusted schedule actuals.'}</h1><p>{role==='company'?'Manage the baseline, review field evidence, validate actuals, and preserve project intelligence.':'Report site progress with text, voice, or evidence files without exposing company planning controls.'}</p><div className="auth-path">{role==='company'?<><span>01 Plan</span><i>→</i><span>02 Review</span><i>→</i><span>03 Apply</span><i>→</i><span>04 Learn</span></>:<><span>01 Work</span><i>→</i><span>02 Capture</span><i>→</i><span>03 Submit</span><i>→</i><span>04 Track</span></>}</div></div></div><div className="auth-right"><div className="auth-card"><span className="eyebrow">SECURE WORKSPACE</span><h2>Choose your workspace</h2><div className="role-switch" role="tablist" aria-label="Workspace type"><button type="button" className={role==='company'?'selected':''} onClick={()=>chooseRole('company')}><strong>Company portal</strong><span>Planning, review & control</span></button><button type="button" className={role==='field'?'selected':''} onClick={()=>chooseRole('field')}><strong>Field portal</strong><span>Work, capture & submissions</span></button></div><p>{role==='company'?'Use your project-controls account to manage the project workspace.':'Use your field account to report execution and track submissions.'}</p><form onSubmit={submit}><label>Work email<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email"/></label><label>Password<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<button className="primary-btn" disabled={busy}>{busy?'Working…':`Enter ${role==='company'?'company':'field'} portal`} <span>→</span></button></form><button className="link-btn" type="button" onClick={openForgot}>Forgot password?</button></div></div>{forgotOpen&&<div className="modal-backdrop auth-recovery-backdrop" role="dialog" aria-modal="true" aria-labelledby="recovery-title" onMouseDown={e=>e.currentTarget===e.target&&setForgotOpen(false)}><div className="modal auth-recovery-modal"><div className="modal-head"><h2 id="recovery-title">Reset your password</h2><button className="icon-btn" aria-label="Close password recovery" onClick={()=>setForgotOpen(false)}>×</button></div>{forgotSent?<div className="recovery-success"><span className="success-chip">REQUEST RECEIVED</span><h3>Check your registered email</h3><p>If the address is registered, a password-reset email will be sent to <strong>{forgotEmail}</strong>.</p><button className="primary-btn" onClick={()=>setForgotOpen(false)}>Back to sign in →</button></div>:<form onSubmit={sendReset} className="recovery-form"><p className="modal-copy">Enter the email address registered to your Synchronex account. We'll use it for the password-reset request.</p><label>Registered email<input autoFocus value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} type="email" placeholder="name@company.com" autoComplete="email"/></label>{error&&<div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setForgotOpen(false)}>Cancel</button><button type="submit" className="primary-btn" disabled={forgotBusy}>{forgotBusy?'Sending…':'Send reset email →'}</button></div></form>}</div></div>}</div>
@@ -375,37 +375,43 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
-function Schedule({rows,onExport}:{rows:any[];onExport:()=>void}){
-  const [discipline,setDiscipline]=useState('All');
-  const disciplines=Array.from(new Set(rows.map(a=>String(a.discipline||'Other')).filter(Boolean))).sort();
-  const visibleRows=discipline==='All'?rows:rows.filter(a=>String(a.discipline||'Other')===discipline);
-  const dated=visibleRows.filter(a=>a.planStart && a.planFinish && a.planStart!=='—' && a.planFinish!=='—');
-  const minDate=dated.length?new Date(Math.min(...dated.map(a=>new Date(a.planStart).getTime()))):new Date();
-  const maxDate=dated.length?new Date(Math.max(...dated.map(a=>new Date(a.planFinish).getTime()))):new Date();
-  minDate.setHours(0,0,0,0); maxDate.setHours(0,0,0,0);
-  const span=Math.max(1,Math.ceil((maxDate.getTime()-minDate.getTime())/86400000)+1);
-  const step=Math.max(1,Math.ceil(span/8));
-  const ticks=Array.from({length:Math.ceil(span/step)+1},(_,i)=>Math.min(span-1,i*step));
-  const pct=(date:string)=>Math.max(0,Math.min(100,((new Date(date).getTime()-minDate.getTime())/86400000/span)*100));
-  const widthPct=(start:string,finish:string)=>Math.max(1.2,pct(finish)-pct(start));
-  const labelDate=(offset:number)=>{const d=new Date(minDate);d.setDate(d.getDate()+offset);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});};
+function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
+  const [statusFilter,setStatusFilter]=useState('All');
+  const [sortBy,setSortBy]=useState<'plan'|'progress'|'status'|'id'>('plan');
+  const disciplineRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+  const visibleRows=[...disciplineRows].filter(a=>statusFilter==='All'||a.status===statusFilter).sort((a,b)=>{
+    if(sortBy==='progress') return b.progress-a.progress;
+    if(sortBy==='status') return a.status.localeCompare(b.status);
+    if(sortBy==='id') return a.id.localeCompare(b.id);
+    return a.planStart.localeCompare(b.planStart);
+  });
+  const selectDiscipline=(name:string)=>{
+    setDiscipline(name);
+    setStatusFilter('All');
+    const first=rows.find(a=>a.discipline===name);
+    if(first) onSelect(first.id);
+  };
+  const recentEvidence=(name:string)=>FIELD_EVENTS.filter(e=>ACTIVITIES.find(a=>a.id===e.actId)?.discipline===name).slice(0,2);
+
   return <div className="schedule-page">
-    <PageSection title="Project schedule" action={<div className="schedule-gantt-actions"><label className="discipline-select-label" htmlFor="schedule-discipline">DISCIPLINE</label><select id="schedule-discipline" className="discipline-select" value={discipline} onChange={e=>setDiscipline(e.target.value)}><option value="All">All disciplines</option>{disciplines.map(d=><option key={d} value={d}>{d}</option>)}</select><button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
-      <div className="gantt-shell">
-        <div className="gantt-toolbar"><div><span className="eyebrow">GANTT SCHEDULE</span><h3>Full project timeline</h3><p>Planned dates across the imported schedule. Use All disciplines to view the complete baseline or filter by discipline.</p></div><span className="schedule-detail-count">{visibleRows.length} schedule rows</span></div>
-        <div className="gantt-header gantt-header-planned"><div className="gantt-task-header">ACTIVITY</div><div className="gantt-timeline-header">{ticks.map(t=><span key={t} style={{left:`${(t/span)*100}%`}}>{labelDate(t)}</span>)}</div></div>
-        <div className="gantt-body">
-          {visibleRows.map((a,i)=>{
-            const summary=!!a.isSummary;
-            const hasDates=a.planStart!=='—'&&a.planFinish!=='—';
-            return <div className={`gantt-row gantt-row-planned ${summary?'gantt-summary':''}`} key={a.dbId||a.id||i}>
-              <div className="gantt-task-cell"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} · {a.planStart} → {a.planFinish}</small></div>
-              <div className="gantt-track">{ticks.map(t=><i key={t} style={{left:`${(t/span)*100}%`}}/>)}{hasDates&&<div className="gantt-bar" style={{left:`${pct(a.planStart)}%`,width:`${widthPct(a.planStart,a.planFinish)}%`}}/>}</div>
-            </div>;
-          })}
-          {!visibleRows.length&&<div className="empty-state">No planned schedule rows are available for this discipline.</div>}
-        </div>
-      </div>
+    <PageSection title="Schedule by discipline" action={<div className="schedule-head-actions">{discipline!=='All'&&<button className="filter-btn" onClick={()=>setDiscipline('All')}>← All disciplines</button>}<button className="primary-btn" onClick={onExport}>Export schedule ↓</button></div>}>
+      {discipline==='All' ? <div className="discipline-card-grid">
+        {DISCIPLINES.map(d=>{
+          const evidence=recentEvidence(d.name);
+          return <div key={d.disc} className="discipline-card" style={{['--discipline-accent' as any]:statusAccent(d.status)}}>
+            <button className="discipline-card-hit" onClick={()=>selectDiscipline(d.name)}>
+              <div className="discipline-card-top"><span className="discipline-icon">{d.name.slice(0,1)}</span><span className={`status-badge ${d.status==='Delayed'?'delayed':d.variance<0?'risk':'track'}`}>{d.status}</span><span className="card-chevron">→</span></div>
+              <div className="discipline-card-title"><strong>{d.name}</strong><b>{d.actual}%</b></div>
+              <div className="discipline-progress"><i style={{width:`${d.actual}%`}}/></div>
+              <div className="discipline-card-metrics"><span><small>PLANNED</small><b>{d.planned}%</b></span><span><small>VARIANCE</small><b className={d.variance<0?'negative':'positive'}>{d.variance>0?'+':''}{d.variance}%</b></span><span><small>ACTIVITIES</small><b>{d.activities}</b></span></div>
+            </button>
+          </div>;
+        })}
+      </div> : <>
+        <div className="schedule-detail-head"><div><h3>{discipline === 'Piping' ? 'Piping Workstream' : `${discipline} Workstream`}</h3><p>{discipline === 'Piping' ? 'Track piping activities, planned dates, actual progress, and execution evidence in one view.' : 'Track activities, planned dates, actual progress, and execution evidence in one view.'}</p></div><span className="schedule-detail-count">{disciplineRows.length} activities</span></div>
+        <div className="schedule-filter-bar"><label>Status<select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} aria-label="Filter by status"><option value="All">All</option><option value="Planned">Planned</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option></select></label><label>Sort by<select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} aria-label="Sort activities"><option value="plan">Plan date</option><option value="progress">Progress</option><option value="status">Status</option><option value="id">Activity ID</option></select></label><span className="filter-count">{visibleRows.length} of {disciplineRows.length} activities</span></div>
+        <div className="schedule-activity-list">{visibleRows.map(a=><button key={a.id} className={`schedule-activity ${a.id===selectedId?'selected':''}`} onClick={()=>{onSelect(a.id);onOpenDetail(a.id);}}><div className="activity-main"><code>{a.id}</code><strong>{a.desc}</strong><small>{a.wbs} executable node</small></div><div className="activity-dates"><span><small>PLAN</small>{a.planStart} → {a.planFinish}</span><span><small>ACTUAL</small>{a.actStart} → {a.actFinish}</span></div><div className="activity-progress"><div><i style={{width:`${a.progress}%`}}/></div><b>{a.progress}%</b></div><span className={`confidence ${a.aiConf>=90?'high':a.aiConf?'medium':'none'}`}>{a.aiConf?`${a.aiConf}% AI`:'No AI link'}</span><span className="activity-arrow">→</span></button>)}{visibleRows.length===0&&<div className="empty-state">No activities match this filter. <button className="text-action" onClick={()=>setStatusFilter('All')}>Clear status filter</button></div>}</div>
+      </>}
     </PageSection>
   </div>
 }
@@ -458,28 +464,21 @@ function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,
 
 function Review({count,item,index,queue,onApprove,onReject,onFlag,onJump,detailOpen,onOpenDetail,onBack}:{count:number;item:any;index:number;queue:any[];onApprove:()=>void;onReject:()=>void;onFlag:()=>void;onJump:(i:number)=>void;detailOpen:boolean;onOpenDetail:(i:number)=>void;onBack:()=>void}){
   const {ACTIVITIES}=useRuntimeData();
-  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><strong>{q.reportName||'Field progress update'}</strong><small className="review-report-meta">{q.eventDate?new Date(q.eventDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'Date unavailable'}</small></td><td><strong>{q.text||'No field statement'}</strong><small className="review-report-meta">{q.progress!=null?`Extracted progress: ${q.progress}%`:'No explicit progress extracted'}</small></td><td><code>{q.candidate||'—'}</code><small className="review-report-meta">{q.candidateName||'No candidate'}</small></td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
+  const queueRows=queue.map((q,i)=><tr key={q.id} onClick={()=>onOpenDetail(i)}><td><code>{q.id}</code></td><td><strong>{q.text.replace(/"/g,'')}</strong></td><td>{q.candidate||'—'}</td><td><b className={q.conf>=80?'review-conf-high':'review-conf'}>{q.conf?`${q.conf}%`:'—'}</b></td><td>{q.issue}</td><td><span className={`review-status ${q.status==='Unmatched'?'unmatched':''}`}>{q.status}</span></td><td><span className="review-open-arrow">Open →</span></td></tr>);
   if(!detailOpen){
     return <div className="review-queue-page"><PageSection label="" title="Review queue" action={<span className="queue-count">{count} open</span>}>
       <div className="review-queue-subtitle"><strong>Select a field event to open planner validation.</strong><p>Review ambiguous or unmatched execution signals before they become trusted schedule actuals.</p></div>
-      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Report</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
+      <div className="review-table-wrap"><table className="review-table"><thead><tr><th>Queue ID</th><th>Field event</th><th>Candidate</th><th>Confidence</th><th>Issue</th><th>Status</th><th></th></tr></thead><tbody>{queue.length?queueRows:<tr><td colSpan={7}><div className="review-empty"><strong>Queue cleared</strong><span>All open decisions have been resolved for this session.</span></div></td></tr>}</tbody></table></div>
     </PageSection></div>
   }
-  const candidate= item?.candidate && item.candidate!=='—' ? (ACTIVITIES.find(a=>a.id===item.candidate)||null) : null;
-  return <div className="review-detail-page"><PageSection label="" title="Field progress review" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
+  return <div className="review-detail-page"><PageSection label="" title="Resolve before apply" action={<button className="outline-btn" onClick={onBack}>← Back to review queue</button>}>
     <div className="review-detail-grid">
       <main className="review-detail-main">
-        <section className="field-report-card" aria-labelledby="field-report-title">
-          <div className="field-report-head"><div><span className="eyebrow">FIELD PROGRESS REPORT</span><h2 id="field-report-title">{item?.reportName||'Field progress update'}</h2><p>Submitted evidence is shown below exactly as received, with extracted facts separated for quick planner validation.</p></div><span className={`review-status ${item?.status==='Unmatched'?'unmatched':''}`}>{item?.status||'Review'}</span></div>
-          <div className="field-report-meta"><div><span>REPORT DATE</span><b>{item?.eventDate?new Date(item.eventDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'—'}</b></div><div><span>DISCIPLINE</span><b>{item?.discipline||'—'}</b></div><div><span>EXTRACTED PROGRESS</span><b>{item?.progress!=null?`${item.progress}%`:'Not stated'}</b></div><div><span>ACTION</span><b>{String(item?.action||'observation').replace(/^./,c=>c.toUpperCase())}</b></div></div>
-          <div className="field-report-evidence"><span className="eyebrow">SOURCE STATEMENT</span><pre>{item?.text||'No field statement was captured.'}</pre>{item?.sourceFile&&<small>Evidence file: {item.sourceFile}</small>}</div>
-        </section>
-        <section className="match-validation-card" aria-labelledby="match-validation-title">
-          <div className="match-validation-head"><div><span className="eyebrow">MATCH VALIDATION</span><h2 id="match-validation-title">Does this field report belong to this activity?</h2></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
-          <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">SUGGESTED BASELINE ACTIVITY</span><code>{item?.candidate || 'No activity'}</code><strong>{candidate?.desc || item?.candidateName || 'No matching baseline node'}</strong><div className="candidate-facts"><span><small>PLANNED</small>{candidate?`${candidate.planStart} → ${candidate.planFinish}`:'—'}</span><span><small>ACTUAL</small>{candidate?`${candidate.progress}%`:'—'}</span><span><small>WBS</small>{candidate?.wbs||'—'}</span></div><p>Match evidence combines activity terminology, discipline, schedule context, and granularity.</p></div><div className="candidate"><span className="eyebrow">PLANNER CHECK</span><strong>{item?.candidate&&item.candidate!=='—'?'Confirm the suggested activity':'No baseline candidate found'}</strong><p>{item?.candidate&&item.candidate!=='—'?'Verify that the source statement refers to this L5/L6 activity. If it does not, reject the match. If no suitable baseline activity exists, flag the event as a new-activity proposal.':'Do not silently apply an unmatched event. Flag it for baseline control instead.'}</p><div className="confidence-explanation"><span>AI MATCH CONFIDENCE</span><b>{item?.conf||0}%</b></div></div></div>
-        </section>
-        <div className="review-actions"><button className="primary-btn" onClick={onApprove} disabled={!item?.candidate||item.candidate==='—'}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="outline-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying a match writes verified actual progress and a trace record. It does not change the planned baseline.</p>
+        <div className="review-hero"><div><span className="eyebrow">ORIGINAL FIELD EVENT</span><blockquote>{item?.text}</blockquote><span className="issue-chip">{item?.issue}</span></div><div className="confidence-ring"><b>{item?.conf || 0}%</b><span>AI confidence</span></div></div>
+        <div className="candidate-grid"><div className="candidate selected"><span className="eyebrow">CURRENT CANDIDATE</span><code>{item?.candidate || 'No activity'}</code><strong>{item?.candidate ? (ACTIVITIES.find(a=>a.id===item.candidate)?.desc || `Baseline activity ${item.candidate}`) : 'No matching baseline node'}</strong><p>Match evidence combines terminology, discipline, schedule context, and granularity.</p><span className="evidence-score">Evidence alignment · {item?.conf || 0}%</span></div><div className="candidate"><span className="eyebrow">DECISION REQUIRED</span><strong>{item?.candidate?'Confirm or reject':'Create a new activity proposal'}</strong><p>{item?.candidate?'Verify the suggested L5/L6 node against the source statement. Reject it if the suggested activity is not the correct match.':'Do not silently drop unmatched work. Flag it for planner review and baseline control.'}</p></div></div>
+        <div className="review-actions"><button className="primary-btn" onClick={onApprove}>Confirm match & apply →</button><button className="danger-btn" onClick={onReject}>Reject</button><button className="danger-btn" onClick={onFlag}>Flag as new activity</button></div><p className="helper">Applying writes an actual update and creates an append-only trace record.</p>
       </main>
+      
     </div>
   </PageSection></div>
 }
@@ -606,9 +605,9 @@ function Memory(){
   }
 
   return <div className="memory-overview"><PageSection title="Memory" action={<button className="outline-btn" onClick={exportKnowledge}>Export knowledge ↓</button>}>
-    <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
+    {MEMORY_ACTIVITIES.length ? <div className="memory-table"><table><thead><tr><th>Activity type</th><th>Baseline avg</th><th>Actual avg</th><th>Drift</th><th>Occurrences</th><th>Evidence</th></tr></thead><tbody>{MEMORY_ACTIVITIES.map(m=><tr key={m.type} onClick={()=>setSelectedType(m.type)} style={{cursor:'pointer'}} title="View occurrence details">
       <td><strong>{m.type}</strong><div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'#94A3B8',marginTop:3}}>View occurrence details →</div></td><td>{m.baselineAvg}</td><td>{m.actualAvg}</td><td className="negative">{m.variance}</td><td>{m.occurrences}</td><td><span className="trace-chip">Traceable</span></td>
-    </tr>)}</tbody></table></div>
+    </tr>)}</tbody></table></div> : <div className="screen-empty-state"><strong>No validated execution memory so far</strong><span>Reusable memory will appear after reviewed execution events produce validated historical evidence.</span></div>}
   </PageSection></div>;
 }
 
@@ -633,14 +632,14 @@ function Trace(){
   const selectedUpdates=selectedActor?actorUpdates(selectedActor):[];
   const selectedMeta=selectedActor?(actorMeta[selectedActor]||{label:selectedActor,description:'Recorded provenance events.',glyph:selectedActor.slice(0,2).toUpperCase()}):null;
   return <PageSection label="AUDIT / APPEND-ONLY PROVENANCE" title="Trace every accepted change" action={<button className="outline-btn" onClick={()=>downloadCsv(AUDIT_TRAIL,'synchronex-all-trace-updates.csv')}>Export all updates ↓</button>}>
-    <div className="trace-actor-grid trace-actor-grid-only">{actors.map(actor=>{const meta=actorMeta[actor]||{label:actor,description:'Recorded provenance events.',glyph:actor.slice(0,2).toUpperCase()}; const rows=actorUpdates(actor); return <div key={actor} className="trace-actor-card" onClick={()=>setSelectedActor(actor)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedActor(actor)}}>
+    {actors.length ? <div className="trace-actor-grid trace-actor-grid-only">{actors.map(actor=>{const meta=actorMeta[actor]||{label:actor,description:'Recorded provenance events.',glyph:actor.slice(0,2).toUpperCase()}; const rows=actorUpdates(actor); return <div key={actor} className="trace-actor-card" onClick={()=>setSelectedActor(actor)} role="button" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSelectedActor(actor)}}>
       <div className="trace-actor-card-top"><div className="trace-actor-mark">{meta.glyph}</div><span className="trace-actor-count">{rows.length} updates</span></div>
       <strong>{meta.label}</strong><p>{meta.description}</p>
       <div className="trace-stage-list" aria-label={`${meta.label} trace stages`}>
         <span><i>01</i> Capture</span><span><i>02</i> Process</span><span><i>03</i> Record</span>
       </div>
       <span className="trace-actor-open">View {meta.label} updates →</span>
-    </div>})}</div>
+    </div>})}</div> : <div className="screen-empty-state"><strong>No trace updates so far</strong><span>Accepted changes and other provenance events will appear here after validated execution activity is recorded.</span></div>}
     {selectedActor&&<div className="trace-actor-modal" role="dialog" aria-modal="true" aria-labelledby="trace-actor-modal-title" onMouseDown={e=>{if(e.currentTarget===e.target)setSelectedActor(null)}}>
       <div className="trace-actor-modal-card">
         <div className="trace-actor-modal-head">
@@ -713,7 +712,7 @@ function Analytics(){
   const {PROGRESS_TREND,DISCIPLINE_PERF,DELAY_CAUSES,REVIEW_QUEUE}=useRuntimeData();
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
-  const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
+  const x=(i:number)=>left+(i/(trend.length-1))*(width-left-right);
   const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
@@ -767,7 +766,7 @@ function FieldSettings({themeMode,setThemeMode,density,setDensity,autoSave,setAu
 }
 function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,autoSave,setAutoSave,dateFormat,setDateFormat,timezone,setTimezone,retention,setRetention}:{threshold:number;setThreshold:(n:number)=>void;saved:boolean;onSave:()=>void;themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void;retention:string;setRetention:(v:string)=>void}){
  return <div className="settings-page"><PageSection title="Make Synchronex work your way"><div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for this workspace. System follows your operating system preference.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div><div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible in tables and lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div></PageSection>
- <PageSection title="Control when AI may apply changes"><div className="settings-card stacked"><div className="setting-row"><div><strong>Auto-apply confidence threshold</strong><p>Events at or above this threshold may be eligible for automatic application if all validation checks pass.</p></div><div className="threshold-control"><input aria-label="Auto apply confidence threshold" type="range" min="80" max="99" value={threshold} onChange={e=>setThreshold(Number(e.target.value))}/><b>{threshold}%</b></div></div><div className="setting-row"><div><strong>Auto-save drafts</strong><p>Preserve unfinished company form changes locally before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div></div></PageSection>
+ <PageSection title="Control when AI may apply changes"><div className="settings-card stacked"><div className="setting-row threshold-setting-row"><div><strong>Auto-apply confidence threshold</strong><p>Events at or above this threshold may be eligible for automatic application if all validation checks pass.</p></div><div className="threshold-control"><input aria-label="Auto apply confidence threshold" type="range" min="80" max="100" value={threshold} onChange={e=>setThreshold(Number(e.target.value))}/><b>{threshold}%</b></div></div><div className="setting-row company-draft-setting"><div><strong>Auto-save drafts</strong><p>Preserve unfinished company form changes locally before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div><div className="settings-save-row"><button className="primary-btn" onClick={onSave}>Save workspace controls</button>{saved&&<span className="settings-saved-note">Saved to workspace</span>}</div></div></PageSection>
 
 </div>
 }
