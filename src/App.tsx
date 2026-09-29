@@ -136,14 +136,18 @@ export default function App(){
     if(!captureName.trim()){notify('Name this progress update before submitting.');return;}
     if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add at least one information source: text, a file, or a voice update.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
-    const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
+    const apiBase=(()=>{const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';return 'https://synchronex-api.onrender.com';})();
     try{
-      const body=new FormData(); body.append('project_id',project?.id||''); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',`REPORT NAME: ${captureName.trim()}\n${captureText}`.trim());
+      let activeProjectId=project?.id;
+      if(!activeProjectId){ activeProjectId=await refreshRuntimeData(); }
+      if(!activeProjectId) throw new Error('Import a project schedule before submitting field progress.');
+      const body=new FormData(); body.append('project_id',activeProjectId); body.append('submitted_by',role==='field'?'field':'planner'); body.append('text',`REPORT NAME: ${captureName.trim()}\n${captureText}`.trim());
       captureFiles.forEach(f=>body.append('files',f,f.name));
+      if(recordedAudioUrl){ const audioResponse=await fetch(recordedAudioUrl); const audioBlob=await audioResponse.blob(); body.append('files',new File([audioBlob],'field-voice-update.webm',{type:audioBlob.type||'audio/webm'}),'field-voice-update.webm'); }
       const response=await fetch(`${apiBase}/api/capture`,{method:'POST',body}); const payload=await response.json().catch(()=>({detail:'Capture failed.'}));
       if(!response.ok) throw new Error(payload?.detail||'Capture failed.');
-      setCaptureBusy(false);setCaptureResult(false);setCaptureText('');setCaptureName('');setCaptureFiles([]);if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);setRecordedAudioUrl('');setRecordingSeconds(0);setDirty(false);await refreshRuntimeData(project?.id);notify('Progress update submitted successfully. The field form has been reset.');
-    }catch(error){setCaptureBusy(false);notify(error instanceof Error?error.message:'Capture failed.');}
+      setCaptureBusy(false);setCaptureResult(false);setCaptureText('');setCaptureName('');setCaptureFiles([]);if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);setRecordedAudioUrl('');setRecordingSeconds(0);setDirty(false);await refreshRuntimeData(activeProjectId);notify('Progress update submitted successfully. The field form has been reset.');
+    }catch(error){setCaptureBusy(false);notify(error instanceof TypeError?'Unable to reach Synchronex API. Check the deployed backend connection and try again.':error instanceof Error?error.message:'Capture failed.');}
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
@@ -212,7 +216,7 @@ export default function App(){
 
   const decideReview=async(decision:'approve'|'reject'|'flag')=>{
     if(!activeReview) return;
-    try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
+    try{const apiBase=(()=>{const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';return 'https://synchronex-api.onrender.com';})();const r=await fetch(`${apiBase}/api/review/${activeReview.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({decision,reviewer:'planner'})});const p=await r.json().catch(()=>({detail:'Review action failed.'}));if(!r.ok)throw new Error(p?.detail||'Review action failed.');await refreshRuntimeData(project?.id);setReviewDetailOpen(false);setReviewIndex(0);notify(decision==='approve'?'Match approved and actuals/provenance updated.':decision==='reject'?'Match rejected and retained in provenance.':'Execution event flagged as a new activity proposal.');}catch(error){notify(error instanceof Error?error.message:'Review action failed.');}
   };
   const approveReview=()=>decideReview('approve');
   const rejectReview=()=>decideReview('reject');
@@ -221,7 +225,7 @@ export default function App(){
     if(!importFiles.length){notify('Choose a ProjectLibre, Microsoft Project, or Primavera schedule file first.');return;}
     const file=importFiles[0];
     if(!/\.(pod|mpp|xml|xer|mspdi)$/i.test(file.name)){setImportState('error');notify('Supported schedules: ProjectLibre .pod, Microsoft Project .mpp/.xml, Primavera P6 .xer.');return;}
-    const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');
+    const apiBase=(()=>{const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';return 'https://synchronex-api.onrender.com';})();
     const projectId=project?.id;
     setImportState('processing');
     try{
@@ -233,14 +237,14 @@ export default function App(){
       if(!response.ok) throw new Error(payload?.detail||`Import failed (${response.status}).`);
       setImportState('success');
       setDirty(false);
-      await refreshRuntimeData(projectId);
+      await refreshRuntimeData(payload?.project_id || projectId);
       const counts=payload?.counts||{};
       setImportFiles([]);
       setImportState('idle');
       notify(`${payload?.source||'Schedule'} imported successfully. Import form reset: ${counts.activities??0} activities, ${counts.dependencies??0} dependencies loaded.`);
     }catch(error){
       setImportState('error');
-      notify(error instanceof Error?error.message:'POD import failed.');
+      notify(error instanceof TypeError?'Unable to reach Synchronex API. The schedule may already have been persisted; refresh before retrying.':error instanceof Error?error.message:'POD import failed.');
     }
   };
   const exportSchedule=()=>{
@@ -290,7 +294,7 @@ export default function App(){
       {role==='company' && screen==='import'&&<Import state={importState} files={importFiles} setFiles={(files)=>{setImportFiles(files);setImportState('idle');setDirty(true)}} onProcess={processImport} onRetry={processImport} onOpenReview={()=>go('review')}/>}
       {role==='company' && screen==='analytics'&&<Analytics />}
       {role==='company' && screen==='team'&&<Team onInvite={()=>setModal('invite')} onManage={(m)=>{setMemberTarget(m);setMemberDraft({role:m.role,workspace:m.workspace,status:m.status,canReview:m.role.toLowerCase().includes('review')||m.workspace==='Company',canImport:m.workspace==='Company',canEditBaseline:m.role==='Project Manager'});setModal('member')}} />}
-      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{if(!project?.id){notify('Import a schedule before saving workspace controls.');return;}try{const apiBase=(import.meta.env.VITE_API_BASE_URL||'https://synchronex-api.onrender.com').replace(/\/$/,'');const r=await fetch(`${apiBase}/api/settings/${project.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
+      {role==='company' && screen==='settings'&&<Settings threshold={threshold} setThreshold={setThreshold} saved={saved} onSave={async()=>{if(!project?.id){notify('Import a schedule before saving workspace controls.');return;}try{const apiBase=(()=>{const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';return 'https://synchronex-api.onrender.com';})();const r=await fetch(`${apiBase}/api/settings/${project.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({confidence_threshold:threshold/100,date_format:dateFormat,timezone,retention,auto_save:autoSave,email_notifications:emailNotifications,in_app_notifications:inAppNotifications})});if(!r.ok)throw new Error('Settings could not be saved.');setSaved(true);notify('Workspace controls saved to Supabase.');}catch(error){notify(error instanceof Error?error.message:'Settings could not be saved.');}}} themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} emailNotifications={emailNotifications} setEmailNotifications={setEmailNotifications} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave} dateFormat={dateFormat} setDateFormat={setDateFormat} timezone={timezone} setTimezone={setTimezone} retention={retention} setRetention={setRetention}/>}
       {role==='field' && screen==='field-home'&&<FieldHome onGo={go}/>}
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='profile'&&<FieldProfile onSignOut={()=>setAuthenticated(false)}/>}
