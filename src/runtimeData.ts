@@ -43,13 +43,21 @@ export function apiUrl(path: string) {
 }
 
 async function request(path: string, init?: RequestInit) {
-  const response = await fetch(apiUrl(path), init);
+  const url = apiUrl(path);
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Network request failed';
+    throw new Error(`Cannot reach the Synchronex backend at ${API_BASE}. Check that Render is live and VITE_API_BASE_URL is set to the Render URL. (${reason})`);
+  }
+
   const text = await response.text();
   let body: any = null;
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   if (!response.ok) {
     const message = body?.detail || body?.message || `API request failed (${response.status})`;
-    throw new Error(message);
+    throw new Error(`${message} [${response.status} ${response.statusText}]`);
   }
   return body;
 }
