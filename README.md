@@ -87,3 +87,14 @@ No baseline schedule is expected before a manager performs this import.
 ## Important production note
 
 The current login screen is the existing prototype workspace UI. It is not a replacement for a full Supabase Auth/RBAC implementation. Before exposing Synchronex to real users or sensitive project data, connect the UI to Supabase Auth and enforce the user's project role on backend operations.
+
+
+## Parsing and validation guarantees
+
+- ProjectLibre POD: embedded MSPDI tasks, WBS hierarchy, predecessor links, calendars, resources and assignments are normalized before persistence.
+- Microsoft Project XML: MSPDI tasks, WBS hierarchy, predecessor links, calendars, resources and assignments are normalized through the same schedule model.
+- Microsoft Project MPP: MPXJ is used for tasks, relations, task calendars, project calendars, resources and resource assignments. Java/MPXJ is required at runtime.
+- Primavera P6 XER: TASK, PROJWBS, TASKPRED, CALENDAR, RSRC and TASKRSRC records are normalized into the same schedule model.
+- A schedule is validated before the existing schedule layer is replaced. Invalid source data therefore does not intentionally clear a previously imported schedule.
+- Source `PercentComplete` remains source metadata; Synchronex planned trajectory is calculated from planned dates, while actual progress is only populated by validated field execution evidence.
+- Field reports create one execution event per submission. Explicit unique activity references receive 100% confidence and can auto-apply; ambiguous or unmatched evidence enters planner review.
