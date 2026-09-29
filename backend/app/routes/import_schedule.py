@@ -14,6 +14,23 @@ def _project_code(name: str) -> str:
     return base[:80]
 
 
+
+
+def _infer_discipline(name: str) -> str:
+    low = str(name or '').lower()
+    if re.search(r'spool|piping|pipeline|pipe|weld|ndt|erection', low):
+        return 'Piping'
+    if re.search(r'pump|mechanical|equipment|commissioning|alignment', low):
+        return 'Mechanical'
+    if re.search(r'cable|electrical|termination|continuity', low):
+        return 'Electrical'
+    if re.search(r'instrument|calibration|tubing', low):
+        return 'Instrumentation'
+    if re.search(r'civil|excavat|concrete|foundation|backfill', low):
+        return 'Civil'
+    return 'Other'
+
+
 def _resolve_or_create_project(sb, parsed: dict, project_id: str | None, filename: str):
     if project_id:
         result = sb.table('projects').select('*').eq('id', project_id).limit(1).execute()
@@ -130,7 +147,7 @@ async def import_schedule(file: UploadFile = File(...), project_id: str | None =
                 'wbs_node_id': None,
                 'activity_code': f"{Path(filename).stem[:8].upper()}-{t['uid']}",
                 'name': t['name'],
-                'discipline': None,
+                'discipline': _infer_discipline(t['name']) if not t.get('is_summary') else None,
                 'planned_start': (t.get('start') or '')[:10] or None,
                 'planned_finish': (t.get('finish') or '')[:10] or None,
                 'actual_start': None,

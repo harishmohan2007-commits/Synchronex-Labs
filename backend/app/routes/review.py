@@ -6,6 +6,7 @@ from ..services.supabase_service import get_supabase
 
 router = APIRouter(prefix='/api/review', tags=['review'])
 
+
 class Decision(BaseModel):
     reviewer: str = 'planner'
     decision: str
@@ -34,10 +35,17 @@ def decide(review_id: str, body: Decision):
         activity = sb.table('activities').select('*').eq('id', activity_id).single().execute().data
         if not activity:
             raise HTTPException(404, 'Matched activity not found.')
+        if activity.get('is_summary'):
+            raise HTTPException(400, 'Summary/WBS nodes cannot receive field actuals. Match the event to an executable activity.')
 
+        # Prefer an explicit planner override, otherwise apply the progress extracted
+        # from the field report when it was captured as execution_events.quantity + '%'.
         progress = body.new_progress
+        if progress is None and event.get('unit') == '%' and event.get('quantity') is not None:
+            progress = float(event['quantity'])
         if progress is not None and not 0 <= progress <= 100:
             raise HTTPException(400, 'new_progress must be between 0 and 100')
+
         update = {}
         if event.get('extracted_action') == 'start' and actual_date:
             update['actual_start'] = activity.get('actual_start') or actual_date
@@ -50,14 +58,20 @@ def decide(review_id: str, body: Decision):
             update['status'] = 'completed' if progress >= 100 else ('in_progress' if progress > 0 else 'not_started')
             if progress > 0 and not activity.get('actual_start') and actual_date:
                 update['actual_start'] = actual_date
+            if progress >= 100 and actual_date:
+                update['actual_finish'] = activity.get('actual_finish') or actual_date
+
         if update:
             sb.table('activities').update(update).eq('id', activity_id).execute()
             if progress is not None:
                 sb.table('progress_updates').insert({
-                    'activity_id': activity_id, 'execution_event_id': event['id'],
+                    'activity_id': activity_id,
+                    'execution_event_id': event['id'],
                     'previous_progress': activity.get('actual_progress') or 0,
-                    'new_progress': progress, 'quantity_completed': body.quantity_completed,
-                    'quantity_unit': body.quantity_unit, 'update_source': 'human_review',
+                    'new_progress': progress,
+                    'quantity_completed': body.quantity_completed,
+                    'quantity_unit': body.quantity_unit or ('%' if event.get('unit') == '%' else None),
+                    'update_source': 'human_review',
                 }).execute()
 
         sb.table('execution_events').update({'extracted_action': event.get('extracted_action')}).eq('id', event['id']).execute()
@@ -85,7 +99,6 @@ def decide(review_id: str, body: Decision):
             except (TypeError, ValueError):
                 pass
     elif body.decision == 'reject':
-        sb.table('execution_events').update({'extracted_action': event.get('extracted_action')}).eq('id', event['id']).execute()
         sb.table('review_queue').update({'status': 'rejected', 'reviewed_at': now}).eq('id', review_id).execute()
         sb.table('activity_matches').update({'status': 'rejected', 'reviewed_at': now}).eq('execution_event_id', event['id']).execute()
         sb.table('audit_logs').insert({'project_id': event['project_id'], 'action': 'review_rejected', 'entity_type': 'execution_event', 'entity_id': event['id'], 'new_value': {'review_id': review_id}, 'source': 'human_review'}).execute()
