@@ -1,0 +1,4 @@
+-- Field-capture flow fixes are intentionally compatible with the existing schema.
+-- execution_events.quantity + unit='%' stores the reported physical progress so
+-- planners can review it before it becomes a trusted activities.actual_progress.
+-- No new table is required.
