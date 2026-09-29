@@ -23,6 +23,7 @@ const fieldNav: Array<{id:Screen; num:string; label:string; glyph:string}> = [
   {id:'submissions',num:'04',label:'Submissions',glyph:'↥'},
   {id:'notifications',num:'05',label:'Notifications',glyph:'!'},
   {id:'profile',num:'06',label:'Profile',glyph:'●'},
+  {id:'settings',num:'07',label:'Settings',glyph:'⚙'},
 ];
 
 const pageMeta: Record<Screen,{eyebrow:string;title:string;subtitle:string}> = {
@@ -183,6 +184,7 @@ export default function App(){
   const [modal,setModal]=useState<Modal>(null);
   const [dirty,setDirty]=useState(false);
   const [captureText,setCaptureText]=useState('Piping team completed erection of Line 24 spool section A today. Line 25 erection started at 09:30. Foundation Block A concrete work reached approximately 70%.');
+  const [captureName,setCaptureName]=useState('');
   const [captureStage,setCaptureStage]=useState(0);
   const [captureBusy,setCaptureBusy]=useState(false);
   const [captureResult,setCaptureResult]=useState(false);
@@ -302,16 +304,23 @@ export default function App(){
 
   const runCapture=()=>{
     if(captureBusy)return;
-    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add a progress note, file evidence, or a voice recording before submitting.');return;}
+    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add text, at least one evidence file, or a voice update before submitting.');return;}
+    if(!captureName.trim()){notify('Give this progress update a name before submitting.');return;}
     setCaptureBusy(true);setCaptureResult(false);setDirty(false);
-    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the available field evidence.');},1200);
+    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the selected evidence.');},1200);
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
-    setCaptureFiles(prev=>{
-      const merged=[...prev,...Array.from(files)];
-      return merged.filter((file,i,self)=>self.findIndex(x=>x.name===file.name && x.size===file.size && x.lastModified===file.lastModified)===i);
+    const incoming=Array.from(files);
+    const existingKeys=new Set(captureFiles.map(file=>`${file.name}|${file.size}|${file.lastModified}`));
+    const additions=incoming.filter(file=>{
+      const key=`${file.name}|${file.size}|${file.lastModified}`;
+      if(existingKeys.has(key)) return false;
+      existingKeys.add(key);
+      return true;
     });
+    if(!additions.length) return;
+    setCaptureFiles(prev=>[...prev,...additions]);
     setDirty(true);
   };
   const removeCaptureFile=(index:number)=>{setCaptureFiles(files=>files.filter((_,i)=>i!==index));setDirty(true);};
@@ -345,6 +354,7 @@ export default function App(){
   const resetCapture=()=>{
     if(recording) stopRecording();
     setCaptureText('');
+    setCaptureName('');
     setCaptureFiles([]);
     if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
     setRecordedAudioUrl('');
@@ -451,7 +461,7 @@ export default function App(){
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
       {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
-      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the evidence upload area below to attach a field report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
+      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} name={captureName} setName={(v)=>{setCaptureName(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
@@ -463,6 +473,7 @@ export default function App(){
       {role==='field' && screen==='submissions'&&<Submissions onCapture={()=>go('capture')}/>}
       {role==='field' && screen==='notifications'&&<FieldNotifications />}
       {role==='field' && screen==='profile'&&<FieldProfile onSwitch={()=>{setRole('company');setAuthenticated(false);setModal(null)}} onSignOut={()=>setAuthenticated(false)}/>}
+      {role==='field' && screen==='settings'&&<FieldSettings themeMode={themeMode} setThemeMode={setThemeMode} density={density} setDensity={setDensity} inAppNotifications={inAppNotifications} setInAppNotifications={setInAppNotifications} autoSave={autoSave} setAutoSave={setAutoSave}/>}
     </main>
 
     {modal==='profile'&&<Modal title="Profile" onClose={()=>setModal(null)}><div className="profile-modal profile-modal-enhanced"><div className="profile-hero"><div className="profile-avatar profile-avatar-enhanced">{role==='company'?'PC':'FS'}</div><div><span className="eyebrow">{role==='company'?'COMPANY WORKSPACE':'FIELD WORKSPACE'}</span><h3>{role==='company'?'Project Controls Engineer':'Field Supervisor'}</h3><p>Synchronex Labs workspace</p></div></div><div className="profile-summary"><div><span>ACCESS</span><strong>{role==='company'?'Planning & control':'Execution & reporting'}</strong></div><div><span>SESSION</span><strong>Authenticated</strong></div></div><div className="profile-modal-actions"><button className="danger-btn profile-signout" onClick={()=>{setAuthenticated(false);setModal(null)}}><span>↪</span> Sign out</button></div></div></Modal>}
@@ -634,45 +645,50 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   </div>
 }
 
-function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
+function Capture({text,setText,name,setName,stage,busy,result,run,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;name:string;setName:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
   return <div className="capture-layout capture-layout-full">
     <div className="capture-main">
       <PageSection label="FIELD PROGRESS / 01" title="Submit work progress">
-        <p className="lead">Share what was completed on site using a short note, files, images, or a voice update. The text box is optional when your evidence already contains the progress details.</p>
+        <p className="lead">Share what was completed on site using text, files, images, or a voice update. Use any one of these inputs or combine them.</p>
         <textarea value={text} onChange={e=>setText(e.target.value)} aria-label="Optional field progress note" placeholder="Optional: add a short progress note, site update, or supervisor comment…"/>
-        <div className="capture-submit-banner">
-          <div><span className="eyebrow">PROGRESS UPDATE</span><strong>One submission, any evidence.</strong><p>Add whichever inputs you have. You can submit text alone, evidence files alone, a voice recording, or any combination.</p></div>
-          <span className="capture-evidence-count">{files.length + (recordedAudioUrl?1:0)} evidence attached</span>
-        </div>
         <div className="capture-input-grid capture-input-grid-three">
           <section className="capture-source-card">
-            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / 02</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / 01</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
             <input ref={fileInputRef} type="file" multiple accept="*/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value='';}} />
             <button className="capture-dropzone" type="button" onClick={()=>fileInputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFiles(e.dataTransfer.files);}}>
               <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>Images · PDF · Word · Excel · CSV · TXT · ZIP · video · and more</small>
             </button>
-            {files.length>0&&<div className="capture-file-list">{files.map((file,i)=><div className="capture-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Unknown file type'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
-            <span className="helper">Files stay attached to the progress submission as field evidence.</span>
+            {files.length>0&&<div className="capture-file-list">{files.map((file,i)=><div className="capture-file-row" key={`${file.name}-${file.lastModified}`}><div className="capture-file-main"><strong>{file.name}</strong><span>{file.type||'Unknown file type'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>Remove ×</button></div>)}</div>}
+            <span className="helper">Use the file name you entered on your device. You can remove an attachment before submitting.</span>
           </section>
 
           <section className="capture-source-card voice-card">
-            <div className="capture-source-head"><div><span className="eyebrow">VOICE UPDATE / 03</span><h3>Record progress</h3><p>Use your microphone when speaking is easier than typing. The recording can be submitted as evidence.</p></div><span className="source-icon">◉</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">VOICE UPDATE / 02</span><h3>Record progress</h3><p>Use your microphone when speaking is easier than typing. The recording can be submitted as progress evidence.</p></div><span className="source-icon">◉</span></div>
             <div className={`voice-recorder ${recording?'recording':''}`}><div className="voice-status-dot">{recording?'●':'○'}</div><div><strong>{recording?'Recording progress update':'Ready to record'}</strong><span>{recording?formatRecordingTime(recordingSeconds):'Use your browser microphone'}</span></div></div>
             <div className="voice-actions">{!recording?<button className="primary-btn" onClick={startRecording}>● Start recording</button>:<button className="danger-btn" onClick={stopRecording}>■ Stop recording</button>}</div>
-            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><audio controls src={recordedAudioUrl}/><div className="recording-actions"><button className="danger-btn" onClick={deleteRecording}>Delete recording</button></div></div>}
+            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><strong>Voice progress recording</strong><audio controls src={recordedAudioUrl}/><div className="recording-actions"><button className="danger-btn" onClick={deleteRecording}>Delete recording</button></div></div>}
             <span className="helper">You can delete a recording and record again before submitting.</span>
           </section>
+        </div>
+        <div className="capture-report-name">
+          <div>
+            <span className="eyebrow">PROGRESS REPORT / NAME</span>
+            <h3>Name this progress update</h3>
+            <p>Give the complete submission a clear name so the project team can identify it later. The worker chooses this name.</p>
+          </div>
+          <input value={name} onChange={e=>{setName(e.target.value);setDirty(true)}} placeholder="e.g. Pipe erection XX progress" aria-label="Progress report name" />
         </div>
         <div className="capture-final-actions">
           <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
           <button className="outline-btn" type="button" onClick={resetCapture}>Reset update</button>
-          <span className="helper">Text is optional. Submit any combination of text, files, images, or voice.</span>
+          <span className="helper">Text is optional. Submit text, files, voice, or any combination.</span>
         </div>
-        {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your field note and attached evidence are ready for the project record and review workflow.</p></div></div>}
+        {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your progress note and selected evidence are ready for the project record and review workflow.</p></div></div>}
       </PageSection>
     </div>
   </div>
 }
+
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
 function EventCard({id,text,conf,status}:{id:string;text:string;conf:number;status:string}){return <div className="event-card"><div><span className={`signal-tag ${status==='Matched'?'matched':'review'}`}>{status}</span><strong>{text}</strong></div><div><code>{id}</code><b className={conf>=90?'green':'amber'}>{conf}%</b></div></div>}
 
@@ -1052,6 +1068,13 @@ function Team({onInvite,onManage}:{onInvite:()=>void;onManage:(member:{initials:
       <div className="team-table-wrap"><table className="team-table"><thead><tr><th>Member</th><th>Role</th><th>Workspace</th><th>Status</th><th>Access</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td><span className="member-avatar">{m.initials}</span><strong>{m.name}</strong></td><td>{m.role}</td><td>{m.workspace}</td><td><span className="status-badge track">{m.status}</span></td><td><button className="text-action" onClick={()=>onManage(m)}>Manage →</button></td></tr>)}</tbody></table></div>
     </PageSection>
   </div>
+}
+function FieldSettings({themeMode,setThemeMode,density,setDensity,inAppNotifications,setInAppNotifications,autoSave,setAutoSave}:{themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void}){
+ return <div className="settings-page field-settings-page"><PageSection title="Field settings">
+   <div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for your field workspace.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div>
+   <div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible across the field workspace.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div>
+   <div className="settings-card stacked"><div className="setting-row"><div><span className="eyebrow">NOTIFICATIONS</span><strong>In-app notifications</strong><p>Show submission, review, and field-workflow updates inside the portal.</p></div><button className={`toggle ${inAppNotifications?'on':''}`} aria-pressed={inAppNotifications} onClick={()=>setInAppNotifications(!inAppNotifications)}><span/></button></div><div className="setting-row"><div><span className="eyebrow">DRAFTS</span><strong>Auto-save progress drafts</strong><p>Keep unfinished field progress entries locally so they can be resumed before submission.</p></div><button className={`toggle ${autoSave?'on':''}`} aria-pressed={autoSave} onClick={()=>setAutoSave(!autoSave)}><span/></button></div></div>
+ </PageSection></div>
 }
 function Settings({threshold,setThreshold,saved,onSave,themeMode,setThemeMode,density,setDensity,emailNotifications,setEmailNotifications,inAppNotifications,setInAppNotifications,autoSave,setAutoSave,dateFormat,setDateFormat,timezone,setTimezone,retention,setRetention}:{threshold:number;setThreshold:(n:number)=>void;saved:boolean;onSave:()=>void;themeMode:ThemeMode;setThemeMode:(v:ThemeMode)=>void;density:'comfortable'|'compact';setDensity:(v:'comfortable'|'compact')=>void;emailNotifications:boolean;setEmailNotifications:(v:boolean)=>void;inAppNotifications:boolean;setInAppNotifications:(v:boolean)=>void;autoSave:boolean;setAutoSave:(v:boolean)=>void;dateFormat:string;setDateFormat:(v:string)=>void;timezone:string;setTimezone:(v:string)=>void;retention:string;setRetention:(v:string)=>void}){
  return <div className="settings-page"><PageSection title="Make Synchronex work your way"><div className="settings-card"><div className="setting-copy"><span className="eyebrow">APPEARANCE</span><strong>Theme</strong><p>Choose the interface appearance for this workspace. System follows your operating system preference.</p></div><div className="theme-picker" role="radiogroup" aria-label="Theme"><button className={themeMode==='light'?'selected':''} onClick={()=>setThemeMode('light')}><span className="theme-preview light-preview">☼</span><b>Light</b><small>Bright workspace</small></button><button className={themeMode==='dark'?'selected':''} onClick={()=>setThemeMode('dark')}><span className="theme-preview dark-preview">◐</span><b>Dark</b><small>Low-light workspace</small></button><button className={themeMode==='system'?'selected':''} onClick={()=>setThemeMode('system')}><span className="theme-preview system-preview">◑</span><b>System</b><small>Follow device</small></button></div></div><div className="settings-card"><div className="setting-copy"><span className="eyebrow">LAYOUT</span><strong>Density</strong><p>Control how much information is visible in tables and lists.</p></div><div className="segmented-control"><button className={density==='comfortable'?'selected':''} onClick={()=>setDensity('comfortable')}>Comfortable</button><button className={density==='compact'?'selected':''} onClick={()=>setDensity('compact')}>Compact</button></div></div></PageSection>

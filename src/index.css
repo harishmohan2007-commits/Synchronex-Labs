@@ -1842,3 +1842,29 @@ button,input,textarea,select{font-family:var(--font-ui)}
   .capture-submit-banner{align-items:flex-start;flex-direction:column}
   .field-summary-grid{grid-template-columns:1fr!important}
 }
+
+/* Field portal refinements: focused settings + named progress evidence */
+.field-settings-page{padding-bottom:90px}
+.field-settings-page .section{max-width:none;width:100%}
+.field-settings-page .settings-card{width:100%}
+.capture-layout-full{padding-bottom:96px}
+.capture-file-row-named{align-items:flex-start;gap:14px}
+.capture-file-main{min-width:0;flex:1}
+.capture-file-main label,.voice-preview label{display:block;font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--text-3)}
+.capture-file-main input,.voice-preview input{display:block;width:100%;margin-top:7px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);padding:10px 11px;font:500 13px var(--font-sans);outline:none}
+.capture-file-main input:focus,.voice-preview input:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 14%,transparent)}
+.capture-file-main>span{display:block;margin-top:7px;color:var(--text-3);font-size:10px;line-height:1.45}
+.voice-preview{display:flex;flex-direction:column;gap:10px}
+.voice-preview audio{width:100%}
+.voice-preview .recording-actions{margin-top:2px}
+.capture-final-actions{margin-bottom:10px}
+@media(max-width:850px){.capture-layout-full{padding-bottom:72px}}
+
+/* Worker-defined name for the complete progress submission */
+.capture-report-name{margin-top:22px;border:1px solid var(--border);background:var(--surface-2);padding:20px 22px;display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,460px);gap:28px;align-items:center}
+.capture-report-name h3{margin:6px 0 5px;color:var(--text);font-size:18px;letter-spacing:-.02em}
+.capture-report-name p{margin:0;color:var(--text-2);font-size:13px;line-height:1.5;max-width:720px}
+.capture-report-name input{width:100%;height:46px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);padding:0 13px;font-size:14px;outline:none}
+.capture-report-name input::placeholder{color:var(--text-3)}
+.capture-report-name input:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 14%,transparent)}
+@media(max-width:850px){.capture-report-name{grid-template-columns:1fr;gap:14px}}
