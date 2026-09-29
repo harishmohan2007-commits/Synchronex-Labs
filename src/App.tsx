@@ -675,7 +675,7 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   const trend=PROGRESS_TREND;
   const width=760, height=250, left=42, right=18, top=20, bottom=42;
   const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
   const plannedPoints=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actualPoints=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="field-page field-home-page">
@@ -718,7 +718,7 @@ function Analytics(){
   const trend=PROGRESS_TREND;
   const width=860,height=280,left=52,right=20,top=18,bottom=34;
   const x=(i:number)=>left+(i/Math.max(1,trend.length-1))*(width-left-right);
-  const y=(v:number)=>top+(60-v)/60*(height-top-bottom);
+  const y=(v:number)=>top+(100-v)/100*(height-top-bottom);
   const planned=trend.map((d,i)=>`${x(i)},${y(d.planned)}`).join(' ');
   const actual=trend.map((d,i)=>`${x(i)},${y(d.actual)}`).join(' ');
   return <div className="analytics-page">
@@ -733,18 +733,18 @@ function Analytics(){
         <article className="analytics-panel analytics-trajectory-panel">
           <div className="analytics-panel-head"><div><span className="eyebrow">PROGRESS TRAJECTORY</span><h3>Planned vs actual</h3></div><span className="trace-chip">{PROJECT_METRICS.actualProgress.toFixed(1)}% actual</span></div>
           <div className="analytics-chart">
-            <div className="analytics-ylabels"><span>60%</span><span>45%</span><span>30%</span><span>15%</span><span>0%</span></div>
+            <div className="analytics-ylabels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
             <div className="analytics-plot">
-              <div className="analytics-gridlines"><i/><i/><i/><i/><i/></div>
-              {trend.length > 1 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="empty-state">Historical progress points will appear after validated execution updates are recorded.</div>}
-              <div className="analytics-xlabels">{trend.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>
+              <div className="analytics-gridlines" aria-hidden="true"><i/><i/><i/><i/><i/></div>
+              {trend.length > 1 ? <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Planned versus actual project progress"><polyline points={planned} fill="none" stroke="var(--info)" strokeWidth="3" strokeDasharray="8 7"/><polyline points={actual} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>{trend.map((d:any,i:number)=><circle key={i} cx={x(i)} cy={y(d.actual)} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="3"/>)}</svg> : <div className="analytics-chart-empty"><strong>No validated progress history</strong><span>Historical points will appear after approved execution updates are recorded.</span></div>}
+              {trend.length > 1 && <div className="analytics-xlabels">{trend.map((d:any)=><span key={d.date}>{d.date}</span>)}</div>}
             </div>
           </div>
           <div className="analytics-legend"><span><i className="legend-line actual-line"/>Actual</span><span><i className="legend-line planned-line"/>Planned</span></div>
         </article>
-        <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div><div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div></article>
+        <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DISCIPLINE PERFORMANCE</span><h3>Workstream output</h3></div></div>{DISCIPLINE_PERF.length ? <div className="analytics-bars">{DISCIPLINE_PERF.map(d=><div className="analytics-bar-row" key={d.disc}><div className="analytics-bar-label"><span>{d.disc}</span><b>{d.actual}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.actual}%`}}/><span style={{left:`${d.planned}%`}}/></div><small>plan {d.planned}%</small></div>)}</div> : <div className="analytics-panel-empty"><strong>No discipline data yet</strong><span>Workstream output will appear after a schedule is imported.</span></div>}</article>
       </div>
-      <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div><div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div></article>
+      <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="eyebrow">DELAY PATTERNS</span><h3>Primary execution causes</h3></div></div>{DELAY_CAUSES.length ? <div className="analytics-bars">{DELAY_CAUSES.map(d=><div className="analytics-bar-row" key={d.cause}><div className="analytics-bar-label"><span>{d.cause}</span><b>{d.pct}%</b></div><div className="analytics-bar-track"><i style={{width:`${d.pct}%`}}/></div></div>)}</div> : <div className="analytics-panel-empty"><strong>No delay patterns yet</strong><span>Delay causes will appear after validated execution events are recorded.</span></div>}</article>
     </PageSection>
   </div>
 }
