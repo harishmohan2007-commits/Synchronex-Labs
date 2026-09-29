@@ -4,7 +4,7 @@ Synchronex is the planning-to-execution bridge for SIH26122. This package contai
 
 ## Architecture
 
-- **Frontend:** React + Vite → Netlify or Vercel
+- **Frontend:** React + Vite → Vercel
 - **Backend:** FastAPI + Python → Python web host (recommended: Render)
 - **Database:** Supabase
 - **Schedule intake:** manager uploads `.pod`, `.mpp`, `.xml`/`.mspdi`, or `.xer` at runtime
@@ -42,16 +42,16 @@ Expected response includes `"status":"ok"` and `"supabase_configured":true`.
 
 ## 2. Configure the frontend
 
-Create a Netlify project from the repository root.
+Create a Vercel project from the repository root.
 
 - Framework: Vite
 - Build command: `npm run build`
 - Output directory: `dist`
 
-Set this Netlify environment variable:
+Set this Vercel environment variable:
 
 ```text
-VITE_API_BASE_URL=/api
+VITE_API_BASE_URL=https://YOUR-BACKEND
 ```
 
 Then deploy:
@@ -59,10 +59,10 @@ Then deploy:
 ```bash
 npm install
 npm run build
-netlify deploy --prod
+vercel --prod
 ```
 
-The included `netlify.toml` provides the `/api` proxy and SPA fallback routing. The included `vercel.json` provides the same `/api` proxy and SPA fallback when deployed on Vercel.
+The included `vercel.json` provides SPA fallback routing.
 
 ## 3. First real schedule import
 
@@ -87,8 +87,3 @@ No baseline schedule is expected before a manager performs this import.
 ## Important production note
 
 The current login screen is the existing prototype workspace UI. It is not a replacement for a full Supabase Auth/RBAC implementation. Before exposing Synchronex to real users or sensitive project data, connect the UI to Supabase Auth and enforce the user's project role on backend operations.
-
-
-## Judge/demo login
-
-The workspace selector intentionally accepts blank email and password fields for the SIH demonstration build. Select Company portal or Field portal and press **Enter** / click the portal button. No credentials are required for this demo path.
