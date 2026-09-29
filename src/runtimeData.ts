@@ -170,6 +170,7 @@ export function applyBootstrap(data: any) {
       time: e.created_at ? new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
       status: match?.status === 'approved' ? 'AI MATCHED' : match?.activity_id ? 'REVIEW REQUIRED' : 'UNMATCHED',
       text: `"${e.raw_text || ''}"`,
+      submissionName: e.submission_name || act?.desc || 'Field progress update',
       actId: act?.id || match?.activity_id || '—',
       actDesc: act?.desc || 'No matching activity',
       progress: e.unit === '%' && e.quantity != null ? Number(e.quantity) : null,
@@ -183,6 +184,7 @@ export function applyBootstrap(data: any) {
     return {
       id: r.id,
       text: `"${event?.raw_text || 'Execution event'}"`,
+      submissionName: event?.submission_name || act?.desc || 'Field progress update',
       candidate: act?.id || '—',
       conf: Math.round(Number(r.confidence_score || 0) * 100),
       issue: r.reason || (act ? 'Review required' : 'No matching activity'),
@@ -251,7 +253,8 @@ export async function refreshCurrentProject() {
 export async function submitCapture(projectId: string, submittedBy: string, text: string, files: File[]) {
   const form = new FormData();
   form.append('project_id', projectId);
-  form.append('submitted_by', submittedBy || 'field');
+  form.append('submitted_by', 'field');
+  form.append('submission_name', submittedBy || 'Field progress update');
   form.append('text', text || '');
   files.forEach(file => form.append('files', file, file.name));
   const result = await request('/api/capture', { method: 'POST', body: form });

@@ -3901,3 +3901,59 @@ table{border-collapse:collapse;width:100%}th{font:600 9px var(--font-mono);lette
   letter-spacing: .02em;
   color: #d8b36a;
 }
+
+/* Field submission cards: keep the list scannable. The worker's chosen
+   submission name is the primary heading; the matched baseline activity is
+   the compact subheading. Full evidence remains available in planner review. */
+.submission-mini strong,
+.submission-card strong {
+  font-size: 15px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.submission-mini small,
+.submission-card small {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.submission-card {
+  min-height: 88px;
+}
+.submission-card > div {
+  min-width: 0;
+}
+.submission-card small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(760px, 75vw);
+}
+
+/* Review queue is intentionally a summary surface. Full evidence is shown
+   only after opening a queue item. */
+.review-table {
+  min-width: 760px;
+}
+.review-table td:nth-child(1) {
+  min-width: 230px;
+  width: 28%;
+}
+.review-table td:nth-child(2) {
+  min-width: 280px;
+  width: 34%;
+}
+.review-table td:nth-child(3),
+.review-table td:nth-child(4),
+.review-table td:nth-child(5) {
+  white-space: nowrap;
+}
+.review-submission-name {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.review-submission-title{margin:8px 0 16px;font-size:22px;line-height:1.25;color:var(--ink);font-weight:600;letter-spacing:-.02em}.review-original-label{display:block;margin-bottom:7px}.review-detail-main .review-hero blockquote{font-size:16px;line-height:1.6;max-width:900px}.review-detail-main .review-hero{padding:26px 30px}
