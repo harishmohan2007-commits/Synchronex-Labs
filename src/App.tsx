@@ -301,11 +301,10 @@ export default function App(){
   };
 
   const runCapture=()=>{
-    if(!captureText.trim()){notify('Nothing to extract. Enter a field statement first.');return;}
     if(captureBusy)return;
-    setCaptureBusy(true);setCaptureResult(false);setCaptureStage(1);setDirty(false);
-    [2,3,4,5,6].forEach((s,i)=>window.setTimeout(()=>setCaptureStage(s),550*(i+1)));
-    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('3 execution events extracted · 2 auto-linkable · 1 requires review.')},3500);
+    if(!captureText.trim() && !captureFiles.length && !recordedAudioUrl){notify('Add a progress note, file evidence, or a voice recording before submitting.');return;}
+    setCaptureBusy(true);setCaptureResult(false);setDirty(false);
+    window.setTimeout(()=>{setCaptureBusy(false);setCaptureResult(true);notify('Progress update submitted with the available field evidence.');},1200);
   };
   const handleCaptureFiles=(files:FileList|null)=>{
     if(!files) return;
@@ -343,7 +342,26 @@ export default function App(){
     setRecording(false);
     if(recordingTimerRef.current!==null){window.clearInterval(recordingTimerRef.current);recordingTimerRef.current=null;}
   };
-  const processVoice=()=>{if(!recordedAudioUrl){notify('Record a voice update first.');return;} setCaptureResult(true); setCaptureStage(1); [2,3,4,5,6].forEach((stage,i)=>window.setTimeout(()=>setCaptureStage(stage),450*(i+1))); window.setTimeout(()=>notify('Voice evidence processed · 3 execution events extracted.'),2800);};
+  const resetCapture=()=>{
+    if(recording) stopRecording();
+    setCaptureText('');
+    setCaptureFiles([]);
+    if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    setRecordedAudioUrl('');
+    setRecordingSeconds(0);
+    setCaptureResult(false);
+    setCaptureBusy(false);
+    setDirty(false);
+    notify('Progress update draft cleared.');
+  };
+  const deleteRecording=()=>{
+    if(recording) stopRecording();
+    if(recordedAudioUrl) URL.revokeObjectURL(recordedAudioUrl);
+    setRecordedAudioUrl('');
+    setRecordingSeconds(0);
+    setDirty(true);
+    notify('Voice recording removed.');
+  };
   const formatRecordingTime=(seconds:number)=>`${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;
 
   const approveReview=()=>{
@@ -433,7 +451,7 @@ export default function App(){
 
       {role==='company' && screen==='command'&&<Command onGo={go} reviewCount={reviewCount}/>}
       {role==='company' && screen==='schedule'&&<Schedule rows={ACTIVITIES} selectedId={selectedId} onSelect={setSelectedId} onExport={exportSchedule} discipline={scheduleDiscipline} setDiscipline={setScheduleDiscipline} onOpenDetail={(id)=>{setDetailId(id);setModal('activity')}} />}
-      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the file evidence card below to attach a report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} processVoice={processVoice} formatRecordingTime={formatRecordingTime} />}
+      {role==='field' && screen==='capture'&&<Capture text={captureText} setText={(v)=>{setCaptureText(v);setDirty(true)}} stage={captureStage} busy={captureBusy} result={captureResult} run={runCapture} onImport={()=>role==='company'?go('import'):notify('Use the evidence upload area below to attach a field report.')} files={captureFiles} onFiles={handleCaptureFiles} removeFile={removeCaptureFile} fileInputRef={fileInputRef} recording={recording} recordingSeconds={recordingSeconds} recordedAudioUrl={recordedAudioUrl} startRecording={startRecording} stopRecording={stopRecording} deleteRecording={deleteRecording} resetCapture={resetCapture} formatRecordingTime={formatRecordingTime} />}
       {role==='company' && screen==='review'&&<Review count={openReviewQueue.length} item={activeReview} index={reviewIndex} queue={openReviewQueue} onApprove={approveReview} onReject={rejectReview} onFlag={flagNew} onJump={setReviewIndex} detailOpen={reviewDetailOpen} onOpenDetail={(i)=>{setReviewIndex(i);setReviewDetailOpen(true)}} onBack={()=>setReviewDetailOpen(false)} />}
       {role==='company' && screen==='memory'&&<Memory />}
       {role==='company' && screen==='trace'&&<Trace />}
@@ -616,37 +634,43 @@ function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,on
   </div>
 }
 
-function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,processVoice,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;processVoice:()=>void;formatRecordingTime:(seconds:number)=>string}){
-  return <div className="capture-layout">
+function Capture({text,setText,stage,busy,result,run,onImport,files,onFiles,removeFile,fileInputRef,recording,recordingSeconds,recordedAudioUrl,startRecording,stopRecording,deleteRecording,resetCapture,formatRecordingTime}:{text:string;setText:(v:string)=>void;stage:number;busy:boolean;result:boolean;run:()=>void;onImport:()=>void;files:File[];onFiles:(files:FileList|null)=>void;removeFile:(index:number)=>void;fileInputRef:React.RefObject<HTMLInputElement|null>;recording:boolean;recordingSeconds:number;recordedAudioUrl:string;startRecording:()=>void;stopRecording:()=>void;deleteRecording:()=>void;resetCapture:()=>void;formatRecordingTime:(seconds:number)=>string}){
+  return <div className="capture-layout capture-layout-full">
     <div className="capture-main">
-      <PageSection label="FIELD INPUT / 01" title="Speak in the language of the site">
-        <p className="lead">Paste a daily report, site diary note, or supervisor statement. Synchronex turns execution language into structured events without forcing field teams into a rigid form.</p>
-        <textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter')run()}} aria-label="Field report input" placeholder="Example: Line 24 spool erection completed…"/>
-        <div className="capture-actions"><button className="primary-btn" disabled={busy} onClick={run}>{busy?'Extracting events…':'Extract execution events'} <span>↗</span></button><button className="outline-btn" onClick={onImport}>Import instead</button><span className="helper">Ctrl / ⌘ + Enter to extract · demo uses synthetic data</span></div>
-        {result&&<ExtractionResult/>}
-
-        <div className="capture-input-grid">
+      <PageSection label="FIELD PROGRESS / 01" title="Submit work progress">
+        <p className="lead">Share what was completed on site using a short note, files, images, or a voice update. The text box is optional when your evidence already contains the progress details.</p>
+        <textarea value={text} onChange={e=>setText(e.target.value)} aria-label="Optional field progress note" placeholder="Optional: add a short progress note, site update, or supervisor comment…"/>
+        <div className="capture-submit-banner">
+          <div><span className="eyebrow">PROGRESS UPDATE</span><strong>One submission, any evidence.</strong><p>Add whichever inputs you have. You can submit text alone, evidence files alone, a voice recording, or any combination.</p></div>
+          <span className="capture-evidence-count">{files.length + (recordedAudioUrl?1:0)} evidence attached</span>
+        </div>
+        <div className="capture-input-grid capture-input-grid-three">
           <section className="capture-source-card">
-            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / 02</span><h3>Upload any field file</h3><p>Accept documents, spreadsheets, PDFs, images, archives, text files, or any other file type.</p></div><span className="source-icon">↑</span></div>
+            <div className="capture-source-head"><div><span className="eyebrow">FILE EVIDENCE / 02</span><h3>Attach progress evidence</h3><p>Upload photos, PDFs, reports, spreadsheets, videos, ZIP files, or any other supporting evidence.</p></div><span className="source-icon">↑</span></div>
             <input ref={fileInputRef} type="file" multiple accept="*/*" hidden onChange={e=>{onFiles(e.target.files);e.currentTarget.value='';}} />
             <button className="capture-dropzone" type="button" onClick={()=>fileInputRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onFiles(e.dataTransfer.files);}}>
-              <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>PDF · Word · Excel · CSV · TXT · images · ZIP · and more</small>
+              <strong>Drop files here or browse</strong><span>Any file type · multiple files supported</span><small>Images · PDF · Word · Excel · CSV · TXT · ZIP · video · and more</small>
             </button>
             {files.length>0&&<div className="capture-file-list">{files.map((file,i)=><div className="capture-file-row" key={`${file.name}-${file.lastModified}`}><div><strong>{file.name}</strong><span>{file.type||'Unknown file type'} · {(file.size/1024/1024).toFixed(2)} MB</span></div><button type="button" aria-label={`Remove ${file.name}`} onClick={()=>removeFile(i)}>×</button></div>)}</div>}
-            <div className="capture-source-actions"><button className="primary-btn" disabled={!files.length} onClick={run}>Extract from {files.length||0} file{files.length===1?'':'s'} →</button><span className="helper">Original files remain available as source evidence.</span></div>
+            <span className="helper">Files stay attached to the progress submission as field evidence.</span>
           </section>
 
           <section className="capture-source-card voice-card">
-            <div className="capture-source-head"><div><span className="eyebrow">VOICE EVIDENCE / 03</span><h3>Record a field update</h3><p>Capture a supervisor or site-team statement directly from the microphone.</p></div><span className="source-icon">◉</span></div>
-            <div className={`voice-recorder ${recording?'recording':''}`}><div className="voice-status-dot">{recording?'●':'○'}</div><div><strong>{recording?'Recording field statement':'Ready to record'}</strong><span>{recording?formatRecordingTime(recordingSeconds):'Use your browser microphone'}</span></div></div>
+            <div className="capture-source-head"><div><span className="eyebrow">VOICE UPDATE / 03</span><h3>Record progress</h3><p>Use your microphone when speaking is easier than typing. The recording can be submitted as evidence.</p></div><span className="source-icon">◉</span></div>
+            <div className={`voice-recorder ${recording?'recording':''}`}><div className="voice-status-dot">{recording?'●':'○'}</div><div><strong>{recording?'Recording progress update':'Ready to record'}</strong><span>{recording?formatRecordingTime(recordingSeconds):'Use your browser microphone'}</span></div></div>
             <div className="voice-actions">{!recording?<button className="primary-btn" onClick={startRecording}>● Start recording</button>:<button className="danger-btn" onClick={stopRecording}>■ Stop recording</button>}</div>
-            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><audio controls src={recordedAudioUrl}/><button className="outline-btn" onClick={processVoice}>Process voice evidence →</button></div>}
-            <span className="helper">Microphone access is requested only when recording starts. Audio can later feed the same extraction and matching pipeline.</span>
+            {recordedAudioUrl&&<div className="voice-preview"><span className="eyebrow">RECORDED EVIDENCE</span><audio controls src={recordedAudioUrl}/><div className="recording-actions"><button className="danger-btn" onClick={deleteRecording}>Delete recording</button></div></div>}
+            <span className="helper">You can delete a recording and record again before submitting.</span>
           </section>
         </div>
+        <div className="capture-final-actions">
+          <button className="primary-btn capture-submit-btn" disabled={busy} onClick={run}>{busy?'Submitting progress…':'Submit progress update'} <span>→</span></button>
+          <button className="outline-btn" type="button" onClick={resetCapture}>Reset update</button>
+          <span className="helper">Text is optional. Submit any combination of text, files, images, or voice.</span>
+        </div>
+        {result&&<div className="submission-success"><span>✓</span><div><strong>Progress update submitted</strong><p>Your field note and attached evidence are ready for the project record and review workflow.</p></div></div>}
       </PageSection>
     </div>
-    <aside className="process-panel"><span className="eyebrow">PROCESS / 04</span>{stages.map((s,i)=><div className={`process-step ${stage===i+1?'active':''} ${stage>i+1?'done':''}`} key={s}><b>0{i+1}</b><span>{s}</span><i>{stage>i+1?'✓':stage===i+1?'●':'○'}</i></div>)}<div className="human-loop"><b>Human stays in the loop.</b><p>Ambiguous matches never disappear. They move to review with candidate activities and evidence.</p></div></aside>
   </div>
 }
 function ExtractionResult(){return <div className="result-panel"><div className="result-head"><div><span className="eyebrow">EXTRACTION COMPLETE</span><h3>3 execution events found</h3></div><span className="success-chip">2 auto-linkable · 1 review</span></div><div className="event-cards"><EventCard id="PIP-245" text="Line 24 spool section A completed" conf={96} status="Matched"/><EventCard id="PIP-246" text="Line 25 erection started at 09:30" conf={91} status="Matched"/><EventCard id="CIV-022 / CIV-023" text="Foundation Block A reached ~70%" conf={78} status="Review required"/></div></div>}
@@ -925,9 +949,8 @@ function FieldHome({onGo}:{onGo:(s:Screen)=>void}){
   return <div className="field-page field-home-page">
     <PageSection label="FIELD / TODAY" title="Field home" action={<button className="primary-btn" onClick={()=>onGo('capture')}>Report progress →</button>}>
       <div className="field-summary-grid">
-        <div className="field-summary field-summary-work"><div><span className="eyebrow">TODAY'S WORK</span><strong>3</strong><small>Activities currently assigned</small></div><span className="summary-status">ACTIVE</span></div>
+        <div className="field-summary field-summary-work"><div><span className="eyebrow">FIELD UPDATES TODAY</span><strong>3</strong><small>Progress reports submitted today</small></div><span className="summary-status">ACTIVE</span></div>
         <div className="field-summary field-summary-submissions"><div><span className="eyebrow">PENDING SUBMISSIONS</span><strong>2</strong><small>Reports currently processing</small></div><span className="summary-status amber">IN REVIEW</span></div>
-        <div className="field-summary field-summary-baseline"><div><span className="eyebrow">BASELINE</span><strong>APPROVED</strong><small>Current company schedule</small></div><span className="summary-status">SYNCED</span></div>
       </div>
       <div className="field-home-grid field-home-grid-enhanced">
         <div className="field-panel field-trajectory-panel">
