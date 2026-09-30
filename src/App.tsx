@@ -249,14 +249,14 @@ export default function App(){
   };
   const exportSchedule=()=>{
     const headers=['Activity ID','Discipline','Activity','WBS','Plan Start','Plan Finish','Actual Start','Actual Finish','Progress','Status','AI Confidence'];
-    const csv=[headers.join(','),...ACTIVITIES.map(a=>[a.id,a.discipline,a.desc,a.wbs,a.planStart,a.planFinish,a.actStart,a.actFinish,`${a.progress}%`,a.status,a.aiConf?`${a.aiConf}%`:''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+    const csv=[headers.join(','),...ACTIVITIES.filter(a=>!a.isSummary).map(a=>[a.id,a.discipline,a.desc,a.wbs,a.planStart,a.planFinish,a.actStart,a.actFinish,`${a.progress}%`,a.status,a.aiConf?`${a.aiConf}%`:''].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','))].join('\n');
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a'); link.href=url; link.download='synchronex-schedule-export.csv'; link.click();
     URL.revokeObjectURL(url); notify('Schedule exported successfully.');
   };
 
-  if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} role={role} setRole={setRole} onLogin={()=>{setScreen(role==='company'?'command':'field-home');setScheduleDiscipline('All');setSelectedId(ACTIVITIES[0]?.id||'');setDetailId(null);setModal(null);setDirty(false);setAuthenticated(true)}} />;
+  if(!authenticated) return <AuthScreen mode={authMode} setMode={setAuthMode} role={role} setRole={setRole} onLogin={()=>{setScreen(role==='company'?'command':'field-home');setScheduleDiscipline('All');setSelectedId(ACTIVITIES.find(a=>!a.isSummary)?.id||'');setDetailId(null);setModal(null);setDirty(false);setAuthenticated(true)}} />;
 
   const detailActivity=ACTIVITIES.find(a=>a.id===detailId) || null;
   const detailTrail=detailId?AUDIT_TRAIL.filter(t=>t.activity===detailId):[];
@@ -381,7 +381,7 @@ function Command({onGo,reviewCount}:{onGo:(s:Screen)=>void;reviewCount:number}){
 function Metric({label,value,note,tone}:{label:string;value:string;note:string;tone?:string}){return <div className="metric"><span>{label}</span><strong className={tone||''}>{value}</strong><small>{note}</small></div>}
 
 function Schedule({rows,selectedId,onSelect,onExport,discipline,setDiscipline,onOpenDetail}:{rows:any[];selectedId:string;onSelect:(id:string)=>void;onExport:()=>void;discipline:string;setDiscipline:(d:string)=>void;onOpenDetail:(id:string)=>void}){
-  const visibleRows=discipline==='All'?rows:rows.filter(a=>a.discipline===discipline);
+  const visibleRows=(discipline==='All'?rows:rows.filter(a=>a.discipline===discipline)).filter(a=>!a.isSummary);
   const plannedRows=visibleRows.filter(a=>a.planStart!=='—'&&a.planFinish!=='—');
   const dates=plannedRows.flatMap(a=>[new Date(a.planStart).getTime(),new Date(a.planFinish).getTime()]).filter(Number.isFinite);
   const minDate=dates.length?new Date(Math.min(...dates)):new Date();
