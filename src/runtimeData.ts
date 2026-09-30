@@ -4,7 +4,7 @@ type RuntimeData={project:any|null;ACTIVITIES:any[];DISCIPLINES:any[];FIELD_EVEN
 const empty:RuntimeData={project:null,ACTIVITIES:[],DISCIPLINES:[],FIELD_EVENTS:[],REVIEW_QUEUE:[],AUDIT_TRAIL:[],MEMORY_ACTIVITIES:[],PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],MEMORY_OCCURRENCES:[],settings:null,loading:true,error:''};
 let snapshot=empty; const listeners=new Set<()=>void>(); const emit=()=>listeners.forEach(l=>l());
 export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
-const apiBase=()=>{if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');return 'https://synchronex-api.onrender.com';};
+const apiBase=()=> 'https://synchronex-api.onrender.com';
 const dayMs=86400000;
 function asDate(v:any){if(!v||v==='—')return null;const d=new Date(v);return Number.isFinite(d.getTime())?d:null;}
 function plannedAt(start:any,finish:any,at:any){const s=asDate(start),f=asDate(finish),d=asDate(at);if(!s||!f||!d)return 0;if(d.getTime()<=s.getTime())return 0;if(d.getTime()>=f.getTime())return 100;const span=Math.max(dayMs,f.getTime()-s.getTime());return Math.max(0,Math.min(100,((d.getTime()-s.getTime())/span)*100));}
