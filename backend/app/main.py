@@ -14,18 +14,6 @@ app.include_router(capture_router)
 app.include_router(review_router)
 app.include_router(settings_router)
 
-# Keep CORS OUTSIDE FastAPI's exception handling stack so browser clients still receive
-# Access-Control-Allow-Origin on 4xx/5xx responses and unhandled backend exceptions.
-# This is important for the deployed Vercel/Netlify frontend calling Render directly.
-app = CORSMiddleware(
-    app=app,
-    allow_origins=['*'],
-    allow_credentials=False,
-    allow_methods=['*'],
-    allow_headers=['*'],
-    expose_headers=['*'],
-)
-
 @app.get('/')
 def root():
     return {'service':'Synchronex execution bridge','sources':['ProjectLibre POD','Microsoft Project MPP/MSPDI','Primavera P6 XER'],'persistence':'Supabase'}
@@ -42,3 +30,16 @@ def health():
         return {'status':'ok','supabase_configured':True,'supabase_reachable':True}
     except Exception as exc:
         return {'status':'degraded','supabase_configured':True,'supabase_reachable':False,'error':str(exc)}
+
+
+# Wrap the fully configured FastAPI application only after all routes have been registered.
+# This keeps CORS headers on normal and error responses without replacing the FastAPI
+# object before route decorators are evaluated.
+app = CORSMiddleware(
+    app=app,
+    allow_origins=['*'],
+    allow_credentials=False,
+    allow_methods=['*'],
+    allow_headers=['*'],
+    expose_headers=['*'],
+)
