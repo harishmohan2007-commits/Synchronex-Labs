@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import re
 from datetime import datetime, timezone
+from uuid import UUID
 
 import fitz
 import pandas as pd
@@ -143,6 +144,16 @@ async def capture(
     if not text and not files:
         raise HTTPException(400, 'Provide text or at least one evidence file.')
 
+    # The browser sends a real project UUID. Older deployed clients could accidentally
+    # send the role string ("field") in this slot; never pass a non-UUID into Postgres.
+    try:
+        UUID(str(project_id))
+    except (ValueError, TypeError, AttributeError):
+        latest = sb.table('projects').select('id').order('created_at', desc=True).limit(1).execute().data or []
+        if not latest:
+            raise HTTPException(404, 'Import the project schedule before submitting field progress.')
+        project_id = latest[0]['id']
+
     project_rows = sb.table('projects').select('id').eq('id', project_id).limit(1).execute().data or []
     if not project_rows:
         raise HTTPException(404, 'The selected project does not exist. Import the schedule before submitting field progress.')
@@ -225,7 +236,7 @@ async def capture(
         'quantity': None,
         'unit': None,
         'extraction_confidence': 1.0 if explicit_unique else (0.80 if aid else 0.65),
-        'created_by': submitted_by or 'field',
+        'created_by': None,
     }
     inserted = sb.table('execution_events').insert(event_row).execute().data[0]
 
