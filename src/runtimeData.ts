@@ -4,7 +4,7 @@ type RuntimeData={project:any|null;ACTIVITIES:any[];DISCIPLINES:any[];FIELD_EVEN
 const empty:RuntimeData={project:null,ACTIVITIES:[],DISCIPLINES:[],FIELD_EVENTS:[],REVIEW_QUEUE:[],AUDIT_TRAIL:[],MEMORY_ACTIVITIES:[],PROGRESS_TREND:[],DELAY_CAUSES:[],DISCIPLINE_PERF:[],MEMORY_OCCURRENCES:[],settings:null,loading:true,error:''};
 let snapshot=empty; const listeners=new Set<()=>void>(); const emit=()=>listeners.forEach(l=>l());
 export function useRuntimeData(){return useSyncExternalStore(cb=>{listeners.add(cb);return()=>listeners.delete(cb)},()=>snapshot,()=>snapshot);}
-const apiBase=()=>{const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';return 'https://synchronex-api.onrender.com';};
+const apiBase=()=>{if(typeof window!=='undefined'&&!['localhost','127.0.0.1'].includes(window.location.hostname))return '';const configured=import.meta.env.VITE_API_BASE_URL?.trim();if(configured)return configured.replace(/\/$/,'');return 'https://synchronex-api.onrender.com';};
 const dayMs=86400000;
 function asDate(v:any){if(!v||v==='—')return null;const d=new Date(v);return Number.isFinite(d.getTime())?d:null;}
 function plannedAt(start:any,finish:any,at:any){const s=asDate(start),f=asDate(finish),d=asDate(at);if(!s||!f||!d)return 0;if(d.getTime()<=s.getTime())return 0;if(d.getTime()>=f.getTime())return 100;const span=Math.max(dayMs,f.getTime()-s.getTime());return Math.max(0,Math.min(100,((d.getTime()-s.getTime())/span)*100));}
@@ -26,7 +26,8 @@ export async function refreshRuntimeData(projectId?:string){snapshot={...snapsho
  const rawActivities=payload.activities||[]; const events=payload.events||[]; const reviews=payload.reviews||[]; const trace=payload.trace||[]; const progressUpdates=payload.progress_updates||[];
  const approvedEvents=events.filter((e:any)=>{const m=(payload.matches||[]).find((x:any)=>x.execution_event_id===e.id&&x.status==='approved');return !!m;});
  const progressDates=events.map((e:any)=>asDate(e.event_date)||asDate(e.created_at)).filter(Boolean) as Date[];
- const progressDate=progressDates.length?new Date(Math.max(...progressDates.map(d=>d.getTime()))):new Date();
+ const projectStart=asDate(project?.planned_start);
+ const progressDate=progressDates.length?new Date(Math.max(...progressDates.map(d=>d.getTime()))):(projectStart&&new Date().getTime()<projectStart.getTime()?projectStart:new Date());
  const activities=mapActivities(rawActivities,progressDate); const activityByDb=new Map(rawActivities.map((a:any)=>[a.id,a])); const byEvent=new Map(events.map((e:any)=>[e.id,e]));
  const matches=payload.matches||[]; const matchByEvent=new Map<string,any>(); matches.forEach((m:any)=>{const current=matchByEvent.get(m.execution_event_id);if(!current||Number(m.confidence_score||0)>Number(current.confidence_score||0))matchByEvent.set(m.execution_event_id,m);});
  const fieldEvents=events.map((e:any)=>{const match=matchByEvent.get(e.id);const aid=match?.activity_id?activityByDb.get(match.activity_id):null;const progress=progressFromText(e.raw_text||'');return {time:new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),date:e.event_date||'—',status:match?.status==='approved'?'AI MATCHED':'REVIEW REQUIRED',text:`${e.raw_text||''}`,reportName:reportName(e.raw_text||''),discipline:e.discipline||aid?.discipline||inferDiscipline(e.raw_text||''),action:e.extracted_action||'observation',progress,actId:aid?.activity_code||'—',actDesc:aid?.name||'No matching activity',conf:Math.round(Number(match?.confidence_score??e.extraction_confidence??0)*100)};});
