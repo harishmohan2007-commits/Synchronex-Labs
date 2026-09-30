@@ -8,12 +8,23 @@ from .routes.settings import router as settings_router
 from .services.supabase_service import get_supabase
 
 app=FastAPI(title='Synchronex Execution Bridge API',version='2.0.0')
-app.add_middleware(CORSMiddleware,allow_origins=['*'],allow_credentials=False,allow_methods=['*'],allow_headers=['*'])
 app.include_router(import_router)
 app.include_router(schedule_router)
 app.include_router(capture_router)
 app.include_router(review_router)
 app.include_router(settings_router)
+
+# Keep CORS OUTSIDE FastAPI's exception handling stack so browser clients still receive
+# Access-Control-Allow-Origin on 4xx/5xx responses and unhandled backend exceptions.
+# This is important for the deployed Vercel/Netlify frontend calling Render directly.
+app = CORSMiddleware(
+    app=app,
+    allow_origins=['*'],
+    allow_credentials=False,
+    allow_methods=['*'],
+    allow_headers=['*'],
+    expose_headers=['*'],
+)
 
 @app.get('/')
 def root():
