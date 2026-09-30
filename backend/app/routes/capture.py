@@ -290,7 +290,7 @@ async def capture(
                 'quantity_completed': None,
                 'quantity_unit': None,
                 'update_source': 'auto_threshold',
-                'updated_by': submitted_by or 'field',
+                'updated_by': None,
             }).execute()
 
     sb.table('review_queue').insert({
